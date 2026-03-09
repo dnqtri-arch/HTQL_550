@@ -223,6 +223,7 @@ const LOAI_CHIET_KHAU_OPTIONS = [
 
 const THUE_SUAT_OPTIONS = [
   { value: 'Chưa xác định', label: 'Chưa xác định' },
+  { value: '0', label: '0%' },
   { value: '5', label: '5%' },
   { value: '8', label: '8%' },
   { value: '10', label: '10%' },
@@ -650,13 +651,13 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       thue_suat_gtgt_dau_ra: (() => {
         const v = initialData?.thue_suat_gtgt ?? 'Chưa xác định'
         const s = String(v).trim()
-        if (s === '' || s === 'Chưa xác định' || s === '5' || s === '8' || s === '10') return s || 'Chưa xác định'
+        if (s === '' || s === 'Chưa xác định' || s === '0' || s === '5' || s === '8' || s === '10') return s || 'Chưa xác định'
         return 'Tự nhập'
       })(),
       thue_suat_gtgt_tu_nhap: (() => {
         const v = initialData?.thue_suat_gtgt ?? ''
         const s = String(v).trim()
-        if (s === '' || s === 'Chưa xác định' || s === '5' || s === '8' || s === '10') return ''
+        if (s === '' || s === 'Chưa xác định' || s === '0' || s === '5' || s === '8' || s === '10') return ''
         return formatSoTien(s)
       })(),
       co_giam_thue: initialData?.co_giam_thue ?? 'Có giảm thuế',
@@ -778,6 +779,23 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   useEffect(() => {
     if (mode === 'add') setValue('ma_vthh', onMaTuDong(tinhChat ?? 'Vật tư'))
   }, [mode, tinhChat, onMaTuDong, setValue])
+
+  /** Đồng bộ hai chiều: "Là hàng khuyến mại" ↔ Thuế GTGT 0%
+   * - Tick checkbox → gán Thuế GTGT = 0%
+   * - Chọn thuế khác 0% (gồm "Tự nhập") → bỏ tick (effect chỉ phụ thuộc thuế để tránh bỏ tick ngay khi user vừa tick) */
+  const laMatHangKhuyenMai = watch('la_mat_hang_khuyen_mai')
+  const thueSuatGtgtDauRa = watch('thue_suat_gtgt_dau_ra')
+  useEffect(() => {
+    if (laMatHangKhuyenMai) {
+      setValue('thue_suat_gtgt_dau_ra', '0', { shouldValidate: false })
+      setValue('thue_suat_gtgt_tu_nhap', '', { shouldValidate: false })
+    }
+  }, [laMatHangKhuyenMai, setValue])
+  useEffect(() => {
+    if (getValues('la_mat_hang_khuyen_mai') && thueSuatGtgtDauRa !== '0') {
+      setValue('la_mat_hang_khuyen_mai', false, { shouldValidate: false })
+    }
+  }, [thueSuatGtgtDauRa, setValue, getValues])
 
   const imagePreview = watch('duong_dan_hinh_anh')
   const handleImageSelect = async (file: File | null) => {
@@ -1434,7 +1452,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     />
                   </InputWithLookup>
                 </div>
-                <LabelCell label="Tài khoản kho" />
+                <LabelCell label="TK kho" />
                 <div className="misa-grid-item" style={{ position: 'relative' }}>
                   <input {...register('tai_khoan_kho')} className="misa-input-solo" style={inputStyle} placeholder="152, 156..." />
                   <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
@@ -1540,96 +1558,27 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <input {...register('tk_giam_gia')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
                   <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
                 </div>
-                <LabelCell label="Thuế NK (%)" />
-                <div className="misa-grid-item">
-                  <Controller
-                    control={control}
-                    name="thue_suat_nk"
-                    rules={{ validate: validateSoKhongAm }}
-                    render={({ field, fieldState }) => (
-                      <input
-                        {...field}
-                        onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                        onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                        onBlur={field.onBlur}
-                        className="misa-input-solo"
-                        style={{ ...inputStyle, ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                  {errors.thue_suat_nk && <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}>{errors.thue_suat_nk.message}</div>}
+                <div className="misa-grid-item" />
+                <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <input type="checkbox" {...register('la_mat_hang_khuyen_mai')} style={{ width: 14, height: 14, flexShrink: 0 }} />
+                    <span style={{ color: 'var(--text-primary)' }}>Là hàng khuyến mại</span>
+                  </label>
                 </div>
                 <LabelCell label="TK trả lại" />
                 <div className="misa-grid-item" style={{ position: 'relative' }}>
                   <input {...register('tk_tra_lai')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
                   <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
                 </div>
-                <LabelCell label="Thuế XK (%)" />
-                <div className="misa-grid-item">
-                  <Controller
-                    control={control}
-                    name="thue_suat_xk"
-                    rules={{ validate: validateSoKhongAm }}
-                    render={({ field, fieldState }) => (
-                      <input
-                        {...field}
-                        onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                        onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                        onBlur={field.onBlur}
-                        className="misa-input-solo"
-                        style={{ ...inputStyle, ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                  {errors.thue_suat_xk && <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}>{errors.thue_suat_xk.message}</div>}
-                </div>
+                <div className="misa-grid-item" />
+                <div className="misa-grid-item" />
                 <LabelCell label="TK chi phí" />
                 <div className="misa-grid-item" style={{ position: 'relative' }}>
                   <input {...register('tai_khoan_chi_phi')} className="misa-input-solo" style={inputStyle} placeholder="632" />
                   <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
                 </div>
-                <LabelCell label="HHDV chịu thuế TTĐB" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('nhom_hhdv_ttdb')} className="misa-input-solo" style={inputStyle} placeholder="Chọn nhóm..." />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <LabelCell label="Tỷ lệ CKMH (%)" />
-                <div className="misa-grid-item">
-                  <Controller
-                    control={control}
-                    name="ty_le_ckmh"
-                    rules={{ validate: validateSoKhongAm }}
-                    render={({ field, fieldState }) => (
-                      <input
-                        {...field}
-                        onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                        onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                        onBlur={field.onBlur}
-                        className="misa-input-solo"
-                        style={{ ...inputStyle, ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                  {errors.ty_le_ckmh && <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}>{errors.ty_le_ckmh.message}</div>}
-                </div>
                 <div className="misa-grid-item" />
                 <div className="misa-grid-item" />
-                <LabelCell label="Loại HH đặc trưng" />
-                <div className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input {...register('loai_hh_dac_trung')} className="misa-input-solo" style={{ ...inputStyle, flex: 1 }} placeholder="Chọn loại..." />
-                  <button type="button" style={{ padding: 2, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent)' }} title="Thông tin"><Info size={14} /></button>
-                  <ChevronDown size={12} style={{ pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <div className="misa-grid-item" />
-                <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    <input type="checkbox" {...register('la_mat_hang_khuyen_mai')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-                    <span style={{ color: 'var(--text-primary)' }}>Là hàng khuyến mại</span>
-                  </label>
-                </div>
               </div>
             )}
             {activeSubTab === 2 && (
