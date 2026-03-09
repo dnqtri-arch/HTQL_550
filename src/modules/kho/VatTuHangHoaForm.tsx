@@ -57,7 +57,7 @@ export type FormValues = {
   la_mat_hang_khuyen_mai: boolean
   chiet_khau: boolean
   loai_chiet_khau: string
-  bang_chiet_khau: { so_luong_tu: string; so_luong_den: string; ty_le_chiet_khau: string }[]
+  bang_chiet_khau: { so_luong_tu: string; so_luong_den: string; ty_le_chiet_khau: string; mo_ta: string }[]
   theo_doi_ma_quy_cach: boolean
   ma_quy_cach: { hien_thi: boolean; ten_hien_thi: string; cho_phep_trung: boolean }[]
   dac_tinh: string
@@ -734,13 +734,16 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       chiet_khau: (initialData as { chiet_khau?: boolean })?.chiet_khau ?? false,
       loai_chiet_khau: (initialData as { loai_chiet_khau?: string })?.loai_chiet_khau ?? 'Theo %',
       bang_chiet_khau: Array.isArray((initialData as { bang_chiet_khau?: { so_luong_tu?: string; so_luong_den?: string; ty_le_chiet_khau?: string }[] })?.bang_chiet_khau) && (initialData as { bang_chiet_khau: unknown[] }).bang_chiet_khau.length > 0
-        ? (initialData as { bang_chiet_khau: { so_luong_tu?: string; so_luong_den?: string; ty_le_chiet_khau?: string }[]; loai_chiet_khau?: string }).bang_chiet_khau.map((r) => {
+        ? (initialData as { bang_chiet_khau: { so_luong_tu?: string; so_luong_den?: string; ty_le_chiet_khau?: string; mo_ta?: string }[]; loai_chiet_khau?: string }).bang_chiet_khau.map((r, idx, arr) => {
             const loai = (initialData as { loai_chiet_khau?: string })?.loai_chiet_khau ?? 'Theo %'
             const tyLe = r.ty_le_chiet_khau != null ? String(r.ty_le_chiet_khau) : ''
+            const prev = arr[idx - 1]
+            const soLuongTu = r.so_luong_tu != null && String(r.so_luong_tu).trim() !== '' ? formatSoNguyenInput(String(r.so_luong_tu)) : (idx === 0 ? '0' : (prev ? formatSoNguyenInput(String(prev.so_luong_den ?? '')) : ''))
             return {
-              so_luong_tu: r.so_luong_tu != null ? formatSoNguyenInput(String(r.so_luong_tu)) : '',
+              so_luong_tu: soLuongTu,
               so_luong_den: r.so_luong_den != null ? formatSoNguyenInput(String(r.so_luong_den)) : '',
               ty_le_chiet_khau: tyLe ? (loai === 'Theo số tiền' ? formatSoTien(tyLe) : formatSoNguyenInput(tyLe)) : '',
+              mo_ta: (r as { mo_ta?: string }).mo_ta ?? '',
             }
           })
         : [],
@@ -969,7 +972,14 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       chiet_khau: data.chiet_khau,
       loai_chiet_khau: data.loai_chiet_khau.trim() || undefined,
       bang_chiet_khau: (() => {
-        const arr = data.bang_chiet_khau.filter((r) => r.so_luong_tu || r.so_luong_den || r.ty_le_chiet_khau)
+        const arr = data.bang_chiet_khau
+          .filter((r) => r.so_luong_tu || r.so_luong_den || r.ty_le_chiet_khau)
+          .map((r) => {
+            const tu = (r.so_luong_tu ?? '').trim() || '—'
+            const den = (r.so_luong_den ?? '').trim() || '—'
+            const gia = (r.ty_le_chiet_khau ?? '').trim() || '—'
+            return { ...r, mo_ta: `Từ ${tu} đến ${den}, đơn giá ${gia}` }
+          })
         return arr.length > 0 ? arr : undefined
       })(),
       dac_tinh: data.dac_tinh?.trim() || undefined,
@@ -1587,9 +1597,10 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: 36 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 130 }} />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 100 }} />
+                      <col style={{ minWidth: 120 }} />
                       <col style={{ width: 36 }} />
                     </colgroup>
                     <thead>
@@ -1597,14 +1608,15 @@ const kichThuocSuffix = (md: string, mr: string) => {
                         <th style={{ ...thChietKhau, textAlign: 'center' }}>STT</th>
                         <th style={{ ...thChietKhau }}>Số lượng từ</th>
                         <th style={{ ...thChietKhau }}>Số lượng đến</th>
-                        <th style={{ ...thChietKhau }}>% chiết khấu</th>
+                        <th style={{ ...thChietKhau }}>Đơn giá</th>
+                        <th style={{ ...thChietKhau }}>Mô tả</th>
                         <th style={{ ...thChietKhau }} />
                       </tr>
                     </thead>
                     <tbody>
                       {bangChietKhauFields.length === 0 ? (
                         <tr>
-                          <td colSpan={5} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
+                          <td colSpan={6} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
                         </tr>
                       ) : (
                         bangChietKhauFields.map((field, idx) => (
@@ -1654,34 +1666,35 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               <Controller
                                 control={control}
                                 name={`bang_chiet_khau.${idx}.ty_le_chiet_khau`}
-                                rules={{ validate: validateTyLeChietKhau }}
-                                render={({ field: f, fieldState }) => {
-                                  const displayValue = f.value ? formatSoNguyenInput(f.value) : (f.value ?? '')
-                                  return (
-                                    <input
-                                      {...f}
-                                      value={displayValue}
-                                      onChange={(e) => {
-                                        const raw = e.target.value
-                                        const formatted = formatSoNguyenInput(raw)
-                                        const num = parseFloatVN(formatted)
-                                        f.onChange(num > 100 ? '100' : formatted)
-                                      }}
-                                      onBlur={f.onBlur}
-                                      className="misa-input-solo"
-                                      style={{
-                                        ...inputStyle,
-                                        width: '100%',
-                                        minWidth: 100,
-                                        textAlign: 'right',
-                                        ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}),
-                                      }}
-                                      placeholder="0"
-                                      inputMode="text"
-                                    />
-                                  )
-                                }}
+                                rules={{ validate: validateSoKhongAm }}
+                                render={({ field: f, fieldState }) => (
+                                  <input
+                                    {...f}
+                                    onChange={(e) => { f.onChange(formatSoTien(e.target.value)) }}
+                                    onFocus={() => { if (isZeroDisplay(String(f.value))) f.onChange('') }}
+                                    onBlur={f.onBlur}
+                                    className="misa-input-solo"
+                                    style={{
+                                      ...inputStyle,
+                                      width: '100%',
+                                      minWidth: 80,
+                                      textAlign: 'right',
+                                      ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}),
+                                    }}
+                                    placeholder="0"
+                                    inputMode="text"
+                                  />
+                                )}
                               />
+                            </td>
+                            <td style={{ ...tdChietKhau, color: 'var(--text-muted)', fontSize: 10 }}>
+                              {(() => {
+                                const r = bangChietKhauValues[idx]
+                                const tu = (r?.so_luong_tu ?? '').trim() || '—'
+                                const den = (r?.so_luong_den ?? '').trim() || '—'
+                                const gia = (r?.ty_le_chiet_khau ?? '').trim() || '—'
+                                return <>Từ {tu} đến {den}, đơn giá {gia}</>
+                              })()}
                             </td>
                             <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
                               <button type="button" onClick={() => removeChietKhau(idx)} title="Xóa dòng" style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1711,7 +1724,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     ) : null
                   })()}
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={() => canAddRow && appendChietKhau({ so_luong_tu: '', so_luong_den: '', ty_le_chiet_khau: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: canAddRow ? 'var(--accent)' : 'var(--bg-secondary)', color: canAddRow ? '#0d0d0d' : 'var(--text-muted)', border: 'none', borderRadius: 4, cursor: canAddRow ? 'pointer' : 'not-allowed', opacity: canAddRow ? 1 : 0.6 }}>
+                    <button type="button" onClick={() => canAddRow && appendChietKhau({ so_luong_tu: bangChietKhauValues.length === 0 ? '0' : (bangChietKhauValues[bangChietKhauValues.length - 1]?.so_luong_den ?? '0'), so_luong_den: '', ty_le_chiet_khau: '', mo_ta: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: canAddRow ? 'var(--accent)' : 'var(--bg-secondary)', color: canAddRow ? '#0d0d0d' : 'var(--text-muted)', border: 'none', borderRadius: 4, cursor: canAddRow ? 'pointer' : 'not-allowed', opacity: canAddRow ? 1 : 0.6 }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
