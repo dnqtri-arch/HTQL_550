@@ -1,0 +1,31 @@
+---
+description: Ô chọn từ danh mục (lookup / dropdown có mã + tên) — lưu và hiển thị chỉ mã
+globs: **/*.{ts,tsx}
+---
+
+# Lookup / Dropdown (mã + tên) — toàn hệ thống
+
+## Nguyên tắc (theo thiết lập ban đầu)
+
+- **Lưu trữ (form value / API):** Chỉ lưu **mã** (id), nhiều giá trị cách nhau bằng `;` (vd: `NVL` hoặc `NVL;HH`).
+- **Hiển thị trên ô nhập:** Chỉ hiển thị **mã** (code) — **một dòng**, không hiển thị tên hay "tên;mã".
+  - Một mục: hiển thị một mã (vd: `NVL`).
+  - Nhiều mục: hiển thị nhiều mã cách nhau bằng `;` hoặc `, ` (vd: `NVL;HH` hoặc `NVL, HH` tùy thiết kế).
+
+## Khi load dữ liệu (sửa / mở lại)
+
+- Nếu API hoặc initial trả về chuỗi dạng `"tên;mã"` hoặc chỉ `"tên"` / chỉ `"mã"`: chuẩn hóa về **chỉ lưu mã** bằng cách tra danh mục (tìm theo id hoặc ten) và gán lại `id` vào form. Loại trùng mã nếu có.
+
+## Cách làm trong code
+
+1. **Ô nhập (display):** Hiển thị trực tiếp giá trị đã lưu (mã). Ô `readOnly`, dùng `register(field)` hoặc `Controller` với `value={field.value}`.
+2. **Khi chọn từ modal/lookup:** `setValue(field, ids.join(';'))` với `ids` là mảng mã (id).
+3. **Khi load defaultValues:** Parse giá trị hiện tại (split `;`), với mỗi phần tìm trong danh mục theo id hoặc ten, lấy `id` và gán lại `ids.join(';')`.
+
+## Đã áp dụng
+
+- **Nhóm VTHH** (`nhom_vthh`): lưu và hiển thị chỉ mã (vd `NVL`). Chuẩn hóa khi load trong `VatTuHangHoaForm.tsx`.
+
+## Áp dụng cho
+
+- Mọi ô chọn từ danh mục có cấu trúc **id + label/ten** (lookup modal, dropdown custom): lưu và hiển thị **chỉ mã** theo thiết lập ban đầu.

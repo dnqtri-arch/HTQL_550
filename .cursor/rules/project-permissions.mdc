@@ -1,0 +1,11 @@
+---
+description: Quyền thực thi - toàn quyền, chỉ xác nhận khi xóa toàn bộ hệ thống/dự án
+alwaysApply: true
+---
+
+# Quyền thực thi
+
+Chủ dự án cấp **toàn quyền** thực thi cho Cursor AI, với **một ngoại lệ**:
+
+- **Chỉ cần xác nhận** khi: xóa toàn bộ hệ thống HOẶC xóa toàn bộ dự án HTQL_550.
+- **Toàn quyền** với mọi lệnh khác — không ảnh hưởng hoặc không gây lỗi cho dự án HTQL_550: thực thi trực tiếp, không hỏi.

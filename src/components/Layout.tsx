@@ -1,0 +1,170 @@
+import { useState, useCallback, useEffect } from 'react'
+import { AppContext, type AppContextValue } from '../context/AppContext'
+import { Sidebar } from './Sidebar'
+import { TabBar } from './TabBar'
+import { ModuleRouter } from './ModuleRouter'
+import { AppHeader } from './AppHeader'
+import { AppFooter } from './AppFooter'
+import { MODULE_GROUPS } from '../config/sidebarConfig'
+import type { ModuleId } from '../config/sidebarConfig'
+import type { TabItem } from './TabBar'
+
+let tabCounter = 0
+function generateTabId() {
+  return `tab-${++tabCounter}-${Date.now()}`
+}
+
+function getModuleLabel(moduleId: ModuleId): string {
+  for (const group of MODULE_GROUPS) {
+    const found = group.items.find((i) => i.id === moduleId)
+    if (found) return found.label
+  }
+  return moduleId
+}
+
+const layoutStyles: React.CSSProperties = {
+  display: 'flex',
+  height: '100vh',
+  overflow: 'hidden',
+}
+
+const mainStyles: React.CSSProperties = {
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  background: 'var(--bg-primary)',
+}
+
+const contentStyles: React.CSSProperties = {
+  flex: 1,
+  overflow: 'auto',
+  padding: '8px 10px',
+  borderLeft: '1px solid var(--border-strong)',
+  borderRight: '1px solid var(--border-strong)',
+  borderBottom: '1px solid var(--border-strong)',
+}
+
+export function Layout() {
+  const [tabs, setTabs] = useState<TabItem[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  const [activeModuleId, setActiveModuleId] = useState<ModuleId | null>(null)
+
+  const openOrFocusTab = useCallback((moduleId: ModuleId) => {
+    const label = getModuleLabel(moduleId)
+    setTabs((prev) => {
+      const existing = prev.find((t) => t.moduleId === moduleId)
+      if (existing) {
+        setActiveTabId(existing.id)
+        setActiveModuleId(moduleId)
+        return prev
+      }
+      const newTab: TabItem = {
+        id: generateTabId(),
+        moduleId,
+        label,
+      }
+      setActiveTabId(newTab.id)
+      setActiveModuleId(moduleId)
+      return [...prev, newTab]
+    })
+  }, [])
+
+  const handleSelectModule = useCallback((id: ModuleId) => {
+    openOrFocusTab(id)
+  }, [openOrFocusTab])
+
+  const handleSelectTab = useCallback((id: string) => {
+    const tab = tabs.find((t) => t.id === id)
+    if (tab) {
+      setActiveTabId(id)
+      setActiveModuleId(tab.moduleId)
+    }
+  }, [tabs])
+
+  const handleCloseTab = useCallback((id: string) => {
+    setTabs((prev) => {
+      const next = prev.filter((t) => t.id !== id)
+      if (activeTabId === id) {
+        const idx = prev.findIndex((t) => t.id === id)
+        const newActive = next[idx] ?? next[idx - 1]
+        setActiveTabId(newActive?.id ?? null)
+        setActiveModuleId(newActive?.moduleId ?? null)
+      }
+      return next
+    })
+  }, [activeTabId])
+
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+  const displayModuleId = activeTab?.moduleId ?? activeModuleId
+
+  useEffect(() => {
+    if (tabs.length === 0) {
+      handleSelectModule('ban-lam-viec')
+    }
+  }, [tabs.length, handleSelectModule])
+
+  const appContextValue: AppContextValue = {
+    activeModuleId,
+    openOrFocusTab: handleSelectModule,
+  }
+
+  return (
+    <AppContext.Provider value={appContextValue}>
+    <div style={layoutStyles}>
+      <Sidebar activeModuleId={activeModuleId} onSelectModule={handleSelectModule} />
+      <main style={mainStyles}>
+        <AppHeader />
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onSelectTab={handleSelectTab}
+          onCloseTab={handleCloseTab}
+        />
+        <div style={contentStyles}>
+          {displayModuleId ? (
+            <ModuleRouter moduleId={displayModuleId} />
+          ) : (
+            <WelcomeScreen onSelectModule={handleSelectModule} />
+          )}
+        </div>
+        <AppFooter />
+      </main>
+    </div>
+    </AppContext.Provider>
+  )
+}
+
+function WelcomeScreen({ onSelectModule }: { onSelectModule: (id: ModuleId) => void }) {
+  const welcomeItems = MODULE_GROUPS.flatMap((g) => g.items).slice(0, 6)
+  return (
+    <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+      <h2 style={{ fontSize: '16px', marginBottom: '8px', color: 'var(--text-primary)' }}>
+        Chào mừng đến HTQL_550
+      </h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '12px', fontSize: '11px' }}>
+        Chọn một phân hệ ở menu bên trái để mở trong tab mới. Bạn có thể mở nhiều tab và chuyển đổi mà không mất dữ liệu.
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
+        {welcomeItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onSelectModule(item.id)}
+            style={{
+              padding: '6px 12px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-primary)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '11px',
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}

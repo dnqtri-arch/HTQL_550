@@ -1,0 +1,235 @@
+/* HTQL_550 - Đen (nền), Vàng (chữ/icon), Cam (highlight) - Compact như MISA */
+:root {
+  --bg-primary: #0d0d0d;
+  --bg-secondary: #1a1a1a;
+  --bg-sidebar: #141414;
+  --bg-tab: #1f1f1f;
+  --bg-tab-active: #2a2a2a;
+  /* Ô Nhóm VTHH (read-only): giống ô trong ảnh - nền trắng nhạt, viền xanh nhạt */
+  --bg-nhom-vthh: #FDFDFD;
+  --border-nhom-vthh: #E0E6F7;
+  --text-primary: #f5d042;
+  --text-secondary: #e6c235;
+  --text-muted: #b8952e;
+  --accent: #e67e22;
+  --accent-hover: #f39c12;
+  --connector: #d97706;
+  --connector-highlight: #f59e0b;
+  /* Dòng được chọn trong bảng: cam đậm, nổi bật rõ trên nền tối */
+  --row-selected-bg: #c2410c;
+  --row-selected-text: #fff;
+  --row-selected-border: #ea580c;
+  --border: #3d3520;
+  --border-strong: #2a2520;
+  --font-sans: 'Be Vietnam Pro', system-ui, sans-serif;
+  --font-misa: 'Tahoma', Arial, sans-serif;
+  /* Compact: font và spacing nhỏ hơn */
+  --font-size-base: 12px;
+  --font-size-sm: 11px;
+  --font-size-misa: 11px;
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 6px;
+  --spacing-lg: 8px;
+  --spacing-xl: 10px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--font-size-base);
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Scrollbar - đồng bộ tone màu (nền tối, thumb vàng cam nhạt) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg-tab);
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--bg-tab);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+*::-webkit-scrollbar-corner {
+  background: var(--bg-tab);
+}
+
+/* htql_550_map (maps): dropdown gợi ý địa chỉ Google Places - hiển thị trên modal */
+.pac-container {
+  z-index: 9999 !important;
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif) !important;
+  font-size: 11px !important;
+  background: var(--bg-secondary, #1a1a1a) !important;
+  border: 1px solid var(--border, #3d3520) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+  margin-top: 2px !important;
+}
+.pac-container::after {
+  display: none !important;
+}
+.pac-item {
+  padding: 6px 10px !important;
+  color: var(--text-primary, #f5d042) !important;
+  cursor: pointer !important;
+  border-top: none !important;
+  line-height: 1.35 !important;
+}
+.pac-item:hover,
+.pac-item-selected {
+  background: var(--bg-tab-active, #2a2a2a) !important;
+  color: var(--accent, #e67e22) !important;
+}
+.pac-item-query {
+  color: inherit !important;
+  font-size: 11px !important;
+}
+.pac-icon {
+  display: none !important;
+}
+
+/* Ẩn các icon cảnh báo mặc định của Google Maps khi API chưa load xong hoặc lỗi */
+.gm-err-container,
+.gm-err-message,
+.gm-style-pbc {
+  display: none !important;
+}
+
+/* Đảm bảo ô input địa chỉ luôn gọn gàng và đúng font */
+.htql-address-wrap {
+  width: 100%;
+}
+.htql-address-wrap input {
+  font-family: 'Tahoma', sans-serif !important;
+  font-size: 11px !important;
+  padding: 2px 5px !important;
+}
+
+/* Ô địa chỉ dùng Maps: kích thước lớn hơn, gợi ý hiển thị phía dưới theo dòng */
+.htql-address-input {
+  min-height: 40px !important;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+.htql-address-suggestions {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+.htql-address-suggestion-item {
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif);
+}
+.htql-address-suggestion-item:last-child {
+  border-bottom: none;
+}
+.htql-address-suggestion-item:hover {
+  background: var(--bg-tab-active);
+  color: var(--accent);
+}
+.htql-address-suggestions-loading {
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* === Hover: nút toolbar và menu - đổi màu nền khi rê chuột === */
+.htql-toolbar-btn {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.htql-toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}
+.htql-menu-btn {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.htql-menu-btn:hover {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}
+.htql-icon-btn {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.htql-icon-btn:hover {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}
+.htql-sidebar-group-btn {
+  transition: background-color 0.15s ease, filter 0.15s ease;
+}
+.htql-sidebar-group-btn:hover {
+  filter: brightness(1.15);
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+.htql-sidebar-item {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.htql-sidebar-item:hover {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}
+.htql-sidebar-item.htql-sidebar-item-active:hover {
+  background: var(--accent-hover) !important;
+  color: #0d0d0d !important;
+}
+.htql-tab-btn {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.htql-tab-btn:hover {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}

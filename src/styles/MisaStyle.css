@@ -1,0 +1,88 @@
+/**
+ * MisaStyle.css - Chuẩn giao diện MISA SME 100%
+ * Hard-coded size, không dùng biến linh hoạt.
+ */
+
+/* === MISA Form Container === */
+.misa-form {
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif) !important;
+  font-size: var(--font-size-misa, 11px) !important;
+}
+
+.misa-form * {
+  box-sizing: border-box !important;
+}
+
+/* === MISA Label === */
+.misa-label {
+  font-size: var(--font-size-misa, 11px) !important;
+  color: #000000 !important;
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif) !important;
+  font-weight: bold !important;
+  width: 100px;
+  text-align: right;
+  padding-right: 5px;
+  line-height: 20px;
+}
+
+.misa-required {
+  position: relative;
+  right: -2px;
+  color: #ef4444 !important;
+}
+
+/* === MISA Input (height 20px chuẩn) === */
+.misa-form input,
+.misa-form select {
+  height: 20px !important;
+  line-height: 1 !important;
+  font-size: var(--font-size-misa, 11px) !important;
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif) !important;
+  padding: 0 4px !important;
+  margin: 0 !important;
+  border: 1px solid #9ca3af !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+
+.misa-form input:focus,
+.misa-form select:focus {
+  outline: none !important;
+  border-color: #f59e0b !important;
+}
+
+/* === MISA Lookup Button === */
+.misa-lookup-btn {
+  width: 20px !important;
+  min-width: 20px !important;
+  height: 18px !important;
+  background-color: #e5e7eb !important;
+  border: 1px solid #9ca3af !important;
+  color: #000 !important;
+  font-size: 10px !important;
+  cursor: pointer;
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif) !important;
+}
+
+.misa-lookup-btn:hover {
+  background-color: #d1d5db !important;
+}
+
+/* === MISA Tab (thẻ bài nổi) === */
+.misa-tab-row {
+  border-bottom: 1px solid #9ca3af;
+  background: #f3f4f6;
+}
+
+.misa-tab-btn.misa-tab-active {
+  background: #fff !important;
+  border: 1px solid #9ca3af;
+  border-bottom: 1px solid #fff;
+  font-weight: bold;
+  color: #000;
+}
+
+/* === MISA Form Border === */
+.misa-form {
+  border: 1px solid #9ca3af !important;
+}

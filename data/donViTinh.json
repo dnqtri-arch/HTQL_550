@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "ma_dvt": "01",
+    "ten_dvt": "Cái",
+    "ky_hieu": "Cái",
+    "dien_giai": ""
+  },
+  {
+    "id": 2,
+    "ma_dvt": "02",
+    "ten_dvt": "Hộp",
+    "ky_hieu": "Hộp",
+    "dien_giai": ""
+  },
+  {
+    "id": 3,
+    "ma_dvt": "03",
+    "ten_dvt": "Mét",
+    "ky_hieu": "m",
+    "dien_giai": "Đơn vị đo chiều dài"
+  },
+  {
+    "id": 4,
+    "ma_dvt": "04",
+    "ten_dvt": "Kilôgam",
+    "ky_hieu": "Kg",
+    "dien_giai": ""
+  },
+  {
+    "id": 5,
+    "ma_dvt": "05",
+    "ten_dvt": "Tờ",
+    "ky_hieu": "Tờ",
+    "dien_giai": ""
+  },
+  {
+    "id": 6,
+    "ma_dvt": "06",
+    "ten_dvt": "Ram giấy",
+    "ky_hieu": "Ram",
+    "dien_giai": ""
+  },
+  {
+    "ma_dvt": "07",
+    "ten_dvt": "mét vuông",
+    "ky_hieu": "m2",
+    "dien_giai": "",
+    "id": 7
+  },
+  {
+    "ma_dvt": "08",
+    "ten_dvt": "Cây",
+    "ky_hieu": "Cây",
+    "dien_giai": "",
+    "id": 8
+  }
+]

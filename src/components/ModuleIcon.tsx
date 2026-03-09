@@ -1,0 +1,50 @@
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Store,
+  ShoppingCart,
+  FileText,
+  Wallet,
+  Landmark,
+  UserCircle,
+  Warehouse,
+  Ruler,
+  UserCog,
+  Wrench,
+  Car,
+  Banknote,
+  Percent,
+  Calculator,
+  BookOpen,
+  FileCheck,
+  Files,
+  FolderOpen,
+  LucideIcon,
+} from 'lucide-react'
+
+const iconMap: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  ClipboardList,
+  Store,
+  ShoppingCart,
+  FileText,
+  Wallet,
+  Landmark,
+  UserCircle,
+  Warehouse,
+  Ruler,
+  UserCog,
+  Wrench,
+  Car,
+  Banknote,
+  Percent,
+  Calculator,
+  BookOpen,
+  FileCheck,
+  Files,
+  FolderOpen,
+}
+
+export function getModuleIcon(iconName: string): LucideIcon {
+  return iconMap[iconName] ?? LayoutDashboard
+}

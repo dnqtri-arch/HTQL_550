@@ -1,0 +1,228 @@
+import { useState, useEffect } from 'react'
+import { X, Save, Ban } from 'lucide-react'
+import { donViTinhPost, donViTinhMaTuDong } from './donViTinhApi'
+
+interface ThemDonViTinhModalProps {
+  onClose: () => void
+  onSaved: () => void | Promise<void>
+}
+
+const overlay: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.7)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 2100,
+}
+
+const box: React.CSSProperties = {
+  background: 'var(--bg-secondary)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  minWidth: 320,
+  maxWidth: '90vw',
+  boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+}
+
+const headerStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  borderBottom: '1px solid var(--border)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  background: 'var(--bg-tab)',
+  fontSize: '12px',
+  fontFamily: "var(--font-misa, 'Tahoma', Arial, sans-serif)",
+  fontWeight: 600,
+  color: 'var(--text-primary)',
+}
+
+const bodyStyle: React.CSSProperties = {
+  padding: 12,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+}
+
+const footerStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  borderTop: '1px solid var(--border)',
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: 8,
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--text-primary)',
+  marginBottom: 4,
+  display: 'block',
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '4px 8px',
+  fontSize: 11,
+  background: 'var(--bg-tab)',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  color: 'var(--text-primary)',
+  boxSizing: 'border-box',
+  height: 28,
+}
+
+const btnBase: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '4px 12px',
+  fontSize: 11,
+  fontFamily: "var(--font-misa, 'Tahoma', Arial, sans-serif)",
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  cursor: 'pointer',
+  background: 'var(--bg-tab-active)',
+  color: 'var(--text-primary)',
+}
+
+const btnPrimary: React.CSSProperties = {
+  ...btnBase,
+  background: 'var(--accent)',
+  color: '#0d0d0d',
+  borderColor: 'var(--connector)',
+}
+
+const btnDanger: React.CSSProperties = {
+  ...btnBase,
+  color: '#e74c3c',
+}
+
+export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps) {
+  const [ma_dvt, setMaDvt] = useState('')
+  const [ten_dvt, setTenDvt] = useState('')
+  const [ky_hieu, setKyHieu] = useState('')
+  const [dien_giai, setDienGiai] = useState('')
+  const [loi, setLoi] = useState('')
+  const [dangLuu, setDangLuu] = useState(false)
+
+  useEffect(() => {
+    donViTinhMaTuDong().then(setMaDvt)
+  }, [])
+
+  const handleCất = async () => {
+    const ten = ten_dvt.trim()
+    if (!ten) {
+      setLoi('Tên đơn vị tính là bắt buộc.')
+      return
+    }
+    setLoi('')
+    setDangLuu(true)
+    try {
+      await donViTinhPost({
+        ma_dvt: ma_dvt.trim() || (await donViTinhMaTuDong()),
+        ten_dvt: ten,
+        ky_hieu: ky_hieu.trim() || undefined,
+        dien_giai: dien_giai.trim() || '',
+      })
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setLoi(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
+    } finally {
+      setDangLuu(false)
+    }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={box} onClick={(e) => e.stopPropagation()}>
+        <div style={headerStyle}>
+          <span>Thêm đơn vị tính</span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: 2,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-primary)',
+              display: 'flex',
+            }}
+            aria-label="Đóng"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={bodyStyle}>
+          <div>
+            <label style={labelStyle}>Mã đơn vị tính</label>
+            <input
+              type="text"
+              value={ma_dvt}
+              readOnly
+              style={{
+                ...inputStyle,
+                background: 'var(--bg-primary)',
+                color: 'var(--text-muted)',
+                borderColor: 'var(--border-strong)',
+                cursor: 'default',
+              }}
+              title="Tự động: 01, 02, 03..."
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Tên đơn vị tính (*)</label>
+            <input
+              type="text"
+              value={ten_dvt}
+              onChange={(e) => setTenDvt(e.target.value)}
+              style={inputStyle}
+              placeholder="Nhập tên đơn vị tính"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Ký hiệu</label>
+            <input
+              type="text"
+              value={ky_hieu}
+              onChange={(e) => setKyHieu(e.target.value)}
+              style={inputStyle}
+              placeholder="VD: Cái, Kg, m"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Diễn giải</label>
+            <input
+              type="text"
+              value={dien_giai}
+              onChange={(e) => setDienGiai(e.target.value)}
+              style={inputStyle}
+              placeholder="Tùy chọn"
+            />
+          </div>
+          {loi && (
+            <div style={{ fontSize: 11, color: 'var(--accent)' }}>
+              {loi}
+            </div>
+          )}
+        </div>
+
+        <div style={footerStyle}>
+          <button type="button" style={btnDanger} onClick={onClose}>
+            <Ban size={14} />
+            <span>Hủy bỏ</span>
+          </button>
+          <button type="button" style={btnPrimary} onClick={handleCất} disabled={dangLuu}>
+            <Save size={14} />
+            <span>{dangLuu ? 'Đang lưu...' : 'Lưu'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

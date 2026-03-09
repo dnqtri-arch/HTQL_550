@@ -1,0 +1,34 @@
+---
+description: Cột/trường ĐVT (đơn vị tính) — tên gọi và nguyên tắc hiển thị toàn hệ thống
+globs: **/*.{ts,tsx}
+---
+
+# ĐVT (Đơn vị tính) — toàn hệ thống
+
+## Tên gọi
+
+- **Tên hiển thị thống nhất:** **ĐVT** (dùng cho tiêu đề cột, nhãn form, xuất file, báo cáo).
+- Có thể dùng thêm "ĐVT chính" khi cần phân biệt với đơn vị quy đổi trong cùng form; phần hiển thị vẫn theo nguyên tắc dưới đây.
+
+## Nguyên tắc hiển thị
+
+- **Lưu trữ (form, API, DB):** Lưu **mã** đơn vị tính (`ma_dvt`), ví dụ: `"07"`, `"01"`.
+- **Hiển thị (lưới, form, export, báo cáo):** Hiển thị **nhãn** — ưu tiên **ký hiệu** (`ky_hieu`), không có thì **tên** (`ten_dvt`), không có nữa thì mã.  
+  Công thức: `ky_hieu || ten_dvt || ma_dvt`.  
+  Ví dụ: mã `"07"` → hiển thị `"m2"` (nếu `ky_hieu = "m2"`); mã `"01"` → `"Cái"`.
+- **Tra cứu:** Có danh mục ĐVT (`ma_dvt`, `ten_dvt`, `ky_hieu`). Khi hiển thị, map mã → nhãn theo danh mục.
+
+## Cách làm trong code
+
+- **Lưới / danh sách:** Trước khi gán vào dữ liệu hiển thị, map `dvt_chinh` (mã) → nhãn bằng hàm kiểu `dvtHienThiLabel(value, dvtList)` trả về `ky_hieu || ten_dvt || ma_dvt`.
+- **Form (dropdown ĐVT chính, ĐVQĐ):** Option hiển thị `d.ky_hieu || d.ten_dvt`; value vẫn là `d.ma_dvt`.
+- **Xuất khẩu (CSV, Excel):** Cột **ĐVT** dùng nhãn (gọi `dvtHienThiLabel`), không xuất mã.
+
+## Đã áp dụng
+
+- **VatTuHangHoa.tsx:** Cột **ĐVT** lưới dùng `dvtHienThiLabel`; xuất khẩu CSV cột ĐVT dùng nhãn. Tiêu đề cột: "ĐVT".
+- **VatTuHangHoaForm.tsx:** Ô ĐVT chính và cột ĐVQĐ hiển thị `ky_hieu || ten_dvt` trong dropdown; lưu `ma_dvt`.
+
+## Áp dụng cho
+
+- Mọi màn hình, báo cáo, export có cột/trường đơn vị tính: dùng tên **ĐVT**, lưu mã và **hiển thị nhãn** (ky_hieu || ten_dvt) theo nguyên tắc trên.

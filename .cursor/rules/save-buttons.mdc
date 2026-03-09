@@ -1,0 +1,43 @@
+---
+description: Nguyên tắc hai nút Lưu và Lưu và tiếp tục — áp dụng toàn hệ thống
+globs: **/*.{ts,tsx}
+---
+
+# Nút Lưu / Lưu và tiếp tục — toàn hệ thống
+
+## Tên nút (nhãn)
+
+- **Lưu** — dùng cho nút lưu và đóng (hoặc kết thúc thao tác).
+- **Lưu và tiếp tục** — dùng cho nút lưu rồi reset form và tiếp tục nhập dòng/bản ghi tiếp theo.
+
+Không dùng "Cất", "Cất & Thêm" trong giao diện. Thống nhất toàn dự án: **Lưu** và **Lưu và tiếp tục**.
+
+---
+
+## Nguyên tắc 1: Nút **Lưu**
+
+- **Hành vi:** Lưu toàn bộ dữ liệu đã nhập (gửi API / ghi xuống nguồn dữ liệu).
+- **Sau khi lưu:** Đóng form/modal (hoặc chuyển trạng thái kết thúc thao tác tùy màn hình).
+- **Áp dụng:** Mọi form/modal có chức năng “lưu và đóng”: form Vật tư hàng hóa (chế độ Thêm/Sửa), Thêm đơn vị tính, Thêm nhóm VTHH, Thêm kho, v.v.
+
+---
+
+## Nguyên tắc 2: Nút **Lưu và tiếp tục**
+
+- **Hành vi:**  
+  1. Lưu toàn bộ dữ liệu đã nhập (gửi API / ghi xuống nguồn dữ liệu).  
+  2. Xóa/trả form về **trạng thái ban đầu** (như lúc mới mở form thêm): reset toàn bộ trường, bảng con (đơn vị quy đổi, chiết khấu, định mức…), state hiển thị (công thức, ảnh, tab đang chọn…).  
+  3. **Không đóng** form; sinh mã mới cho bản ghi tiếp theo (nếu có); đưa focus vào ô nhập chính (vd: Tên) để nhập dòng tiếp theo.
+- **Chỉ hiển thị** khi đang ở chế độ thêm mới (vd: form Thêm vật tư hàng hóa, modal Thêm nhóm VTHH, Thêm kho có hỗ trợ “thêm nhiều”).
+- **Áp dụng:** Form Vật tư hàng hóa (Thêm), modal Thêm nhóm VTHH, modal Thêm kho, và mọi màn hình thêm liên tiếp tương tự.
+
+---
+
+## Đã áp dụng trong code
+
+- **VatTuHangHoaForm.tsx:** Nút "Lưu" (submit + đóng), "Lưu và tiếp tục" (submit + reset form + setActiveSubTab(1) + setFormulaText/… + focus ô Tên). Reset dùng `getEmptyFormValues(dvtList)` và `reset(..., { keepDefaultValues: false })`.
+- **ThemDonViTinhModal.tsx:** Chỉ nút "Lưu" (lưu + đóng).
+- **ThemNhomVTHHModal.tsx:** "Lưu" (lưu + đóng), "Lưu và tiếp tục" (lưu + xóa ô Tên/Thuộc, giữ modal mở).
+- **ThemKhoModal.tsx:** "Lưu" (lưu + đóng), "Lưu và tiếp tục" (lưu + xóa Tên/TK kho/Địa chỉ, giữ modal mở).
+
+Khi thêm form/modal mới có thao tác lưu: dùng đúng nhãn **Lưu** / **Lưu và tiếp tục** và áp dụng hai nguyên tắc trên.

@@ -1,0 +1,9 @@
+[
+  { "ma": "111", "ten": "Tiền mặt" },
+  { "ma": "112", "ten": "Tiền gửi ngân hàng" },
+  { "ma": "131", "ten": "Phải thu khách hàng" },
+  { "ma": "331", "ten": "Phải trả nhà cung cấp" },
+  { "ma": "156", "ten": "Hàng hóa" },
+  { "ma": "511", "ten": "Doanh thu bán hàng" },
+  { "ma": "632", "ten": "Giá vốn hàng bán" }
+]

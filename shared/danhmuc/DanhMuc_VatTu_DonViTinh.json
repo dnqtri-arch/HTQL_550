@@ -1,0 +1,11 @@
+[
+  { "ma": "CAI", "ten": "Cái" },
+  { "ma": "KG", "ten": "Kilogram" },
+  { "ma": "M", "ten": "Mét" },
+  { "ma": "M2", "ten": "Mét vuông" },
+  { "ma": "M3", "ten": "Mét khối" },
+  { "ma": "THUNG", "ten": "Thùng" },
+  { "ma": "BAO", "ten": "Bao" },
+  { "ma": "CHAI", "ten": "Chai" },
+  { "ma": "HOP", "ten": "Hộp" }
+]
