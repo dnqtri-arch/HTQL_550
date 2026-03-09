@@ -442,6 +442,20 @@
   outline: none !important;
 }
 
+/* Ô Thuế GTGT (%): định dạng giống Kho ngầm định (wrapper + select, mũi tên accent) */
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border,
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border select {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border {
+  margin-left: -4px;
+}
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
 /* Nút + cạnh ĐVT chính: chiều cao bằng ô nhập (24px) */
 .htql-form .htql-fieldset .misa-form-grid .htql-dvt-plus-btn,
 .htql-form .htql-tab-ngam-dinh .htql-dvt-plus-btn {
@@ -675,7 +689,7 @@
   padding-right: 15px;
 }
 
-/* Cột văn bản (ĐVQĐ, Phép tính, Mô tả) - căn trái */
+/* Cột văn bản (ĐV quy đổi, Phép tính, Mô tả) - căn trái */
 .htql-dvt-quydoi-table td:nth-child(2),
 .htql-dvt-quydoi-table td:nth-child(4),
 .htql-dvt-quydoi-table th:nth-child(2),

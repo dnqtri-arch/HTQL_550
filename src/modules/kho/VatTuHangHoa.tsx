@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Copy, Pencil, Trash2, RefreshCw, Upload, Download, Printer } from 'lucide-react'
+import { Plus, Copy, Pencil, Trash2, RefreshCw, Upload, Download, Printer, Percent, ArrowLeftRight, Package, FileText } from 'lucide-react'
 import { DataGrid } from '../../components/DataGrid'
 import {
   type VatTuHangHoaRecord,
@@ -71,23 +71,6 @@ const panelChiTiet: React.CSSProperties = {
   overflow: 'hidden',
 }
 
-const panelTieuDe: React.CSSProperties = {
-  padding: '6px 10px',
-  background: 'var(--bg-tab)',
-  borderBottom: '1px solid var(--border-strong)',
-  fontSize: '11px',
-  fontWeight: 600,
-  color: '#f59e0b',
-}
-
-const grid2cot: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 200px',
-  gap: '12px',
-  padding: '10px',
-  fontSize: '11px',
-}
-
 const truongChiTiet: React.CSSProperties = {
   display: 'flex',
   gap: '8px',
@@ -101,6 +84,20 @@ const nhan: React.CSSProperties = {
 
 const giaTri: React.CSSProperties = {
   color: '#e5e7eb',
+}
+
+const thStyle: React.CSSProperties = {
+  padding: '6px 8px',
+  textAlign: 'left',
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+  borderBottom: '1px solid var(--border)',
+  background: 'var(--bg-tab)',
+}
+const tdStyle: React.CSSProperties = {
+  padding: '6px 8px',
+  borderBottom: '1px solid var(--border)',
+  color: 'var(--text-primary)',
 }
 
 const vungHinhAnh: React.CSSProperties = {
@@ -149,6 +146,7 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
   const [dangTai, setDangTai] = useState(true)
   const [imageLoadError, setImageLoadError] = useState(false)
   const [imageMeta, setImageMeta] = useState<{ width: number; height: number; sizeMB: number } | null>(null)
+  const [detailTab, setDetailTab] = useState<'ngam_dinh' | 'chiet_khau' | 'don_vi_quy_doi' | 'dinh_muc_nvl' | 'dac_tinh'>('ngam_dinh')
   const modalBoxRef = useRef<HTMLDivElement>(null)
   const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | null>(null)
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
@@ -204,6 +202,29 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
     setImageLoadError(false)
     setImageMeta(null)
   }, [dongChon?.id, dongChon?.duong_dan_hinh_anh])
+
+  useEffect(() => {
+    setDetailTab('ngam_dinh')
+  }, [dongChon?.id])
+
+  const detailTabs = useMemo(() => {
+    const tabs: { id: typeof detailTab; label: string; icon?: React.ReactNode }[] = [
+      { id: 'ngam_dinh', label: '1. Ngầm định' },
+    ]
+    if (dongChon) {
+      const hasChietKhau = Array.isArray(dongChon.bang_chiet_khau) && dongChon.bang_chiet_khau.some((r) => r.so_luong_tu || r.so_luong_den || r.ty_le_chiet_khau)
+      if (hasChietKhau) tabs.push({ id: 'chiet_khau', label: '2. Bậc giá', icon: <Percent size={12} /> })
+      const hasDonViQuyDoi = Array.isArray(dongChon.don_vi_quy_doi) && dongChon.don_vi_quy_doi.some((r) => (r.dvt ?? '').trim() || (r.ti_le_quy_doi ?? '1') !== '1' || (r.mo_ta ?? '').trim() || (r.gia_ban ?? '').trim())
+      if (hasDonViQuyDoi) tabs.push({ id: 'don_vi_quy_doi', label: '3. Đơn vị quy đổi', icon: <ArrowLeftRight size={12} /> })
+      const hasDinhMucNvl = dongChon.tinh_chat === 'Sản phẩm' && Array.isArray(dongChon.dinh_muc_nvl) && dongChon.dinh_muc_nvl.some((r) => r.ma || r.ten || r.so_luong)
+      if (hasDinhMucNvl) tabs.push({ id: 'dinh_muc_nvl', label: '4. Định mức nguyên vật liệu', icon: <Package size={12} /> })
+      const hasDacTinh = (dongChon.dac_tinh ?? '').trim() || (dongChon.duong_dan_hinh_anh ?? '').trim()
+      if (hasDacTinh) tabs.push({ id: 'dac_tinh', label: '6. Đặc tính, hình ảnh', icon: <FileText size={12} /> })
+    }
+    return tabs
+  }, [dongChon])
+
+  const activeDetailTab = detailTabs.some((t) => t.id === detailTab) ? detailTab : 'ngam_dinh'
 
   useEffect(() => {
     if (modalOpen) setModalPosition(null)
@@ -391,95 +412,207 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
         </div>
 
         <div style={{ ...panelChiTiet, flexShrink: 0 }}>
-          <div style={panelTieuDe}>1. Thông tin ngầm định</div>
-          <div style={grid2cot}>
-            <div>
-              <div style={truongChiTiet}>
-                <span style={nhan}>Kho ngầm định:</span>
-                <span style={giaTri}>{dongChon?.kho_ngam_dinh ?? '—'}</span>
-              </div>
-              <div style={truongChiTiet}>
-                <span style={nhan}>Tài khoản kho:</span>
-                <span style={giaTri}>{dongChon?.tai_khoan_kho ?? '—'}</span>
-              </div>
-              <div style={truongChiTiet}>
-                <span style={nhan}>TK doanh thu:</span>
-                <span style={giaTri}>{dongChon?.tk_doanh_thu ?? '5111'}</span>
-              </div>
-              <div style={truongChiTiet}>
-                <span style={nhan}>TK chi phí:</span>
-                <span style={giaTri}>{dongChon?.tk_chi_phi ?? '632'}</span>
-              </div>
-              <div style={truongChiTiet}>
-                <span style={nhan}>Thuế GTGT (%):</span>
-                <span style={giaTri}>{dongChon?.thue_suat_gtgt ?? '0'}%</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={vungHinhAnh}>
-                {dongChon?.duong_dan_hinh_anh && !imageLoadError ? (
-                  (() => {
-                    const src = dongChon.duong_dan_hinh_anh.startsWith('data:')
-                      ? dongChon.duong_dan_hinh_anh
-                      : VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh
-                    const isDataUrl = dongChon.duong_dan_hinh_anh.startsWith('data:')
-                    const sizeBytes = isDataUrl
-                      ? Math.floor((dongChon.duong_dan_hinh_anh.length - (dongChon.duong_dan_hinh_anh.indexOf(',') + 1)) * 0.75)
-                      : 0
-                    return (
-                      <img
-                        src={src}
-                        alt={dongChon.ten ?? 'Hình ảnh VTHH'}
-                        title={dongChon.ten ?? undefined}
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '100%',
-                          objectFit: 'contain',
-                        }}
-                        onLoad={(e) => {
-                          setImageLoadError(false)
-                          const img = e.currentTarget
-                          setImageMeta({
-                            width: img.naturalWidth,
-                            height: img.naturalHeight,
-                            sizeMB: isDataUrl ? sizeBytes / (1024 * 1024) : 0,
-                          })
-                        }}
-                        onError={() => setImageLoadError(true)}
-                      />
-                    )
-                  })()
-                ) : null}
-                <span
-                  style={{
-                    display: dongChon?.duong_dan_hinh_anh && !imageLoadError ? 'none' : 'block',
-                    textAlign: 'center',
-                    padding: 8,
-                  }}
-                  title={dongChon?.duong_dan_hinh_anh ? VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh : undefined}
-                >
-                  Hình ảnh
-                  <br />
-                  <span style={{ fontSize: '9px' }}>{VATTU_IMAGE_BASE}</span>
-                </span>
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left' }}>
-                <div style={{ ...giaTri, wordBreak: 'break-all' }} title={dongChon?.duong_dan_hinh_anh?.startsWith('data:') ? 'Ảnh nhúng (Base64)' : (dongChon?.duong_dan_hinh_anh ?? '')}>
-                  {dongChon?.duong_dan_hinh_anh
-                    ? (dongChon.duong_dan_hinh_anh.startsWith('data:') ? 'Ảnh nhúng (Base64)' : (dongChon.duong_dan_hinh_anh.split(/[/\\]/).pop() ?? dongChon.duong_dan_hinh_anh))
-                    : '—'}
-                </div>
-                <div style={{ ...giaTri, wordBreak: 'break-all', fontSize: 9 }}>
-                  {imageMeta ? `${imageMeta.width}×${imageMeta.height}` + (imageMeta.sizeMB > 0 ? `, ${imageMeta.sizeMB.toFixed(2)} MB` : '') : (dongChon?.duong_dan_hinh_anh ? '—' : '')}
-                </div>
-                <div style={{ ...giaTri, wordBreak: 'break-all', fontSize: 9 }} title={dongChon?.duong_dan_hinh_anh && !dongChon.duong_dan_hinh_anh.startsWith('data:') ? VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh : undefined}>
-                  {dongChon?.duong_dan_hinh_anh && !dongChon.duong_dan_hinh_anh.startsWith('data:')
-                    ? VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh
-                    : dongChon?.duong_dan_hinh_anh ? '(Base64)' : '—'}
-                </div>
-              </div>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+            {detailTabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setDetailTab(t.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  background: activeDetailTab === t.id ? 'var(--accent)' : 'transparent',
+                  color: activeDetailTab === t.id ? '#0d0d0d' : 'var(--text-muted)',
+                  border: '1px solid ' + (activeDetailTab === t.id ? 'var(--accent)' : 'var(--border)'),
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
           </div>
+          {activeDetailTab === 'ngam_dinh' && (
+            <div style={{ padding: 10, fontSize: 11 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) minmax(120px, 1fr) minmax(100px, 1fr) minmax(120px, 1fr)', gap: '8px 16px', alignItems: 'center' }}>
+                <span style={nhan}>Kho ngầm định</span>
+                <span style={giaTri}>{dongChon?.kho_ngam_dinh ?? '—'}</span>
+                <span style={nhan}>ĐG mua cố định</span>
+                <span style={giaTri}>{dongChon?.don_gia_mua_co_dinh != null ? formatNumberDisplay(dongChon.don_gia_mua_co_dinh) : '—'}</span>
+                <span style={nhan}>Tài khoản kho</span>
+                <span style={giaTri}>{dongChon?.tai_khoan_kho ?? '—'}</span>
+                <span style={nhan}>ĐG mua gần nhất</span>
+                <span style={giaTri}>{dongChon?.gia_mua_gan_nhat != null ? formatNumberDisplay(dongChon.gia_mua_gan_nhat) : (dongChon?.don_gia_mua != null ? formatNumberDisplay(dongChon.don_gia_mua) : '—')}</span>
+                <span style={nhan}>TK doanh thu</span>
+                <span style={giaTri}>{dongChon?.tk_doanh_thu ?? '5111'}</span>
+                <span style={nhan}>ĐG bán</span>
+                <span style={giaTri}>{dongChon?.don_gia_ban != null ? formatNumberDisplay(dongChon.don_gia_ban) : '—'}</span>
+                <span style={nhan}>TK chiết khấu</span>
+                <span style={giaTri}>{dongChon?.tk_chiet_khau ?? '—'}</span>
+                <span style={nhan}>Thuế GTGT (%)</span>
+                <span style={giaTri}>{dongChon?.thue_suat_gtgt ?? 'Chưa xác định'}%</span>
+                <span style={nhan}>TK giảm giá</span>
+                <span style={giaTri}>{dongChon?.tk_giam_gia ?? '—'}</span>
+                <span style={nhan}>Có giảm thuế</span>
+                <span style={giaTri}>{dongChon?.co_giam_thue ?? '—'}</span>
+                <span style={nhan}>TK trả lại</span>
+                <span style={giaTri}>{dongChon?.tk_tra_lai ?? '—'}</span>
+                <span style={nhan}>Thuế NK (%)</span>
+                <span style={giaTri}>{dongChon?.thue_suat_nk ?? '—'}</span>
+                <span style={nhan}>Thuế XK (%)</span>
+                <span style={giaTri}>{dongChon?.thue_suat_xk ?? '—'}</span>
+                <span style={nhan}>Tỷ lệ CKMH (%)</span>
+                <span style={giaTri}>{dongChon?.ty_le_ckmh ?? '—'}</span>
+                <span style={nhan}>HHDV chịu thuế TTĐB</span>
+                <span style={giaTri}>{dongChon?.nhom_hhdv_ttdb ?? '—'}</span>
+                <span style={nhan}>Loại HH đặc trưng</span>
+                <span style={giaTri}>{dongChon?.loai_hh_dac_trung ?? '—'}</span>
+                <span style={nhan}>Là hàng khuyến mại</span>
+                <span style={giaTri}>{dongChon?.la_hang_khuyen_mai ? 'Có' : 'Không'}</span>
+              </div>
+              {(dongChon?.cong_thuc_tinh_so_luong ?? '').trim() && (
+                <div style={{ ...truongChiTiet, marginTop: 10 }}>
+                  <span style={nhan}>Công thức tính số lượng:</span>
+                  <span style={{ ...giaTri, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{dongChon?.cong_thuc_tinh_so_luong}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {activeDetailTab === 'chiet_khau' && dongChon?.bang_chiet_khau && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-tab)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, width: '30%' }}>Số lượng từ</th>
+                    <th style={{ ...thStyle, width: '30%' }}>Số lượng đến</th>
+                    <th style={{ ...thStyle, width: '40%' }}>Tỷ lệ CK (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dongChon.bang_chiet_khau.filter((r) => r.so_luong_tu || r.so_luong_den || r.ty_le_chiet_khau).map((r, i) => (
+                    <tr key={i}>
+                      <td style={tdStyle}>{r.so_luong_tu || '—'}</td>
+                      <td style={tdStyle}>{r.so_luong_den || '—'}</td>
+                      <td style={tdStyle}>{r.ty_le_chiet_khau || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {activeDetailTab === 'don_vi_quy_doi' && dongChon?.don_vi_quy_doi && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflowX: 'auto', background: 'var(--bg-tab)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, width: 36, textAlign: 'center' }}>STT</th>
+                    <th style={thStyle}>ĐV quy đổi</th>
+                    <th style={thStyle}>Tỉ lệ</th>
+                    <th style={thStyle}>Phép tính</th>
+                    <th style={thStyle}>Mô tả</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dongChon.don_vi_quy_doi
+                    .filter((r) => (r.dvt ?? '').trim() || (r.ti_le_quy_doi ?? '1') !== '1' || (r.mo_ta ?? '').trim() || (r.gia_ban ?? '').trim())
+                    .map((r, i) => (
+                      <tr key={i}>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>{i + 1}</td>
+                        <td style={tdStyle}>{dvtHienThiLabel(r.dvt ?? '', dvtList) || '—'}</td>
+                        <td style={tdStyle}>{r.ti_le_quy_doi ?? '1'}</td>
+                        <td style={tdStyle}>{r.phep_tinh === 'chia' ? 'Phép chia' : 'Phép nhân'}</td>
+                        <td style={tdStyle}>{r.mo_ta || '—'}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {activeDetailTab === 'dinh_muc_nvl' && dongChon?.dinh_muc_nvl && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-tab)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, width: '15%' }}>Mã</th>
+                    <th style={{ ...thStyle, width: '35%' }}>Tên</th>
+                    <th style={{ ...thStyle, width: '12%' }}>ĐVT</th>
+                    <th style={{ ...thStyle, width: '18%' }}>Số lượng</th>
+                    <th style={{ ...thStyle, width: '20%' }}>Hao hụt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dongChon.dinh_muc_nvl.filter((r) => r.ma || r.ten || r.so_luong).map((r, i) => (
+                    <tr key={i}>
+                      <td style={tdStyle}>{r.ma || '—'}</td>
+                      <td style={tdStyle}>{r.ten || '—'}</td>
+                      <td style={tdStyle}>{r.dvt || '—'}</td>
+                      <td style={tdStyle}>{r.so_luong || '—'}</td>
+                      <td style={tdStyle}>{r.hao_hut || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {activeDetailTab === 'dac_tinh' && (
+            <div style={{ display: 'flex', flexDirection: 'row', gap: 16, padding: 10, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Đặc tính</label>
+                <div style={{ ...giaTri, whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: 120, padding: 8, background: 'var(--bg-tab)', border: '1px solid var(--border)', borderRadius: 4 }}>
+                  {(dongChon?.dac_tinh ?? '').trim() || '—'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Hình ảnh (tối đa 5MB)</label>
+                <div style={vungHinhAnh}>
+                  {dongChon?.duong_dan_hinh_anh && !imageLoadError ? (
+                    (() => {
+                      const src = dongChon.duong_dan_hinh_anh.startsWith('data:')
+                        ? dongChon.duong_dan_hinh_anh
+                        : VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh
+                      const isDataUrl = dongChon.duong_dan_hinh_anh.startsWith('data:')
+                      const sizeBytes = isDataUrl
+                        ? Math.floor((dongChon.duong_dan_hinh_anh.length - (dongChon.duong_dan_hinh_anh.indexOf(',') + 1)) * 0.75)
+                        : 0
+                      return (
+                        <img
+                          src={src}
+                          alt={dongChon.ten ?? 'Hình ảnh VTHH'}
+                          title={dongChon.ten ?? undefined}
+                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                          onLoad={(e) => {
+                            setImageLoadError(false)
+                            const img = e.currentTarget
+                            setImageMeta({
+                              width: img.naturalWidth,
+                              height: img.naturalHeight,
+                              sizeMB: isDataUrl ? sizeBytes / (1024 * 1024) : 0,
+                            })
+                          }}
+                          onError={() => setImageLoadError(true)}
+                        />
+                      )
+                    })()
+                  ) : null}
+                  <span style={{ display: dongChon?.duong_dan_hinh_anh && !imageLoadError ? 'none' : 'block', textAlign: 'center', padding: 8 }}>
+                    Hình ảnh
+                    <br />
+                    <span style={{ fontSize: '9px' }}>{VATTU_IMAGE_BASE}</span>
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {dongChon?.duong_dan_hinh_anh
+                    ? (dongChon.duong_dan_hinh_anh.startsWith('data:') ? 'Ảnh nhúng (Base64)' : (dongChon.duong_dan_hinh_anh.split(/[/\\]/).pop() ?? ''))
+                    : '—'}
+                  {imageMeta ? ` • ${imageMeta.width}×${imageMeta.height}` + (imageMeta.sizeMB > 0 ? `, ${imageMeta.sizeMB.toFixed(2)} MB` : '') : ''}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

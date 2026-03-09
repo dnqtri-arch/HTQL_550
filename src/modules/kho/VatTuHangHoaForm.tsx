@@ -36,6 +36,7 @@ export type FormValues = {
   don_gia_mua_gan_nhat: string
   don_gia_ban: string
   thue_suat_gtgt_dau_ra: string
+  thue_suat_gtgt_tu_nhap: string
   co_giam_thue: string
   thue_suat_nk: string
   thue_suat_xk: string
@@ -222,9 +223,10 @@ const LOAI_CHIET_KHAU_OPTIONS = [
 
 const THUE_SUAT_OPTIONS = [
   { value: 'Chưa xác định', label: 'Chưa xác định' },
-  { value: '0', label: '0%' },
   { value: '5', label: '5%' },
+  { value: '8', label: '8%' },
   { value: '10', label: '10%' },
+  { value: 'Tự nhập', label: 'Tự nhập' },
 ]
 
 const inputStyle: React.CSSProperties = {
@@ -310,21 +312,19 @@ interface Props {
   vatTuList?: VatTuHangHoaRecord[]
 }
 
-const SUB_TABS_VAT_TU: { id: 1 | 2 | 3 | 4 | 5; label: string }[] = [
+const SUB_TABS_VAT_TU: { id: 1 | 2 | 3 | 4; label: string }[] = [
   { id: 1, label: '1. Ngầm định' },
-  { id: 2, label: '2. Chiết khấu' },
-  { id: 3, label: '3. Đơn vị quy đổi và bậc giá' },
-  { id: 4, label: '4. Mã quy cách' },
-  { id: 5, label: '5. Đặc tính, hình ảnh' },
+  { id: 2, label: '2. Bậc giá' },
+  { id: 3, label: '3. Đơn vị quy đổi' },
+  { id: 4, label: '4. Đặc tính, hình ảnh' },
 ]
 
-const SUB_TABS_SAN_PHAM: { id: 1 | 2 | 3 | 4 | 5 | 6; label: string }[] = [
+const SUB_TABS_SAN_PHAM: { id: 1 | 2 | 3 | 4 | 5; label: string }[] = [
   { id: 1, label: '1. Ngầm định' },
-  { id: 2, label: '2. Chiết khấu' },
-  { id: 3, label: '3. Đơn vị quy đổi và bậc giá' },
+  { id: 2, label: '2. Bậc giá' },
+  { id: 3, label: '3. Đơn vị quy đổi' },
   { id: 4, label: '4. Định mức nguyên vật liệu' },
-  { id: 5, label: '5. Mã quy cách' },
-  { id: 6, label: '6. Đặc tính, hình ảnh' },
+  { id: 5, label: '5. Đặc tính, hình ảnh' },
 ]
 
 /**
@@ -404,6 +404,7 @@ function getEmptyFormValues(dvtList: { id: number; ma_dvt: string; ten_dvt: stri
     don_gia_mua_gan_nhat: '0',
     don_gia_ban: '0',
     thue_suat_gtgt_dau_ra: 'Chưa xác định',
+    thue_suat_gtgt_tu_nhap: '',
     co_giam_thue: 'Có giảm thuế',
     thue_suat_nk: '0',
     thue_suat_xk: '0',
@@ -416,7 +417,7 @@ function getEmptyFormValues(dvtList: { id: number; ma_dvt: string; ten_dvt: stri
     so_may: '',
     thoi_gian_bao_hanh: '',
     xuat_xu: '',
-    don_vi_quy_doi: [{ dvt_chinh: dvtChinh, dvt_quy_doi: '', ti_le_quy_doi: '1', phep_tinh: 'nhan', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' }],
+    don_vi_quy_doi: [],
     dien_giai: '',
     la_bo_phan_lap_rap: false,
     la_mat_hang_khuyen_mai: false,
@@ -478,7 +479,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const [submitError, setSubmitError] = useState('')
   const [lookupModal, setLookupModal] = useState<'kho' | 'nhom_vthh' | null>(null)
   const [showThemDvtModal, setShowThemDvtModal] = useState(false)
-  const [activeSubTab, setActiveSubTab] = useState<1 | 2 | 3 | 4 | 5 | 6>(1)
+  const [activeSubTab, setActiveSubTab] = useState<1 | 2 | 3 | 4 | 5>(1)
   const [imageUploadError, setImageUploadError] = useState('')
   const [imageUploading, setImageUploading] = useState(false)
   const [formulaDialogOpen, setFormulaDialogOpen] = useState(false)
@@ -646,7 +647,18 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       don_gia_mua_co_dinh: initialData?.don_gia_mua_co_dinh != null ? formatSoTien(String(initialData.don_gia_mua_co_dinh)) : '0',
       don_gia_mua_gan_nhat: initialData?.gia_mua_gan_nhat != null ? formatSoTien(String(initialData.gia_mua_gan_nhat)) : (initialData?.don_gia_mua != null ? formatSoTien(String(initialData.don_gia_mua)) : '0'),
       don_gia_ban: initialData?.don_gia_ban != null ? formatSoTien(String(initialData.don_gia_ban)) : (initialData?.gia_ban_quy_dinh != null ? formatSoTien(String(initialData.gia_ban_quy_dinh)) : '0'),
-      thue_suat_gtgt_dau_ra: initialData?.thue_suat_gtgt ?? 'Chưa xác định',
+      thue_suat_gtgt_dau_ra: (() => {
+        const v = initialData?.thue_suat_gtgt ?? 'Chưa xác định'
+        const s = String(v).trim()
+        if (s === '' || s === 'Chưa xác định' || s === '5' || s === '8' || s === '10') return s || 'Chưa xác định'
+        return 'Tự nhập'
+      })(),
+      thue_suat_gtgt_tu_nhap: (() => {
+        const v = initialData?.thue_suat_gtgt ?? ''
+        const s = String(v).trim()
+        if (s === '' || s === 'Chưa xác định' || s === '5' || s === '8' || s === '10') return ''
+        return formatSoTien(s)
+      })(),
       co_giam_thue: initialData?.co_giam_thue ?? 'Có giảm thuế',
       thue_suat_nk: initialData?.thue_suat_nk != null ? formatSoTien(String(initialData.thue_suat_nk)) : '0',
       thue_suat_xk: initialData?.thue_suat_xk != null ? formatSoTien(String(initialData.thue_suat_xk)) : '0',
@@ -714,7 +726,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
             gia_ban_2: (r as { gia_ban_2?: unknown }).gia_ban_2 != null ? formatSoTien(String((r as { gia_ban_2?: unknown }).gia_ban_2)) : '',
             gia_ban_3: (r as { gia_ban_3?: unknown }).gia_ban_3 != null ? formatSoTien(String((r as { gia_ban_3?: unknown }).gia_ban_3)) : '',
           }))
-        : [{ dvt_chinh: initialData?.dvt_chinh ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '1', phep_tinh: 'nhan' as const, mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' }],
+        : [],
       dien_giai: initialData?.dien_giai ?? '',
       la_bo_phan_lap_rap: initialData?.la_bo_phan_lap_rap ?? false,
       la_mat_hang_khuyen_mai: initialData?.la_hang_khuyen_mai ?? false,
@@ -759,7 +771,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const tinhChat = watch('tinh_chat')
   const subTabs = useMemo(() => (tinhChat === 'Sản phẩm' ? SUB_TABS_SAN_PHAM : SUB_TABS_VAT_TU), [tinhChat])
   useEffect(() => {
-    if (tinhChat !== 'Sản phẩm' && activeSubTab === 6) setActiveSubTab(5)
+    if (tinhChat !== 'Sản phẩm' && activeSubTab === 5) setActiveSubTab(4)
   }, [tinhChat, activeSubTab])
 
   /** Chế độ Thêm: ô mã = chữ cái đầu tính chất + 5 số tăng dần; cập nhật khi đổi tính chất */
@@ -791,7 +803,6 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
 
   const { fields: donViQuyDoiFields, append: appendDonViQuyDoi, remove: removeDonViQuyDoi } = useFieldArray({ control, name: 'don_vi_quy_doi' })
   const { fields: bangChietKhauFields, append: appendChietKhau, remove: removeChietKhau } = useFieldArray({ control, name: 'bang_chiet_khau' })
-  const chietKhauEnabled = watch('chiet_khau')
   const bangChietKhauValues = watch('bang_chiet_khau') ?? []
   const donViQuyDoiValues = watch('don_vi_quy_doi') ?? []
   /* Chuỗi phụ thuộc để effect tự sinh mô tả chạy khi đổi ĐVT chính, ĐVQĐ, TL hoặc Phép tính (tránh lỗi chỉ đổi Phép tính mà mô tả không cập nhật) */
@@ -803,7 +814,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     if (!last) return false
     return Boolean((last.so_luong_tu ?? '').trim() && (last.so_luong_den ?? '').trim() && (last.ty_le_chiet_khau ?? '').trim())
   })()
-  const canAddRow = chietKhauEnabled && (bangChietKhauFields.length === 0 || lastRowFilled)
+  const canAddRow = bangChietKhauFields.length === 0 || lastRowFilled
 
   useEffect(() => {
     const t = setTimeout(() => inputTenRef.current?.focus(), 50)
@@ -863,13 +874,14 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     const mr = (kichThuocMr ?? '').trim()
     const mdNum = parseFloat(parseNumber(md)) || 0
     const mrNum = parseFloat(parseNumber(mr)) || 0
+    if (donViQuyDoiValues.length === 0) return
     if (mdNum > 0 && mrNum > 0) {
       const product = mdNum * mrNum
       setValue('don_vi_quy_doi.0.ti_le_quy_doi', formatSoTien(String(product)), { shouldValidate: false })
     } else {
       setValue('don_vi_quy_doi.0.ti_le_quy_doi', '1', { shouldValidate: false })
     }
-  }, [kichThuocMd, kichThuocMr, setValue])
+  }, [kichThuocMd, kichThuocMr, donViQuyDoiValues.length, setValue])
 
   const buildPayload = (data: FormValues): Omit<VatTuHangHoaRecord, 'id'> => {
     const dvd = data.don_vi_quy_doi
@@ -917,7 +929,9 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       don_gia_mua_co_dinh: data.don_gia_mua_co_dinh ? parseFloatVN(data.don_gia_mua_co_dinh) : undefined,
       gia_mua_gan_nhat: data.don_gia_mua_gan_nhat ? parseFloatVN(data.don_gia_mua_gan_nhat) : undefined,
       don_gia_ban: data.don_gia_ban ? parseFloatVN(data.don_gia_ban) : undefined,
-      thue_suat_gtgt: data.thue_suat_gtgt_dau_ra || undefined,
+      thue_suat_gtgt: data.thue_suat_gtgt_dau_ra === 'Tự nhập'
+        ? (data.thue_suat_gtgt_tu_nhap?.trim() || undefined)
+        : (data.thue_suat_gtgt_dau_ra || undefined),
       co_giam_thue: data.co_giam_thue.trim() || undefined,
       thue_suat_nk: data.thue_suat_nk.trim() || undefined,
       thue_suat_xk: data.thue_suat_xk.trim() || undefined,
@@ -987,12 +1001,6 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
 
   /** Validation: số nguyên / thập phân >= 0 */
   const validateSoKhongAm = (v: string) => parseFloatVN(v) >= 0 || 'Phải lớn hơn hoặc bằng 0'
-  const validateThueSuatGtgt = (v: string) => {
-    if (!v.trim()) return true
-    const n = parseFloat(parseNumber(v))
-    if (Number.isNaN(n)) return true
-    return n >= 0 || 'Phải lớn hơn hoặc bằng 0'
-  }
 
   /** Bảng chiết khấu: số lượng từ/đến nguyên dương; số lượng đến >= số lượng từ; số lượng từ dòng sau >= số lượng đến dòng trước */
   const validateSoLuongTu = (idx: number) => (v: string) => {
@@ -1288,7 +1296,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
               <LabelCell label="ĐVT chính" />
               <div className="misa-grid-item htql-full-width" style={{ gridColumn: '2 / -1', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                 <div className="misa-input-wrap htql-dvt-chinh-no-border" style={{ width: 90 }}>
-                  <select {...register('don_vi_quy_doi.0.dvt_chinh')} className="misa-input-solo htql-dvt-chinh-select" style={{ ...selectStyle, width: '100%', border: 'none' }}>
+                  <select {...(donViQuyDoiValues.length > 0 ? register('don_vi_quy_doi.0.dvt_chinh') : register('dvt_chinh'))} className="misa-input-solo htql-dvt-chinh-select" style={{ ...selectStyle, width: '100%', border: 'none' }}>
                     {dvtList.map((d) => {
                       const usedInConversion = donViQuyDoiValues.some((r) => (r.dvt_quy_doi ?? '').trim() === d.ma_dvt)
                       return (
@@ -1482,25 +1490,50 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
                 </div>
                 <LabelCell label="Thuế GTGT (%)" />
-                <div className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                    <input {...register('thue_suat_gtgt_dau_ra', { validate: validateThueSuatGtgt })} className="misa-input-solo" style={{ ...inputStyle, width: '100%', ...(errors.thue_suat_gtgt_dau_ra ? { borderColor: 'var(--accent)' } : {}) }} placeholder="5%" list="thue-suat-gtgt-list" />
-                    <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
+                <div className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <div
+                    className="misa-input-wrap htql-thue-gtgt-no-border"
+                    style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
+                  >
+                    <select
+                      {...register('thue_suat_gtgt_dau_ra')}
+                      className="misa-input-solo"
+                      style={{ ...selectStyle, width: '100%', paddingRight: 26, cursor: 'pointer', border: 'none' }}
+                    >
+                      {THUE_SUAT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
+                      <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                    </span>
                   </div>
-                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                    <input {...register('co_giam_thue')} className="misa-input-solo" style={{ ...inputStyle, width: '100%' }} placeholder="Có giảm thuế" list="co-giam-thue-list" />
-                    <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                  </div>
-                  <button type="button" className="misa-lookup-btn" title="Tra cứu thuế suất">📋</button>
-                  <datalist id="thue-suat-gtgt-list">
-                    {THUE_SUAT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value} />
-                    ))}
-                  </datalist>
-                  <datalist id="co-giam-thue-list">
-                    <option value="Có giảm thuế" />
-                    <option value="Không giảm thuế" />
-                  </datalist>
+                  {watch('thue_suat_gtgt_dau_ra') === 'Tự nhập' && (
+                    <Controller
+                      control={control}
+                      name="thue_suat_gtgt_tu_nhap"
+                      rules={{ validate: (v) => {
+                        if (!v.trim()) return true
+                        const n = parseFloat(parseNumber(v))
+                        if (Number.isNaN(n)) return true
+                        return n >= 0 || 'Phải lớn hơn hoặc bằng 0'
+                      } }}
+                      render={({ field, fieldState }) => (
+                        <input
+                          {...field}
+                          onChange={(e) => field.onChange(formatSoTien(e.target.value))}
+                          onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
+                          onBlur={field.onBlur}
+                          className="misa-input-solo"
+                          style={{ ...inputStyle, width: 72, flexShrink: 0, ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
+                          placeholder="VD: 7"
+                        />
+                      )}
+                    />
+                  )}
+                  {watch('thue_suat_gtgt_dau_ra') === 'Tự nhập' && errors.thue_suat_gtgt_tu_nhap && (
+                    <span style={{ fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>{errors.thue_suat_gtgt_tu_nhap.message}</span>
+                  )}
                 </div>
                 <LabelCell label="TK giảm giá" />
                 <div className="misa-grid-item" style={{ position: 'relative' }}>
@@ -1601,58 +1634,33 @@ const kichThuocSuffix = (md: string, mr: string) => {
             )}
             {activeSubTab === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                    <input type="checkbox" {...register('chiet_khau')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-                    <span>Chiết khấu</span>
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: chietKhauEnabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>Loại chiết khấu</span>
-                    <select {...register('loai_chiet_khau')} disabled={!chietKhauEnabled} style={{ ...selectStyle, width: 120, opacity: chietKhauEnabled ? 1 : 0.6, cursor: chietKhauEnabled ? 'pointer' : 'not-allowed' }}>
-                      {LOAI_CHIET_KHAU_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-tab)', opacity: chietKhauEnabled ? 1 : 0.7, pointerEvents: chietKhauEnabled ? 'auto' : 'none' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <div style={{ border: '0.5px solid var(--border)', borderRadius: 4, overflowX: 'auto', background: 'var(--bg-tab)' }}>
+                  <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 36 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 36 }} />
+                    </colgroup>
                     <thead>
                       <tr>
-                        <th style={{ ...thChietKhau, width: '30%' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            Số lượng từ
-                            <ArrowUpDown size={12} style={{ color: 'var(--text-muted)' }} />
-                          </span>
-                        </th>
-                        <th style={{ ...thChietKhau, width: '30%' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            Số lượng đến
-                            <ArrowUpDown size={12} style={{ color: 'var(--text-muted)' }} />
-                          </span>
-                        </th>
-                        <th style={{ ...thChietKhau, width: '30%', minWidth: 120 }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            {watch('loai_chiet_khau') === 'Theo số tiền' ? 'Số tiền chiết khấu' : '% chiết khấu'}
-                            <ArrowUpDown size={12} style={{ color: 'var(--text-muted)' }} />
-                          </span>
-                        </th>
-                        <th style={{ ...thChietKhau, width: 40, minWidth: 40 }} />
+                        <th style={{ ...thChietKhau, textAlign: 'center' }}>STT</th>
+                        <th style={{ ...thChietKhau }}>Số lượng từ</th>
+                        <th style={{ ...thChietKhau }}>Số lượng đến</th>
+                        <th style={{ ...thChietKhau }}>% chiết khấu</th>
+                        <th style={{ ...thChietKhau }} />
                       </tr>
                     </thead>
                     <tbody>
                       {bangChietKhauFields.length === 0 ? (
-                        Array.from({ length: 5 }).map((_, i) => (
-                          <tr key={`empty-${i}`}>
-                            <td style={{ ...tdChietKhau, background: 'var(--bg-secondary)' }} />
-                            <td style={{ ...tdChietKhau, background: 'var(--bg-secondary)' }} />
-                            <td style={{ ...tdChietKhau, background: 'var(--bg-secondary)' }} />
-                            <td style={{ ...tdChietKhau, background: 'var(--bg-secondary)', width: 40 }} />
-                          </tr>
-                        ))
+                        <tr>
+                          <td colSpan={5} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
+                        </tr>
                       ) : (
                         bangChietKhauFields.map((field, idx) => (
                           <tr key={field.id}>
+                            <td style={{ ...tdChietKhau, textAlign: 'center' }}>{idx + 1}</td>
                             <td style={tdChietKhau}>
                               <Controller
                                 control={control}
@@ -1666,7 +1674,6 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                       void trigger('bang_chiet_khau')
                                     }}
                                     onBlur={() => void trigger('bang_chiet_khau')}
-                                    disabled={!chietKhauEnabled}
                                     className="misa-input-solo"
                                     style={{ ...inputStyle, width: '100%', ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
                                     placeholder=""
@@ -1687,7 +1694,6 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                       void trigger('bang_chiet_khau')
                                     }}
                                     onBlur={() => void trigger('bang_chiet_khau')}
-                                    disabled={!chietKhauEnabled}
                                     className="misa-input-solo"
                                     style={{ ...inputStyle, width: '100%', ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
                                     placeholder=""
@@ -1701,24 +1707,18 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                 name={`bang_chiet_khau.${idx}.ty_le_chiet_khau`}
                                 rules={{ validate: validateTyLeChietKhau }}
                                 render={({ field: f, fieldState }) => {
-                                  const loai = watch('loai_chiet_khau')
-                                  const isSoTien = loai === 'Theo số tiền'
-                                  const displayValue = isSoTien && f.value ? formatSoTien(f.value) : (f.value ? formatSoNguyenInput(f.value) : f.value ?? '')
+                                  const displayValue = f.value ? formatSoNguyenInput(f.value) : (f.value ?? '')
                                   return (
                                     <input
                                       {...f}
                                       value={displayValue}
                                       onChange={(e) => {
                                         const raw = e.target.value
-                                        if (isSoTien) {
-                                          f.onChange(formatSoTien(raw))
-                                        } else {
-                                          const formatted = formatSoNguyenInput(raw)
-                                          const num = parseFloatVN(formatted)
-                                          f.onChange(num > 100 ? '100' : formatted)
-                                        }
+                                        const formatted = formatSoNguyenInput(raw)
+                                        const num = parseFloatVN(formatted)
+                                        f.onChange(num > 100 ? '100' : formatted)
                                       }}
-                                      disabled={!chietKhauEnabled}
+                                      onBlur={f.onBlur}
                                       className="misa-input-solo"
                                       style={{
                                         ...inputStyle,
@@ -1727,15 +1727,15 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                         textAlign: 'right',
                                         ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}),
                                       }}
-                                      placeholder={isSoTien ? '0,00' : '0'}
-                                      inputMode={isSoTien ? 'decimal' : 'text'}
+                                      placeholder="0"
+                                      inputMode="text"
                                     />
                                   )
                                 }}
                               />
                             </td>
-                            <td style={{ ...tdChietKhau, width: 40, padding: '2px 4px', textAlign: 'center' }}>
-                              <button type="button" disabled={!chietKhauEnabled} onClick={() => removeChietKhau(idx)} title="Xóa dòng" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 4, background: 'transparent', border: 'none', cursor: chietKhauEnabled ? 'pointer' : 'not-allowed', color: 'var(--text-muted)', opacity: chietKhauEnabled ? 1 : 0.5 }}>
+                            <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
+                              <button type="button" onClick={() => removeChietKhau(idx)} title="Xóa dòng" style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <Trash2 size={14} />
                               </button>
                             </td>
@@ -1761,9 +1761,8 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       </div>
                     ) : null
                   })()}
-                  <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>Số dòng = {bangChietKhauFields.length}</span>
-                    <button type="button" disabled={!canAddRow} onClick={() => canAddRow && appendChietKhau({ so_luong_tu: '', so_luong_den: '', ty_le_chiet_khau: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: canAddRow ? 'var(--accent)' : 'var(--bg-secondary)', color: canAddRow ? '#0d0d0d' : 'var(--text-muted)', border: 'none', borderRadius: 4, cursor: canAddRow ? 'pointer' : 'not-allowed', opacity: canAddRow ? 1 : 0.6 }}>
+                  <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+                    <button type="button" onClick={() => canAddRow && appendChietKhau({ so_luong_tu: '', so_luong_den: '', ty_le_chiet_khau: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: canAddRow ? 'var(--accent)' : 'var(--bg-secondary)', color: canAddRow ? '#0d0d0d' : 'var(--text-muted)', border: 'none', borderRadius: 4, cursor: canAddRow ? 'pointer' : 'not-allowed', opacity: canAddRow ? 1 : 0.6 }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -1784,37 +1783,34 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: 36 }} />
-                      <col style={{ width: 72 }} />
-                      <col style={{ width: 48 }} />
-                      <col style={{ width: 62 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 130 }} />
                       <col style={{ width: '100%' }} />
-                      <col style={{ width: 80 }} />
-                      <col style={{ width: 80 }} />
-                      <col style={{ width: 80 }} />
-                      <col style={{ width: 80 }} />
                       <col style={{ width: 36 }} />
                     </colgroup>
                     <thead>
                       <tr>
                         <th style={{ ...thChietKhau, textAlign: 'center' }}>STT</th>
-                        <th style={{ ...thChietKhau }}>ĐVQĐ</th>
-                        <th style={{ ...thChietKhau, textAlign: 'left' }}>TL</th>
+                        <th style={{ ...thChietKhau }}>ĐV quy đổi</th>
+                        <th style={{ ...thChietKhau, textAlign: 'left' }}>Tỉ lệ</th>
                         <th style={{ ...thChietKhau }} title="Phép nhân = nhân toán học, Phép chia = chia toán học">Phép tính</th>
                         <th style={{ ...thChietKhau }}>Mô tả</th>
-                        <th style={{ ...thChietKhau }}>ĐGB</th>
-                        <th style={{ ...thChietKhau }}>ĐGB 1</th>
-                        <th style={{ ...thChietKhau }}>ĐGB 2</th>
-                        <th style={{ ...thChietKhau }}>ĐGB 3</th>
                         <th style={{ ...thChietKhau }} />
                       </tr>
                     </thead>
                     <tbody>
-                      {donViQuyDoiFields.map((field, idx) => (
+                      {donViQuyDoiFields.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
+                        </tr>
+                      ) : (
+                        donViQuyDoiFields.map((field, idx) => (
                         <tr key={field.id}>
                           <td style={{ ...tdChietKhau, textAlign: 'center' }}>{idx + 1}</td>
                           <td style={tdChietKhau}>
                             <select {...register(`don_vi_quy_doi.${idx}.dvt_quy_doi`)} className="htql-dvt-quydoi-select" style={{ ...selectStyle, width: '100%', maxWidth: 'none' }}>
-                              <option value="">Chọn đơn vị...</option>
+                              <option value="">Chọn đơn vị</option>
                               {dvtList.map((d) => {
                                 const dvtChinh = donViQuyDoiValues[0]?.dvt_chinh ?? ''
                                 const usedInOtherRows = donViQuyDoiValues.some((r, j) => j !== idx && (r.dvt_quy_doi ?? '').trim() === d.ma_dvt)
@@ -1853,86 +1849,18 @@ const kichThuocSuffix = (md: string, mr: string) => {
                           <td style={{ ...tdChietKhau, textAlign: 'left' }}>
                             <input {...register(`don_vi_quy_doi.${idx}.mo_ta`)} className="misa-input-solo" style={{ ...inputStyle, width: '100%' }} placeholder="" />
                           </td>
-                          <td style={{ ...tdChietKhau, textAlign: 'right' }}>
-                            <Controller
-                              control={control}
-                              name={`don_vi_quy_doi.${idx}.gia_ban`}
-                              render={({ field }) => (
-                                <input
-                                  {...field}
-                                  onChange={(e) => { const v = e.target.value; field.onChange(v ? formatSoTien(v) : '') }}
-                                  onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                                  onBlur={field.onBlur}
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </td>
-                          <td style={{ ...tdChietKhau, textAlign: 'right' }}>
-                            <Controller
-                              control={control}
-                              name={`don_vi_quy_doi.${idx}.gia_ban_1`}
-                              render={({ field }) => (
-                                <input
-                                  {...field}
-                                  onChange={(e) => { const v = e.target.value; field.onChange(v ? formatSoTien(v) : '') }}
-                                  onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                                  onBlur={field.onBlur}
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </td>
-                          <td style={{ ...tdChietKhau, textAlign: 'right' }}>
-                            <Controller
-                              control={control}
-                              name={`don_vi_quy_doi.${idx}.gia_ban_2`}
-                              render={({ field }) => (
-                                <input
-                                  {...field}
-                                  onChange={(e) => { const v = e.target.value; field.onChange(v ? formatSoTien(v) : '') }}
-                                  onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                                  onBlur={field.onBlur}
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </td>
-                          <td style={{ ...tdChietKhau, textAlign: 'right' }}>
-                            <Controller
-                              control={control}
-                              name={`don_vi_quy_doi.${idx}.gia_ban_3`}
-                              render={({ field }) => (
-                                <input
-                                  {...field}
-                                  onChange={(e) => { const v = e.target.value; field.onChange(v ? formatSoTien(v) : '') }}
-                                  onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                                  onBlur={field.onBlur}
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
-                                  placeholder="0"
-                                />
-                              )}
-                            />
-                          </td>
-                          <td style={{ ...tdChietKhau, textAlign: 'center' }}>
-                            <button type="button" onClick={() => donViQuyDoiFields.length > 1 && removeDonViQuyDoi(idx)} disabled={donViQuyDoiFields.length <= 1} title="Xóa dòng" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 2, background: 'transparent', border: 'none', cursor: donViQuyDoiFields.length > 1 ? 'pointer' : 'not-allowed', color: 'var(--text-muted)', opacity: donViQuyDoiFields.length > 1 ? 1 : 0.5 }}>
+                          <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
+                            <button type="button" onClick={() => { if (donViQuyDoiFields.length <= 1) { setValue('don_vi_quy_doi', []); } else { removeDonViQuyDoi(idx); } }} title="Xóa dòng" style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Trash2 size={14} />
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                      )}
                     </tbody>
                   </table>
-                  <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>Số dòng = {donViQuyDoiFields.length}</span>
-                    <button type="button" onClick={() => appendDonViQuyDoi({ dvt_chinh: donViQuyDoiValues[0]?.dvt_chinh ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '1', phep_tinh: 'nhan', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                  <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+                    <button type="button" onClick={() => appendDonViQuyDoi({ dvt_chinh: donViQuyDoiValues[0]?.dvt_chinh ?? getValues('dvt_chinh') ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '1', phep_tinh: 'nhan', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -1947,28 +1875,37 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     (Định nghĩa định mức các thành phần, nguyên vật liệu để cấu thành thành phẩm)
                   </span>
                 </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-tab)' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <div style={{ border: '0.5px solid var(--border)', borderRadius: 4, overflowX: 'auto', background: 'var(--bg-tab)' }}>
+                  <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 36 }} />
+                      <col style={{ minWidth: 90 }} />
+                      <col />
+                      <col style={{ width: 70 }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 80 }} />
+                      <col style={{ width: 36 }} />
+                    </colgroup>
                     <thead>
                       <tr>
-                        <th style={{ ...thChietKhau, width: '10%', minWidth: 90 }}>Mã NVL</th>
-                        <th style={{ ...thChietKhau, width: '50%' }}>Nguyên vật liệu</th>
-                        <th style={{ ...thChietKhau, width: '10.67%' }}>ĐVT</th>
-                        <th style={{ ...thChietKhau, width: 'calc(14.67% + 25px)' }}>Số lượng</th>
-                        <th style={{ ...thChietKhau, width: 'calc(14.66% - 25px)' }}>Hao hụt (%)</th>
-                        <th style={{ ...thChietKhau, width: 40, minWidth: 40 }} />
+                        <th style={{ ...thChietKhau, textAlign: 'center' }}>STT</th>
+                        <th style={{ ...thChietKhau }}>Mã NVL</th>
+                        <th style={{ ...thChietKhau }}>Nguyên vật liệu</th>
+                        <th style={{ ...thChietKhau }}>ĐVT</th>
+                        <th style={{ ...thChietKhau }}>Số lượng</th>
+                        <th style={{ ...thChietKhau }}>Hao hụt (%)</th>
+                        <th style={{ ...thChietKhau }} />
                       </tr>
                     </thead>
                     <tbody>
                       {dinhMucNvlRows.length === 0 ? (
                         <tr>
-                          <td colSpan={6} style={{ ...tdChietKhau, textAlign: 'center', color: 'var(--text-muted)', cursor: 'pointer', padding: 12 }} onClick={() => setDinhMucNvlRows([{ ma: '', ten: '', dvt: '', so_luong: '0', hao_hut: '0' }])}>
-                            Bấm vào đây để thêm mới
-                          </td>
+                          <td colSpan={7} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
                         </tr>
                       ) : (
                         dinhMucNvlRows.map((row, idx) => (
                           <tr key={idx}>
+                            <td style={{ ...tdChietKhau, textAlign: 'center' }}>{idx + 1}</td>
                             <td data-nvl-cell style={tdChietKhau}>
                               <div style={{ position: 'relative', width: '100%', display: 'inline-block' }}>
                                 <input className="misa-input-solo" style={{ ...inputStyle, width: '100%', paddingRight: 26, boxSizing: 'border-box' }} value={row.ma} onChange={(e) => {
@@ -2092,8 +2029,8 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                 placeholder="%"
                               />
                             </td>
-                            <td style={{ ...tdChietKhau, width: 40, padding: '2px 4px', textAlign: 'center', verticalAlign: 'middle' }}>
-                              <button type="button" onClick={() => setDinhMucNvlRows(dinhMucNvlRows.filter((_, i) => i !== idx))} style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Xóa dòng">
+                            <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
+                              <button type="button" onClick={() => setDinhMucNvlRows(dinhMucNvlRows.filter((_, i) => i !== idx))} style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Xóa dòng">
                                 <Trash2 size={14} />
                               </button>
                             </td>
@@ -2102,12 +2039,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       )}
                     </tbody>
                   </table>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                  <span>Số dòng = {dinhMucNvlRows.length}</span>
-                  <button type="button" onClick={() => setDinhMucNvlRows([...dinhMucNvlRows, { ma: '', ten: '', dvt: '', so_luong: '0', hao_hut: '0' }])} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                    <Plus size={12} /> Thêm dòng
-                  </button>
+                  <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+                    <button type="button" onClick={() => setDinhMucNvlRows([...dinhMucNvlRows, { ma: '', ten: '', dvt: '', so_luong: '0', hao_hut: '0' }])} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                      <Plus size={12} /> Thêm dòng
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2175,65 +2111,6 @@ const kichThuocSuffix = (md: string, mr: string) => {
               document.body
             )}
             {((activeSubTab === 4 && tinhChat !== 'Sản phẩm') || (activeSubTab === 5 && tinhChat === 'Sản phẩm')) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                    <input type="checkbox" {...register('theo_doi_ma_quy_cach')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-                    <span>Theo dõi vật tư, hàng hóa theo mã quy cách</span>
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
-                    <Info size={16} style={{ flexShrink: 0, color: 'var(--accent)' }} />
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      (Cho phép theo dõi chi tiết VTHH theo từng chi tiết cụ thể như màu sắc, kích cỡ, ...)
-                    </span>
-                  </div>
-                  <a href="#" style={{ fontSize: 11, color: 'var(--accent-hover)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                    Danh sách chứng từ phát sinh mã quy cách
-                  </a>
-                </div>
-                <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-tab)', opacity: watch('theo_doi_ma_quy_cach') ? 1 : 0.7, pointerEvents: watch('theo_doi_ma_quy_cach') ? 'auto' : 'none' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...thChietKhau, width: '22%' }}>Mã quy cách</th>
-                        <th style={{ ...thChietKhau, width: '50%' }}>Tên hiển thị</th>
-                        <th style={{ ...thChietKhau, width: '28%' }}>Cho phép trùng</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[1, 2, 3, 4, 5].map((i) => {
-                        const hienThiEnabled = watch(`ma_quy_cach.${i - 1}.hien_thi`)
-                        const canEdit = watch('theo_doi_ma_quy_cach') && hienThiEnabled
-                        return (
-                          <tr key={i}>
-                            <td style={tdChietKhau}>Mã quy cách {i}</td>
-                            <td style={tdChietKhau}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <input type="checkbox" {...register(`ma_quy_cach.${i - 1}.hien_thi`)} disabled={!watch('theo_doi_ma_quy_cach')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-                                <input
-                                  {...register(`ma_quy_cach.${i - 1}.ten_hien_thi`)}
-                                  disabled={!canEdit}
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, flex: 1, width: '100%', maxWidth: 'none' }}
-                                  placeholder="Nhập tên mã quy cách. VD: Màu sắc, Kích cỡ..."
-                                />
-                              </div>
-                            </td>
-                            <td style={tdChietKhau}>
-                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
-                                <input type="checkbox" {...register(`ma_quy_cach.${i - 1}.cho_phep_trung`)} disabled={!canEdit} style={{ width: 14, height: 14 }} />
-                                <span style={{ fontSize: 11 }}>Cho phép trùng</span>
-                              </label>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-            {((activeSubTab === 5 && tinhChat !== 'Sản phẩm') || (activeSubTab === 6 && tinhChat === 'Sản phẩm')) && (
               <div style={{ border: '1px solid #4b5563', padding: 16, borderRadius: 4 }}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
                   {/* Phần trái: Đặc tính - chiếm không gian còn lại */}
