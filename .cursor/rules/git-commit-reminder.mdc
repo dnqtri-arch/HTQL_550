@@ -1,0 +1,28 @@
+---
+description: Nhắc Commit sau khi hoàn thành tính năng quan trọng, gợi ý tin nhắn Commit tiếng Việt
+alwaysApply: true
+---
+
+# Quản lý phiên bản Git
+
+Sau mỗi lần hoàn thành một **tính năng quan trọng**, hãy:
+
+1. **Nhắc người dùng Commit** — Ví dụ: "Bạn đã hoàn thành [tính năng]. Bạn có muốn Commit không?"
+2. **Gợi ý nội dung tin nhắn Commit** — Ngắn gọn, súc tích, bằng tiếng Việt.
+
+## Ví dụ gợi ý Commit
+
+| Tính năng hoàn thành | Gợi ý Commit |
+|----------------------|--------------|
+| Xong module Vật tư hàng hóa | `Hoàn thành module Vật tư hàng hóa` |
+| Xong form Thêm/Sửa VTHH | `Cập nhật form Vật tư hàng hóa` |
+| Thêm API đơn vị tính | `Thêm API đơn vị tính` |
+| Sửa lỗi hiển thị | `Sửa lỗi [mô tả ngắn]` |
+| Refactor component | `Refactor [tên component]` |
+
+## Nguyên tắc tin nhắn Commit
+
+- **Ngắn gọn**: 5–15 từ
+- **Súc tích**: Mô tả rõ việc đã làm
+- **Tiếng Việt**: Dùng tiếng Việt có dấu
+- **Động từ mở đầu**: Hoàn thành, Thêm, Sửa, Cập nhật, Refactor...
