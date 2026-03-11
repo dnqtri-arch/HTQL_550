@@ -1,0 +1,51 @@
+[
+  {
+    "ma_ncc": "NCC00001",
+    "ten_ncc": "CÔNG TY TNHH QUẢNG CÁO VÀ XÂY DỰNG NAM BẮC",
+    "loai_ncc": "to_chuc",
+    "khach_hang": false,
+    "dia_chi": "668/10 Khu vực Bình Trung, Phường Long Tuyên, TP Cần Thơ, Việt Nam",
+    "nhom_kh_ncc": "Khách hàng dự án",
+    "ma_so_thue": "1801659861",
+    "dien_thoai": "0939067007",
+    "so_no_toi_da": 0,
+    "ngung_theo_doi": false,
+    "id": 1
+  },
+  {
+    "ma_ncc": "NCC00002",
+    "ten_ncc": "CÔNG TY TNHH THƯƠNG MẠI VÀ DỊCH VỤ YẾN PHÁT NHA TRANG",
+    "loai_ncc": "to_chuc",
+    "khach_hang": false,
+    "dia_chi": "176A Đường 2/4, Phường Bắc Nha Trang, Khánh Hòa",
+    "nhom_kh_ncc": "Khách hàng dự án",
+    "ma_so_thue": "4202051011",
+    "dien_thoai": "0905256010",
+    "email": "info@taynam.vn",
+    "website": "taynam.vn",
+    "so_no_toi_da": 0,
+    "tk_ngan_hang": "0111000216976",
+    "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+    "ngung_theo_doi": false,
+    "tai_khoan_ngan_hang": [
+      {
+        "so_tai_khoan": "0111000216976",
+        "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+        "chi_nhanh": "",
+        "tinh_tp_ngan_hang": ""
+      }
+    ],
+    "quoc_gia": "Việt Nam",
+    "tinh_tp": "Khánh Hòa",
+    "xa_phuong": "Phường Bắc Nha Trang",
+    "xung_ho": "Ông",
+    "ho_va_ten_lien_he": "đặng nguyễn quang trí",
+    "chuc_danh": "giám đốc",
+    "dt_di_dong": "0939067007",
+    "dia_chi_lien_he": "176A Đường 2/4, Phường Bắc Nha Trang, Khánh Hòa",
+    "dia_diem_giao_hang": [
+      "78, Nguyễn Hiền, Khu dân cư 91B, Phường Tân An, Cần Thơ"
+    ],
+    "id": 2
+  }
+]

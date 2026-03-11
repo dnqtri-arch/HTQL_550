@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo } from 'react'
 import { Plus, Pencil, Trash2, RefreshCw, Download } from 'lucide-react'
 import { DataGrid } from '../../components/DataGrid'
+import { ListPageToolbar } from '../../components/ListPageToolbar'
+import { exportCsv } from '../../utils/exportCsv'
 import { loadKhoListFromStorage, saveKhoListToStorage, type KhoStorageItem } from './khoStorage'
 import { ThemKhoModal, MapsScriptPreloader } from './ThemKhoModal'
 
@@ -13,30 +15,6 @@ const COT: { key: keyof KhoRowDisplay; label: string; width?: string }[] = [
   { key: 'tk_kho', label: 'TK kho', width: '13%' },
   { key: 'dia_chi', label: 'Địa chỉ', width: '50%' },
 ]
-
-const toolbarWrap: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: '4px 0 6px',
-  borderBottom: '1px solid var(--border-strong)',
-  marginBottom: '6px',
-  flexWrap: 'wrap',
-}
-
-const toolbarBtn: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: '4px 10px',
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-  borderRadius: '4px',
-  fontSize: '11px',
-  fontFamily: 'inherit',
-}
 
 interface DanhSachKhoProps {
   onQuayLai: () => void
@@ -101,14 +79,7 @@ export function DanhSachKho({ onQuayLai }: DanhSachKhoProps) {
   const xuatKhau = useCallback(() => {
     const header = ['Mã kho', 'Tên kho', 'TK kho', 'Địa chỉ']
     const rows = danhSach.map((r) => [r.id, r.label, r.tk_kho ?? '', r.dia_chi ?? ''])
-    const csv = [header.join(';'), ...rows.map((row) => row.join(';'))].join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'Danh_sach_kho.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+    exportCsv([header, ...rows], 'Danh_sach_kho.csv')
   }, [danhSach])
 
   const columns = COT.map((c) => ({
@@ -141,31 +112,16 @@ export function DanhSachKho({ onQuayLai }: DanhSachKhoProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#1a1a1a' }}>
       <MapsScriptPreloader />
-      <div style={toolbarWrap}>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Thêm" onClick={() => setModalThem(true)}>
-          <Plus size={14} />
-          <span>Thêm</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Sửa" onClick={() => setModalSua(true)} disabled={!dongChon}>
-          <Pencil size={14} />
-          <span>Sửa</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Xóa" onClick={xoa} disabled={!dongChon}>
-          <Trash2 size={14} />
-          <span>Xóa</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Làm mới lại dữ liệu danh sách kho" onClick={napLai}>
-          <RefreshCw size={14} />
-          <span>Làm mới</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Xuất khẩu" onClick={xuatKhau}>
-          <Download size={14} />
-          <span>Xuất khẩu</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" onClick={onQuayLai} style={{ ...toolbarBtn, marginLeft: 'auto' }}>
-          <span>← Quay lại Quy trình</span>
-        </button>
-      </div>
+      <ListPageToolbar
+        onQuayLai={onQuayLai}
+        buttons={[
+          { icon: <Plus size={14} />, label: 'Thêm', onClick: () => setModalThem(true) },
+          { icon: <Pencil size={14} />, label: 'Sửa', onClick: () => setModalSua(true), disabled: !dongChon },
+          { icon: <Trash2 size={14} />, label: 'Xóa', onClick: xoa, disabled: !dongChon },
+          { icon: <RefreshCw size={14} />, label: 'Làm mới', onClick: napLai, title: 'Làm mới lại dữ liệu danh sách kho' },
+          { icon: <Download size={14} />, label: 'Xuất khẩu', onClick: xuatKhau },
+        ]}
+      />
       <DataGrid<KhoRowDisplay>
         columns={columns}
         data={displayData}

@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { KhoTabs } from '../kho/KhoTabs'
+import { VatTuHangHoa } from '../kho/VatTuHangHoa'
 import { QuyTrinhMuaHang } from './QuyTrinhMuaHang'
+import { NhaCungCap } from './NhaCungCap'
+
+/** Hàng hóa, dịch vụ (Mua hàng) dùng chung danh mục với Vật tư hàng hóa (Kho) — cùng vatTuHangHoaApi / một cơ sở dữ liệu. */
 
 const TABS_MUA_HANG = [
   { id: 'don-mua-hang', label: 'Đơn mua hàng' },
@@ -23,17 +27,15 @@ export function MuaHang() {
   const noiDungTab = () => {
     if (viewDanhMuc === 'nha-cung-cap') {
       return (
-        <div style={placeholderStyles}>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Danh mục Nhà cung cấp.</p>
-          <button type="button" style={btnQuayLai} onClick={() => setViewDanhMuc(null)}>← Quay lại</button>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <NhaCungCap onQuayLai={() => setViewDanhMuc(null)} />
         </div>
       )
     }
     if (viewDanhMuc === 'hang-hoa-dich-vu') {
       return (
-        <div style={placeholderStyles}>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Danh mục Hàng hóa, dịch vụ.</p>
-          <button type="button" style={btnQuayLai} onClick={() => setViewDanhMuc(null)}>← Quay lại</button>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <VatTuHangHoa onQuayLai={() => setViewDanhMuc(null)} />
         </div>
       )
     }

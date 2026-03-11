@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, RefreshCw, Download } from 'lucide-react'
 import { DataGrid } from '../../components/DataGrid'
+import { Modal } from '../../components/Modal'
+import { ListPageToolbar } from '../../components/ListPageToolbar'
+import { exportCsv } from '../../utils/exportCsv'
+import { useToastOptional } from '../../context/ToastContext'
 import {
   type DonViTinhRecord,
   donViTinhGetAll,
@@ -19,30 +23,6 @@ const COT: { key: keyof DonViTinhRecord | string; label: string; width?: number 
   { key: 'dien_giai', label: 'Diễn giải', width: '48%' },
 ]
 
-const toolbarWrap: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: '4px 0 6px',
-  borderBottom: '1px solid var(--border-strong)',
-  marginBottom: '6px',
-  flexWrap: 'wrap',
-}
-
-const toolbarBtn: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: '4px 10px',
-  background: 'transparent',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-  borderRadius: '4px',
-  fontSize: '11px',
-  fontFamily: 'inherit',
-}
-
 const btnSecondary: React.CSSProperties = {
   padding: '6px 12px',
   fontSize: '11px',
@@ -51,48 +31,6 @@ const btnSecondary: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: '4px',
   cursor: 'pointer',
-}
-
-const modalOverlay: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.6)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-}
-
-const modalBox: React.CSSProperties = {
-  background: 'var(--bg-secondary)',
-  border: '1px solid var(--border-strong)',
-  borderRadius: '6px',
-  minWidth: 320,
-  maxWidth: '90vw',
-  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-}
-
-const modalHeader: React.CSSProperties = {
-  padding: '8px 12px',
-  borderBottom: '1px solid var(--border-strong)',
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--accent)',
-}
-
-const modalBody: React.CSSProperties = {
-  padding: '12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-}
-
-const modalFooter: React.CSSProperties = {
-  padding: '8px 12px',
-  borderTop: '1px solid var(--border-strong)',
-  display: 'flex',
-  justifyContent: 'flex-end',
-  gap: '8px',
 }
 
 const fieldWrap: React.CSSProperties = {
@@ -127,6 +65,9 @@ const btnPrimary: React.CSSProperties = {
 }
 
 export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
+  const toastApi = useToastOptional()
+  const showError = toastApi ? (msg: string) => toastApi.showToast(msg, 'error') : (msg: string) => alert(msg)
+
   const [danhSach, setDanhSach] = useState<DonViTinhRecord[]>([])
   const [dongChon, setDongChon] = useState<DonViTinhRecord | null>(null)
   const [modalOpen, setModalOpen] = useState<'add' | 'edit' | null>(null)
@@ -168,6 +109,19 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
       ten_dvt: dongChon.ten_dvt,
       ky_hieu: dongChon.ky_hieu ?? '',
       dien_giai: dongChon.dien_giai ?? '',
+    })
+    setLoi('')
+    setModalOpen('edit')
+  }
+
+  /** Double-click dòng: chọn dòng và mở modal sửa */
+  const moSuaDoubleClick = (row: DonViTinhRecord) => {
+    setDongChon(row)
+    setForm({
+      ma_dvt: row.ma_dvt,
+      ten_dvt: row.ten_dvt,
+      ky_hieu: row.ky_hieu ?? '',
+      dien_giai: row.dien_giai ?? '',
     })
     setLoi('')
     setModalOpen('edit')
@@ -224,7 +178,7 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
     if (!dongChon) return
     const dangDung = await donViTinhDangDuongTrongVatTu(dongChon.ma_dvt)
     if (dangDung) {
-      alert('Đơn vị tính này đang được sử dụng trong danh mục Vật tư hàng hóa. Không thể xóa.')
+      showError('Đơn vị tính này đang được sử dụng trong danh mục Vật tư hàng hóa. Không thể xóa.')
       return
     }
     if (!window.confirm('Bạn có chắc chắn muốn xóa không?')) return
@@ -235,21 +189,14 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
       setDongChon(null)
       await napLai()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
+      showError(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
     }
   }
 
   const xuatKhau = () => {
     const header = ['Mã ĐVT', 'Tên ĐVT', 'Ký hiệu', 'Diễn giải']
     const rows = danhSach.map((r) => [r.ma_dvt, r.ten_dvt, r.ky_hieu ?? '', r.dien_giai ?? ''])
-    const csv = [header.join(';'), ...rows.map((row) => row.join(';'))].join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'Don_vi_tinh.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+    exportCsv([header, ...rows], 'Don_vi_tinh.csv')
   }
 
   const columns = COT.map((c) => ({
@@ -273,34 +220,16 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Toolbar */}
-      <div style={toolbarWrap}>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Thêm" onClick={moThem}>
-          <Plus size={14} />
-          <span>Thêm</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Sửa" onClick={moSua} disabled={!dongChon}>
-          <Pencil size={14} />
-          <span>Sửa</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Xóa" onClick={xoa} disabled={!dongChon}>
-          <Trash2 size={14} />
-          <span>Xóa</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Làm mới lại dữ liệu đơn vị tính" onClick={napLai} disabled={dangTai}>
-          <RefreshCw size={14} />
-          <span>Làm mới</span>
-        </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} title="Xuất khẩu" onClick={xuatKhau}>
-          <Download size={14} />
-          <span>Xuất khẩu</span>
-        </button>
-        {onQuayLai && (
-          <button type="button" className="htql-toolbar-btn" onClick={onQuayLai} style={{ ...toolbarBtn, marginLeft: 'auto' }}>
-            ← Quay lại Quy trình
-          </button>
-        )}
-      </div>
+      <ListPageToolbar
+        onQuayLai={onQuayLai}
+        buttons={[
+          { icon: <Plus size={14} />, label: 'Thêm', onClick: moThem },
+          { icon: <Pencil size={14} />, label: 'Sửa', onClick: moSua, disabled: !dongChon },
+          { icon: <Trash2 size={14} />, label: 'Xóa', onClick: xoa, disabled: !dongChon },
+          { icon: <RefreshCw size={14} />, label: 'Làm mới', onClick: napLai, disabled: dangTai, title: 'Làm mới lại dữ liệu đơn vị tính' },
+          { icon: <Download size={14} />, label: 'Xuất khẩu', onClick: xuatKhau },
+        ]}
+      />
 
       {/* Bảng dữ liệu - 1 ô tìm kiếm, không lọc theo cột, fit 100% không scroll ngang */}
       <div style={{ marginBottom: '6px' }}>
@@ -322,82 +251,80 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
         />
       </div>
       <div style={{ flex: 1, minHeight: 0, width: '100%', minWidth: 0 }}>
-        <DataGrid
-        columns={columns}
-        data={danhSachLoc as unknown as Record<string, unknown>[]}
-        keyField="id"
-        selectedRowId={dongChon?.id ?? null}
-        onRowSelect={(row) => setDongChon(row as unknown as DonViTinhRecord)}
-        summary={[{ label: 'Số dòng', value: danhSachLoc.length }]}
-        maxHeight={320}
-        compact
-      />
+        <DataGrid<DonViTinhRecord>
+          columns={columns}
+          data={danhSachLoc}
+          keyField="id"
+          selectedRowId={dongChon?.id ?? null}
+          onRowSelect={setDongChon}
+          onRowDoubleClick={moSuaDoubleClick}
+          summary={[{ label: 'Số dòng', value: danhSachLoc.length }]}
+          maxHeight={320}
+          compact
+        />
       </div>
 
-      {/* Modal Thêm/Sửa */}
-      {modalOpen && (
-        <div style={modalOverlay} onClick={dongModal}>
-          <div style={modalBox} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeader}>
-              {modalOpen === 'add' ? 'Thêm đơn vị tính' : 'Sửa đơn vị tính'}
-            </div>
-            <div style={modalBody}>
-              <div style={fieldWrap}>
-                <label style={labelStyle}>Mã đơn vị tính</label>
-                <input
-                  style={{ ...inputStyle, background: 'var(--bg-tab)', color: 'var(--text-muted)' }}
-                  value={form.ma_dvt}
-                  readOnly
-                  placeholder="Tự động: 01, 02, 03..."
-                />
-              </div>
-              <div style={fieldWrap}>
-                <label style={labelStyle}>Tên đơn vị tính *</label>
-                <input
-                  style={inputStyle}
-                  value={form.ten_dvt}
-                  onChange={(e) => setForm((f) => ({ ...f, ten_dvt: e.target.value }))}
-                  placeholder="Nhập tên"
-                />
-              </div>
-              <div style={fieldWrap}>
-                <label style={labelStyle}>Ký hiệu</label>
-                <input
-                  style={inputStyle}
-                  value={form.ky_hieu}
-                  onChange={(e) => setForm((f) => ({ ...f, ky_hieu: e.target.value }))}
-                  placeholder="VD: Kg, m, Cái"
-                />
-              </div>
-              <div style={fieldWrap}>
-                <label style={labelStyle}>Diễn giải</label>
-                <input
-                  style={inputStyle}
-                  value={form.dien_giai}
-                  onChange={(e) => setForm((f) => ({ ...f, dien_giai: e.target.value }))}
-                  placeholder="Ghi chú thêm"
-                />
-              </div>
-              {loi && (
-                <p style={{ fontSize: '11px', color: 'var(--accent)' }}>{loi}</p>
-              )}
-            </div>
-            <div style={modalFooter}>
-              <button type="button" style={btnSecondary} onClick={dongModal}>
-                Hủy bỏ
+      <Modal
+        open={!!modalOpen}
+        onClose={dongModal}
+        title={modalOpen === 'add' ? 'Thêm đơn vị tính' : 'Sửa đơn vị tính'}
+        size="sm"
+        footer={
+          <>
+            <button type="button" style={btnSecondary} onClick={dongModal}>
+              Hủy bỏ
+            </button>
+            <button type="button" style={btnPrimary} onClick={dongY}>
+              Đồng ý
+            </button>
+            {modalOpen === 'add' && (
+              <button type="button" style={btnPrimary} onClick={dongYVaThem}>
+                Đồng ý và thêm
               </button>
-              <button type="button" style={btnPrimary} onClick={dongY}>
-                Đồng ý
-              </button>
-              {modalOpen === 'add' && (
-                <button type="button" style={btnPrimary} onClick={dongYVaThem}>
-                  Đồng ý và thêm
-                </button>
-              )}
-            </div>
+            )}
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={fieldWrap}>
+            <label style={labelStyle}>Mã đơn vị tính</label>
+            <input
+              style={{ ...inputStyle, background: 'var(--bg-tab)', color: 'var(--text-muted)' }}
+              value={form.ma_dvt}
+              readOnly
+              placeholder="Tự động: 01, 02, 03..."
+            />
           </div>
+          <div style={fieldWrap}>
+            <label style={labelStyle}>Tên đơn vị tính *</label>
+            <input
+              style={inputStyle}
+              value={form.ten_dvt}
+              onChange={(e) => setForm((f) => ({ ...f, ten_dvt: e.target.value }))}
+              placeholder="Nhập tên"
+            />
+          </div>
+          <div style={fieldWrap}>
+            <label style={labelStyle}>Ký hiệu</label>
+            <input
+              style={inputStyle}
+              value={form.ky_hieu}
+              onChange={(e) => setForm((f) => ({ ...f, ky_hieu: e.target.value }))}
+              placeholder="VD: Kg, m, Cái"
+            />
+          </div>
+          <div style={fieldWrap}>
+            <label style={labelStyle}>Diễn giải</label>
+            <input
+              style={inputStyle}
+              value={form.dien_giai}
+              onChange={(e) => setForm((f) => ({ ...f, dien_giai: e.target.value }))}
+              placeholder="Ghi chú thêm"
+            />
+          </div>
+          {loi && <p style={{ fontSize: '11px', color: 'var(--accent)' }}>{loi}</p>}
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

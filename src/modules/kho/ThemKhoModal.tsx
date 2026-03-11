@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { X, Save, Ban } from 'lucide-react'
 import usePlacesAutocompleteService from 'react-google-autocomplete/lib/usePlacesAutocompleteService'
 import { mapsApiKey, mapsReady } from '../../config/htql_550_map'
@@ -148,6 +148,7 @@ export function MapsScriptPreloader() {
 
 export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = [], initialData }: ThemKhoModalProps) {
   const isEditMode = initialData != null
+  const overlayMouseDownRef = useRef(false)
   const [ten, setTen] = useState(isEditMode ? initialData.label : '')
   const [tkKho, setTkKho] = useState(isEditMode ? (initialData.tk_kho ?? '') : '')
   const [diaChi, setDiaChi] = useState(isEditMode ? (initialData.dia_chi ?? '') : '')
@@ -214,7 +215,7 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
   const existingExcludeSelf = useMemo(() => (existingItems ?? []).filter((x) => x.id !== initialData?.id), [existingItems, initialData?.id])
   const id = useMemo(() => (isEditMode && initialData ? initialData.id : maDocNhat(ma, existingExcludeSelf)), [isEditMode, initialData, ma, existingExcludeSelf])
 
-  const handleCất = () => {
+  const handleLuu = () => {
     const tenTrim = ten.trim()
     if (!tenTrim) {
       setLoi('Tên kho là bắt buộc.')
@@ -226,7 +227,7 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
     onClose()
   }
 
-  const handleCấtVaThem = () => {
+  const handleLuuVaTiepTuc = () => {
     const tenTrim = ten.trim()
     if (!tenTrim) {
       setLoi('Tên kho là bắt buộc.')
@@ -242,8 +243,12 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
   }
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={box} onClick={(e) => e.stopPropagation()}>
+    <div
+      style={overlay}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
+      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
+    >
+      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <span>{isEditMode ? 'Sửa kho' : 'Thêm Kho'}</span>
           <button
@@ -372,12 +377,12 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
             <span>Hủy bỏ</span>
           </button>
           {!isEditMode && onSaveAndAdd && (
-            <button type="button" style={btnPrimary} onClick={handleCấtVaThem}>
+            <button type="button" style={btnPrimary} onClick={handleLuuVaTiepTuc}>
               <Save size={14} />
               <span>Lưu và tiếp tục</span>
             </button>
           )}
-          <button type="button" style={btnPrimary} onClick={handleCất}>
+          <button type="button" style={btnPrimary} onClick={handleLuu}>
             <Save size={14} />
             <span>Lưu</span>
           </button>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { X, HelpCircle, Plus, Check, Ban, Search } from 'lucide-react'
 import { ThemNhomVTHHModal } from './ThemNhomVTHHModal'
 
@@ -171,6 +171,7 @@ export function NhomVTHHLookupModal({
 }: NhomVTHHLookupModalProps) {
   const [filterMa, setFilterMa] = useState('')
   const [filterTen, setFilterTen] = useState('')
+  const overlayMouseDownRef = useRef(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     const ids = value.split(';').map((s) => s.trim()).filter(Boolean)
     return new Set(ids)
@@ -204,8 +205,12 @@ export function NhomVTHHLookupModal({
   }
 
   return (
-    <div style={modalOverlay} onClick={onClose}>
-      <div style={modalBox} onClick={(e) => e.stopPropagation()}>
+    <div
+      style={modalOverlay}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
+      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
+    >
+      <div style={modalBox} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <span>{title}</span>
           <button

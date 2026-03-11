@@ -1,14 +1,19 @@
 /**
  * API / Mock cho Danh mục Vật tư hàng hóa (schema vattu_hanghoa).
+ * Cơ sở dữ liệu dùng chung cho cả hai module:
+ * - Kho → Vật tư hàng hóa
+ * - Mua hàng → Hàng hóa, dịch vụ
+ * (Cùng localStorage key + cache; khi có backend thì cùng REST API.)
  * Khi có backend REST: GET/POST /api/vat-tu-hang-hoa, PUT/DELETE /api/vat-tu-hang-hoa/:id
  * Hình ảnh lưu tại: /ssd_2tb/HTQL_550/thietke/vattu/ (DB chỉ lưu tên file hoặc path tương đối).
  */
 
-/** Một dòng chiết khấu theo số lượng (Tab Chiết khấu) */
+/** Một dòng chiết khấu theo số lượng (Tab Bậc giá) */
 export interface ChietKhauItem {
   so_luong_tu: string
   so_luong_den: string
   ty_le_chiet_khau: string
+  mo_ta?: string
 }
 
 /** Một dòng quy đổi ĐVT (Tab Đơn vị quy đổi và bậc giá) */

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
+import { useDebouncedValue } from '../utils/useDebouncedValue'
 
 export interface DataGridColumn<T> {
   key: keyof T | string
@@ -7,9 +9,11 @@ export interface DataGridColumn<T> {
   align?: 'left' | 'right' | 'center'
   type?: 'text' | 'number' | 'date'
   filterable?: boolean
+  /** Tùy chỉnh nội dung ô (value, full row) */
+  renderCell?: (value: unknown, row: T) => ReactNode
 }
 
-export interface DataGridProps<T extends Record<string, unknown>> {
+export interface DataGridProps<T extends object> {
   columns: DataGridColumn<T>[]
   data: T[]
   keyField: keyof T | string
@@ -21,6 +25,8 @@ export interface DataGridProps<T extends Record<string, unknown>> {
   onRowDoubleClick?: (row: T) => void
   /** Chế độ bảng gọn: font nhỏ hơn, khoảng cách dòng hẹp */
   compact?: boolean
+  /** Độ trễ (ms) trước khi áp dụng bộ lọc khi gõ (mặc định 200). Đặt 0 để tắt debounce. */
+  filterDebounceMs?: number
 }
 
 const tableWrap: React.CSSProperties = {
@@ -84,7 +90,7 @@ const footerStyles: React.CSSProperties = {
   flexWrap: 'wrap',
 }
 
-export function DataGrid<T extends Record<string, unknown>>({
+export function DataGrid<T extends object>({
   columns,
   data,
   keyField,
@@ -94,8 +100,10 @@ export function DataGrid<T extends Record<string, unknown>>({
   onRowSelect,
   onRowDoubleClick,
   compact = false,
+  filterDebounceMs = 200,
 }: DataGridProps<T>) {
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
+  const debouncedFilters = useDebouncedValue(filterInputs, filterDebounceMs)
 
   const tableStyle = compact ? { ...tableStyles, fontSize: '11px' } : tableStyles
   const thStyle = compact ? { ...thStyles, padding: '2px 4px' } : thStyles
@@ -103,11 +111,11 @@ export function DataGrid<T extends Record<string, unknown>>({
 
   const filteredData = data.filter((row) => {
     return columns.every((col) => {
-      const filterVal = filters[String(col.key)]
+      const filterVal = debouncedFilters[String(col.key)]
       if (!filterVal) return true
       const cell = row[col.key as keyof T]
       const str = cell != null ? String(cell) : ''
-          return str.toLowerCase().includes(filterVal.toLowerCase())
+      return str.toLowerCase().includes(filterVal.toLowerCase())
     })
   })
 
@@ -133,9 +141,9 @@ export function DataGrid<T extends Record<string, unknown>>({
                       type="text"
                       placeholder="Lọc..."
                       style={filterInputStyles}
-                      value={filters[String(col.key)] ?? ''}
+                      value={filterInputs[String(col.key)] ?? ''}
                       onChange={(e) =>
-                        setFilters((prev) => ({ ...prev, [String(col.key)]: e.target.value }))
+                        setFilterInputs((prev) => ({ ...prev, [String(col.key)]: e.target.value }))
                       }
                     />
                   )}
@@ -159,19 +167,22 @@ export function DataGrid<T extends Record<string, unknown>>({
                   onClick={() => onRowSelect?.(row)}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                 >
-                  {columns.map((col) => (
-                    <td
-                      key={String(col.key)}
-                      style={{
-                        ...tdStyle,
-                        textAlign: col.align ?? 'left',
-                      }}
-                    >
-                      {row[col.key as keyof T] != null
-                        ? String(row[col.key as keyof T])
-                        : ''}
-                    </td>
-                  ))}
+                  {columns.map((col) => {
+                    const cell = row[col.key as keyof T]
+                    const content =
+                      col.renderCell != null ? col.renderCell(cell, row) : cell != null ? String(cell) : ''
+                    return (
+                      <td
+                        key={String(col.key)}
+                        style={{
+                          ...tdStyle,
+                          textAlign: col.align ?? 'left',
+                        }}
+                      >
+                        {content}
+                      </td>
+                    )
+                  })}
                 </tr>
               )
             })}

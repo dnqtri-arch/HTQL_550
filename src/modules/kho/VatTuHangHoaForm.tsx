@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
-import { X, ChevronDown, Info, ArrowUpDown, Plus, Trash2, CheckCircle, XCircle, FileCheck, AlertTriangle } from 'lucide-react'
+import { X, ChevronDown, Info, Plus, Trash2, CheckCircle, XCircle, FileCheck, AlertTriangle } from 'lucide-react'
 import type { VatTuHangHoaRecord } from './vatTuHangHoaApi'
 import { formatSoTien, parseNumber, parseFloatVN, formatSoNguyenInput, formatSoTuNhienInput, isZeroDisplay } from '../../utils/numberFormat'
 import { matchSearchKeyword } from '../../utils/stringUtils'
@@ -9,6 +9,7 @@ import { NhomVTHHLookupModal } from './NhomVTHHLookupModal'
 import { ThemDonViTinhModal } from './ThemDonViTinhModal'
 import { ThemKhoModal, MapsScriptPreloader } from './ThemKhoModal'
 import { mapsReady } from '../../config/htql_550_map'
+import { VatTuHangHoaFormTabNgamDinh, LabelCell } from './VatTuHangHoaFormTabNgamDinh'
 import './VatTuHangHoaForm.css'
 
 export type FormValues = {
@@ -51,7 +52,7 @@ export type FormValues = {
   so_may: string
   thoi_gian_bao_hanh: string
   xuat_xu: string
-  don_vi_quy_doi: { dvt_chinh: string; dvt_quy_doi: string; ti_le_quy_doi: string; phep_tinh: 'nhan' | 'chia'; mo_ta: string; gia_mua_gan_nhat: string; gia_ban: string; gia_ban_1: string; gia_ban_2: string; gia_ban_3: string }[]
+  don_vi_quy_doi: { dvt_chinh: string; dvt_quy_doi: string; ti_le_quy_doi: string; phep_tinh: 'nhan' | 'chia' | ''; mo_ta: string; gia_mua_gan_nhat: string; gia_ban: string; gia_ban_1: string; gia_ban_2: string; gia_ban_3: string }[]
   dien_giai: string
   la_bo_phan_lap_rap: boolean
   la_mat_hang_khuyen_mai: boolean
@@ -89,12 +90,12 @@ function isAllowedImageFile(file: File): boolean {
   )
 }
 
-/** Tự động sinh mô tả quy đổi: 1 ĐVQĐ = 1 nhân/chia tỉ lệ ĐVT chính. VD: 1 Ram = 500 tờ */
+/** Tự động sinh mô tả quy đổi: 1 ĐVQĐ = 1 nhân/chia tỉ lệ ĐVT chính. VD: 1 Ram = 500 tờ. Khi chưa chọn phép tính (phepTinh rỗng) trả về ''. */
 function generateMoTaQuyDoi(opts: {
   dvtChinh: string
   dvtQuyDoi: string
   tiLe: string
-  phepTinh: 'nhan' | 'chia'
+  phepTinh: 'nhan' | 'chia' | ''
   dvtList: { id: number; ma_dvt: string; ten_dvt: string; ky_hieu?: string }[]
 }): string {
   const { dvtChinh, dvtQuyDoi, tiLe, phepTinh, dvtList } = opts
@@ -105,7 +106,7 @@ function generateMoTaQuyDoi(opts: {
   }
   const dvtChinhDisplay = getDisplay(dvtChinh)
   const dvtQuyDoiDisplay = getDisplay(dvtQuyDoi)
-  if (!dvtQuyDoiDisplay || !tiLe) return ''
+  if (!dvtQuyDoiDisplay || !tiLe || (phepTinh !== 'nhan' && phepTinh !== 'chia')) return ''
   const tiLeNum = parseFloat(parseNumber(tiLe)) || 0
   if (tiLeNum <= 0) return ''
   if (phepTinh === 'nhan') {
@@ -215,20 +216,6 @@ import { loadKhoListFromStorage, saveKhoListToStorage } from './khoStorage'
 
 /** Loại trừ "Kho chính" và "Kho phụ" khỏi dropdown Chọn kho (không hiển thị). */
 const KHO_LABELS_EXCLUDED = ['Kho chính', 'Kho phụ']
-
-const LOAI_CHIET_KHAU_OPTIONS = [
-  { value: 'Theo %', label: 'Theo %' },
-  { value: 'Theo số tiền', label: 'Theo số tiền' },
-]
-
-const THUE_SUAT_OPTIONS = [
-  { value: 'Chưa xác định', label: 'Chưa xác định' },
-  { value: '0', label: '0%' },
-  { value: '5', label: '5%' },
-  { value: '8', label: '8%' },
-  { value: '10', label: '10%' },
-  { value: 'Tự nhập', label: 'Tự nhập' },
-]
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -483,6 +470,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const [activeSubTab, setActiveSubTab] = useState<1 | 2 | 3 | 4 | 5>(1)
   const [imageUploadError, setImageUploadError] = useState('')
   const [imageUploading, setImageUploading] = useState(false)
+  const [imageMeta, setImageMeta] = useState<{ width: number; height: number; sizeMB: number } | null>(null)
   const [formulaDialogOpen, setFormulaDialogOpen] = useState(false)
   const [formulaAlert, setFormulaAlert] = useState<{ valid: boolean } | null>(null)
   const [formulaCachTinh, setFormulaCachTinh] = useState('Khác')
@@ -499,6 +487,9 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const inputTenRef = useRef<HTMLInputElement>(null)
   const khoNgamDinhRef = useRef<HTMLDivElement>(null)
   const [khoDropdownRect, setKhoDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  /** Chỉ số các dòng Đơn vị quy đổi đã nhập Tỉ lệ từ bàn phím (auto-fill từ kích thước không tính). */
+  const userEnteredTiLeByIndex = useRef<Set<number>>(new Set())
+  const overlayKhoLookupMouseDownRef = useRef(false)
 
   useEffect(() => {
     if (lookupModal === 'kho' && khoNgamDinhRef.current) {
@@ -517,10 +508,10 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
           ma: r.ma ?? '',
           ten: r.ten ?? '',
           dvt: r.dvt ?? '',
-          so_luong: r.so_luong != null && String(r.so_luong).trim() !== '' ? formatSoTuNhienInput(String(r.so_luong)) : '0',
+          so_luong: r.so_luong != null && String(r.so_luong).trim() !== '' ? formatSoTuNhienInput(String(r.so_luong)) : '',
           hao_hut: (r as { hao_hut?: string }).hao_hut != null && String((r as { hao_hut?: string }).hao_hut).trim() !== ''
           ? formatSoTuNhienInput(String((r as { hao_hut?: string }).hao_hut))
-          : '0',
+          : '',
         })))
       } else {
         setDinhMucNvlRows([])
@@ -529,7 +520,15 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   }, [initialData?.id])
 
   useEffect(() => {
-    if (nvlDropdownRowIdx == null) return
+    const raw = (initialData as { don_vi_quy_doi?: unknown[] })?.don_vi_quy_doi
+    if (Array.isArray(raw) && raw.length > 0) {
+      userEnteredTiLeByIndex.current = new Set(raw.map((_, i) => i))
+    } else if (initialData == null) {
+      userEnteredTiLeByIndex.current = new Set()
+    }
+  }, [initialData?.id])
+
+  useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (nvlDropdownRef.current?.contains(e.target as Node)) return
       if ((e.target as HTMLElement).closest('[data-nvl-cell]')) return
@@ -718,8 +717,8 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
         ? (initialData!.don_vi_quy_doi as { dvt?: string; dvt_chinh?: string; ti_le_quy_doi?: string; phep_tinh?: string; mo_ta?: string; gia_mua?: unknown; gia_ban?: unknown; gia_ban_1?: unknown; gia_ban_2?: unknown; gia_ban_3?: unknown }[]).map((r) => ({
             dvt_chinh: initialData?.dvt_chinh ?? dvtList[0]?.ma_dvt ?? 'Cái',
             dvt_quy_doi: r.dvt ?? r.dvt_chinh ?? '',
-            ti_le_quy_doi: r.ti_le_quy_doi != null ? formatSoTien(String(r.ti_le_quy_doi)) : '1',
-            phep_tinh: (r.phep_tinh === 'chia' ? 'chia' : 'nhan') as 'nhan' | 'chia',
+            ti_le_quy_doi: (r.ti_le_quy_doi != null && String(r.ti_le_quy_doi).trim() !== '') ? formatSoTien(String(r.ti_le_quy_doi)) : '',
+            phep_tinh: (r.phep_tinh === 'chia' ? 'chia' : r.phep_tinh === 'nhan' ? 'nhan' : '') as 'nhan' | 'chia' | '',
             mo_ta: (r as { mo_ta?: string }).mo_ta ?? '',
             gia_mua_gan_nhat: r.gia_mua != null ? String(r.gia_mua) : '',
             gia_ban: r.gia_ban != null ? formatSoTien(String(r.gia_ban)) : '',
@@ -801,6 +800,9 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   }, [thueSuatGtgtDauRa, setValue, getValues])
 
   const imagePreview = watch('duong_dan_hinh_anh')
+  useEffect(() => {
+    if (!imagePreview) setImageMeta(null)
+  }, [imagePreview])
   const handleImageSelect = async (file: File | null) => {
     setImageUploadError('')
     if (!file) return
@@ -825,17 +827,39 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const { fields: donViQuyDoiFields, append: appendDonViQuyDoi, remove: removeDonViQuyDoi } = useFieldArray({ control, name: 'don_vi_quy_doi' })
   const { fields: bangChietKhauFields, append: appendChietKhau, remove: removeChietKhau } = useFieldArray({ control, name: 'bang_chiet_khau' })
   const bangChietKhauValues = watch('bang_chiet_khau') ?? []
+  /** Chỉ số dòng có dữ liệu cuối cùng. Dòng chỉ có Số lượng từ = "0" (các ô khác trống) không coi là có dữ liệu. */
+  const lastDataIndexBangGia = (() => {
+    let last = -1
+    ;(bangChietKhauValues ?? []).forEach((r, i) => {
+      const tu = (r?.so_luong_tu ?? '').trim()
+      const den = (r?.so_luong_den ?? '').trim()
+      const gia = (r?.ty_le_chiet_khau ?? '').trim()
+      const hasData = !!(tu && tu !== '0') || !!(den) || !!(gia !== '' && gia !== '0')
+      if (hasData) last = i
+    })
+    return last
+  })()
   const donViQuyDoiValues = watch('don_vi_quy_doi') ?? []
   /* Chuỗi phụ thuộc để effect tự sinh mô tả chạy khi đổi ĐVT chính, ĐVQĐ, TL hoặc Phép tính (tránh lỗi chỉ đổi Phép tính mà mô tả không cập nhật) */
   const donViQuyDoiInputSignature = donViQuyDoiValues
-    .map((r) => `${(r.dvt_chinh ?? '')}|${(r.dvt_quy_doi ?? '')}|${(r.ti_le_quy_doi ?? '')}|${(r.phep_tinh ?? 'nhan')}`)
+    .map((r) => `${(r.dvt_chinh ?? '')}|${(r.dvt_quy_doi ?? '')}|${(r.ti_le_quy_doi ?? '')}|${(r.phep_tinh ?? '')}`)
     .join(';')
-  const lastRowFilled = bangChietKhauFields.length === 0 || (() => {
-    const last = bangChietKhauValues[bangChietKhauValues.length - 1]
-    if (!last) return false
-    return Boolean((last.so_luong_tu ?? '').trim() && (last.so_luong_den ?? '').trim() && (last.ty_le_chiet_khau ?? '').trim())
-  })()
-  const canAddRow = bangChietKhauFields.length === 0 || lastRowFilled
+  /** Thêm dòng bậc giá: luôn cho phép thêm (giống đơn vị quy đổi), giá trị mặc định giống hiện tại. */
+  const handleThemDongBangGia = () => {
+    appendChietKhau({
+      so_luong_tu: bangChietKhauValues.length === 0 ? '0' : (bangChietKhauValues[bangChietKhauValues.length - 1]?.so_luong_den ?? '0'),
+      so_luong_den: '',
+      ty_le_chiet_khau: '',
+      mo_ta: '',
+    })
+  }
+
+  useEffect(() => {
+    if (activeSubTab === 2 && (bangChietKhauValues?.length ?? 0) > 0) {
+      const t = setTimeout(() => { void trigger('bang_chiet_khau') }, 0)
+      return () => clearTimeout(t)
+    }
+  }, [activeSubTab, trigger, bangChietKhauValues?.length])
 
   useEffect(() => {
     const t = setTimeout(() => inputTenRef.current?.focus(), 50)
@@ -865,7 +889,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     setValue('dien_giai_khi_ban', tenDayDu, { shouldValidate: false })
   }, [watchedTenVthh, watchedKichThuocMd, watchedKichThuocMr, setValue])
 
-  /* Tự động sinh mô tả quy đổi khi ĐVT chính, ĐVQĐ, tỉ lệ, phép tính thay đổi */
+  /* Tự động sinh mô tả quy đổi khi ĐVT chính, ĐVQĐ, tỉ lệ, phép tính thay đổi. Khi tỉ lệ trống thì mô tả để trống. */
   useEffect(() => {
     const rows = donViQuyDoiValues
     const t = setTimeout(() => {
@@ -875,11 +899,11 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
           dvtChinh,
           dvtQuyDoi: (row.dvt_quy_doi ?? '').trim(),
           tiLe: (row.ti_le_quy_doi ?? '').trim(),
-          phepTinh: row.phep_tinh ?? 'nhan',
+          phepTinh: row.phep_tinh === 'chia' ? 'chia' : (row.phep_tinh === 'nhan' ? 'nhan' : ''),
           dvtList,
         })
         const currentMoTa = (row.mo_ta ?? '').trim()
-        if (moTa && currentMoTa !== moTa) {
+        if (currentMoTa !== moTa) {
           setValue(`don_vi_quy_doi.${idx}.mo_ta`, moTa, { shouldValidate: false })
         }
       })
@@ -887,7 +911,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     return () => clearTimeout(t)
   }, [donViQuyDoiInputSignature, donViQuyDoiValues, dvtList, setValue])
 
-  /* TL (tỉ lệ quy đổi) dòng đầu: nếu nhập đủ 2 ô kích thước (mD, mC) và cả hai > 0 thì TL = mD × mC; nếu chỉ nhập 1 ô hoặc 1 trong 2 = 0 thì TL = 1 */
+  /* TL (tỉ lệ quy đổi) dòng đầu: nếu nhập đủ 2 ô kích thước (mD, mC) và cả hai > 0 thì TL = mD × mC; khi không có kích thước thì không ghi đè (tránh xóa tỉ lệ khi bấm Thêm dòng). Khi auto-fill từ kích thước thì coi như đã nhập. */
   const kichThuocMd = watch('kich_thuoc_md')
   const kichThuocMr = watch('kich_thuoc_mr')
   useEffect(() => {
@@ -899,18 +923,30 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     if (mdNum > 0 && mrNum > 0) {
       const product = mdNum * mrNum
       setValue('don_vi_quy_doi.0.ti_le_quy_doi', formatSoTien(String(product)), { shouldValidate: false })
-    } else {
-      setValue('don_vi_quy_doi.0.ti_le_quy_doi', '1', { shouldValidate: false })
+      userEnteredTiLeByIndex.current.add(0)
     }
   }, [kichThuocMd, kichThuocMr, donViQuyDoiValues.length, setValue])
 
+  /**
+   * Tab 3 (Đơn vị quy đổi): không chặn lưu khi có dòng chưa nhập đủ. Chỉ gửi và lưu các dòng đã nhập đủ (ĐV quy đổi + Tỉ lệ); dòng thiếu ô không đưa vào payload.
+   */
+  const validateTabsBeforeSave = (
+    _data: FormValues,
+    _nvlRows: { ma: string; ten: string; dvt: string; so_luong: string; hao_hut: string }[],
+    _tinhChat: string
+  ): { ok: boolean; tab?: 1 | 2 | 3 | 4 | 5; message: string } => {
+    return { ok: true, message: '' }
+  }
+
   const buildPayload = (data: FormValues): Omit<VatTuHangHoaRecord, 'id'> => {
+    /* ĐV quy đổi: nếu không thay đổi, vẫn "Chọn đơn vị" (value '') = chưa nhập, chỉ gửi dòng đã chọn đơn vị + đủ Tỉ lệ + đã chọn Phép tính. */
     const dvd = data.don_vi_quy_doi
-      .filter((r) => r.dvt_quy_doi || r.ti_le_quy_doi || r.mo_ta || r.gia_mua_gan_nhat || r.gia_ban || r.gia_ban_1 || r.gia_ban_2 || r.gia_ban_3)
-      .map((r) => ({
+      .map((r, idx) => ({ r, idx }))
+      .filter(({ r, idx }) => (r.dvt_quy_doi ?? '').trim() && (r.ti_le_quy_doi ?? '').trim() && (r.phep_tinh === 'nhan' || r.phep_tinh === 'chia') && userEnteredTiLeByIndex.current.has(idx))
+      .map(({ r }) => ({
         dvt: r.dvt_quy_doi ?? '',
         ti_le_quy_doi: r.ti_le_quy_doi?.trim() ? String(parseNumber(r.ti_le_quy_doi)) : '',
-        phep_tinh: r.phep_tinh,
+        phep_tinh: r.phep_tinh as 'nhan' | 'chia',
         mo_ta: r.mo_ta?.trim() || undefined,
         gia_mua: r.gia_mua_gan_nhat ?? '',
         gia_ban: r.gia_ban?.trim() ? formatSoTien(r.gia_ban) : '',
@@ -974,24 +1010,42 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       bang_chiet_khau: (() => {
         const arr = data.bang_chiet_khau
           .filter((r) => r.so_luong_tu || r.so_luong_den || r.ty_le_chiet_khau)
-          .map((r) => {
-            const tu = (r.so_luong_tu ?? '').trim() || '—'
-            const den = (r.so_luong_den ?? '').trim() || '—'
-            const gia = (r.ty_le_chiet_khau ?? '').trim() || '—'
-            return { ...r, mo_ta: `Từ ${tu} đến ${den}, đơn giá ${gia}` }
+          .map((r, i, filtered) => {
+            const mo_ta = getMoTaBangGia(filtered, i)
+            return { ...r, mo_ta: mo_ta || `Từ ${(r.so_luong_tu ?? '').trim() || '—'} đến ${(r.so_luong_den ?? '').trim() || '—'}, đơn giá ${(r.ty_le_chiet_khau ?? '').trim() || '—'}` }
           })
         return arr.length > 0 ? arr : undefined
       })(),
       dac_tinh: data.dac_tinh?.trim() || undefined,
       duong_dan_hinh_anh: data.duong_dan_hinh_anh?.trim() || undefined,
       cong_thuc_tinh_so_luong: data.cong_thuc_tinh_so_luong?.trim() || undefined,
-      dinh_muc_nvl: dinhMucNvlRows.length > 0 ? dinhMucNvlRows.map((r) => ({ ma: r.ma.trim(), ten: r.ten.trim(), dvt: r.dvt.trim(), so_luong: r.so_luong.trim(), hao_hut: r.hao_hut.trim() })) : undefined,
+      dinh_muc_nvl: (() => {
+        const filtered = (dinhMucNvlRows ?? []).filter((r) => {
+          const ma = (r?.ma ?? '').trim()
+          const soLuong = (r?.so_luong ?? '').trim()
+          const haoHut = (r?.hao_hut ?? '').trim()
+          return ma && ma !== 'Mã NVL' && soLuong !== '' && haoHut !== ''
+        })
+        return filtered.length > 0 ? filtered.map((r) => ({
+          ma: r.ma.trim(),
+          ten: r.ten.trim(),
+          dvt: r.dvt.trim(),
+          so_luong: (r.so_luong ?? '').trim(),
+          hao_hut: (r.hao_hut ?? '').trim(),
+        })) : undefined
+      })(),
     }
   }
 
   const onSave = handleSubmit(
     async (data) => {
       setSubmitError('')
+      const tabCheck = validateTabsBeforeSave(data, dinhMucNvlRows, data.tinh_chat ?? 'Vật tư')
+      if (!tabCheck.ok) {
+        setSubmitError(tabCheck.message)
+        if (tabCheck.tab != null) setActiveSubTab(tabCheck.tab)
+        return
+      }
       try {
         await onSubmit(buildPayload(data))
         onClose()
@@ -1005,11 +1059,18 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const onSaveAndAdd = handleSubmit(
     async (data) => {
       setSubmitError('')
+      const tabCheck = validateTabsBeforeSave(data, dinhMucNvlRows, data.tinh_chat ?? 'Vật tư')
+      if (!tabCheck.ok) {
+        setSubmitError(tabCheck.message)
+        if (tabCheck.tab != null) setActiveSubTab(tabCheck.tab)
+        return
+      }
       try {
         await onSubmitAndAdd(buildPayload(data))
         const emptyValues = getEmptyFormValues(dvtList)
         reset(emptyValues, { keepDefaultValues: false })
         setValue('ma_vthh', onMaTuDong(getValues('tinh_chat') ?? 'Vật tư'))
+        userEnteredTiLeByIndex.current = new Set()
         setDinhMucNvlRows([])
         setActiveSubTab(1)
         setSubmitError('')
@@ -1030,30 +1091,79 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   /** Validation: số nguyên / thập phân >= 0 */
   const validateSoKhongAm = (v: string) => parseFloatVN(v) >= 0 || 'Phải lớn hơn hoặc bằng 0'
 
-  /** Bảng chiết khấu: số lượng từ/đến nguyên dương; số lượng đến >= số lượng từ; số lượng từ dòng sau >= số lượng đến dòng trước */
-  const validateSoLuongTu = (idx: number) => (v: string) => {
-    const n = parseFloatVN(v)
-    if (n < 0) return 'Phải là số nguyên dương'
+  /** Bảng bậc giá: so sánh Số lượng từ / Số lượng đến như thiết lập ban đầu — luôn kiểm tra "đến ≥ từ" và "từ ≥ đến dòng trước" khi có giá trị. */
+  const validateSoLuongTu = (idx: number, lastDataRowIndex: number) => (v: string) => {
     const arr = getValues('bang_chiet_khau') ?? []
+    const row = arr[idx]
+    const den = (row?.so_luong_den ?? '').trim()
+    const gia = (row?.ty_le_chiet_khau ?? '').trim()
+    const tuVal = (v ?? '').trim()
+    const hasRowData = !!(tuVal && tuVal !== '0') || !!(den) || !!(gia !== '' && gia !== '0')
+    const isLastDataRow = lastDataRowIndex >= 0 && idx === lastDataRowIndex
+    if (!hasRowData) return true
+    if (isLastDataRow && !tuVal) return true
+    if (!isLastDataRow && !tuVal) return 'Bắt buộc nhập'
+    const n = parseFloatVN(v)
+    if (n < 0) return 'Phải lớn hơn hoặc bằng 0'
     if (idx > 0 && arr[idx - 1]) {
-      const denTruoc = parseFloatVN(arr[idx - 1].so_luong_den)
-      if (denTruoc > 0 && n < denTruoc) return 'Số lượng từ sẽ lớn hơn hoặc bằng số lượng đến dòng trước.'
+      const denTruoc = (arr[idx - 1].so_luong_den ?? '').trim()
+      if (denTruoc) {
+        const d = parseFloatVN(denTruoc)
+        if (!Number.isNaN(d) && n < d) return 'Số lượng từ phải ≥ số lượng đến dòng trước'
+      }
+    }
+    if (den) {
+      const d = parseFloatVN(den)
+      if (!Number.isNaN(d) && n > d) return 'Số lượng từ không được lớn hơn số lượng đến trong cùng dòng'
     }
     return true
   }
-  const validateSoLuongDen = (idx: number) => (v: string) => {
-    const n = parseFloatVN(v)
-    if (n < 0) return 'Phải là số nguyên dương'
+  const validateSoLuongDen = (idx: number, lastDataRowIndex: number) => (v: string) => {
     const arr = getValues('bang_chiet_khau') ?? []
-    const tu = parseFloatVN(arr[idx]?.so_luong_tu)
-    if (tu > 0 && n < tu) return 'Số lượng đến phải ≥ số lượng từ'
+    const row = arr[idx]
+    const tu = (row?.so_luong_tu ?? '').trim()
+    const gia = (row?.ty_le_chiet_khau ?? '').trim()
+    const denVal = (v ?? '').trim()
+    const hasRowData = !!(tu && tu !== '0') || !!(denVal) || !!(gia !== '' && gia !== '0')
+    const isLastDataRow = lastDataRowIndex >= 0 && idx === lastDataRowIndex
+    if (!hasRowData) return true
+    if (isLastDataRow && !denVal) return true
+    if (!isLastDataRow && !denVal) return 'Bắt buộc nhập'
+    const n = parseFloatVN(v)
+    if (n < 0) return 'Phải lớn hơn hoặc bằng 0'
+    if (tu) {
+      const t = parseFloatVN(tu)
+      if (!Number.isNaN(t) && n < t) return 'Số lượng đến phải ≥ số lượng từ'
+    }
     return true
   }
-  const validateTyLeChietKhau = (v: string) => {
-    const num = parseFloatVN(v)
-    if (num < 0) return 'Phải lớn hơn hoặc bằng 0'
-    if (watch('loai_chiet_khau') === 'Theo %' && num > 100) return 'Không được lớn hơn 100'
-    return true
+  const validateDonGiaBangGia = (idx: number, lastDataRowIndex: number) => (v: string) => {
+    const arr = getValues('bang_chiet_khau') ?? []
+    const row = arr[idx]
+    const tu = (row?.so_luong_tu ?? '').trim()
+    const den = (row?.so_luong_den ?? '').trim()
+    const giaVal = (v ?? '').trim()
+    const hasRowData = !!(tu && tu !== '0') || !!(den) || !!(giaVal !== '' && giaVal !== '0')
+    const isLastDataRow = lastDataRowIndex >= 0 && idx === lastDataRowIndex
+    if (!hasRowData) return true
+    if (isLastDataRow && !giaVal) return true
+    return parseFloatVN(v) >= 0 || 'Phải lớn hơn hoặc bằng 0'
+  }
+
+  /** Mô tả bậc giá bằng từ ngữ theo logic khoảng: dòng 1 đoạn [a,b], dòng 2+ nửa khoảng (b,c] hoặc (b,+∞). */
+  const getMoTaBangGia = (values: { so_luong_tu?: string; so_luong_den?: string }[], idx: number) => {
+    const tu = (values[idx]?.so_luong_tu ?? '').trim()
+    const den = (values[idx]?.so_luong_den ?? '').trim()
+    const isLast = idx === values.length - 1
+    if (idx === 0) {
+      if (!tu) return ''
+      if (!den && isLast) return `Từ ${tu} trở lên (bao gồm ${tu})`
+      return den ? `Từ ${tu} đến ${den} (bao gồm cả ${tu} và ${den})` : ''
+    }
+    const prevDen = (values[idx - 1]?.so_luong_den ?? '').trim()
+    if (!prevDen) return tu || den ? `Lớn hơn ${prevDen || '—'} đến ${den || 'không giới hạn'}` : ''
+    if (!den && isLast) return `Lớn hơn ${prevDen} trở lên`
+    return den ? `Lớn hơn ${prevDen} đến ${den} (bao gồm ${den})` : ''
   }
 
 /** Chỉ 1 ô: nội dung + m (không R, C). Cả 2 ô: lấy ô đầu (mR) + m, bỏ R */
@@ -1070,22 +1180,6 @@ const kichThuocSuffix = (md: string, mr: string) => {
     if (Number.isNaN(n)) return 'Không đúng định dạng số'
     return n > 0 || 'Phải lớn hơn 0'
   }
-
-  const LabelCell = ({ label, required }: { label: string; required?: boolean }) => (
-    <div className="misa-label misa-grid-item">
-      {label}
-      {required && <span className="misa-required"> *</span>}
-    </div>
-  )
-
-  const InputWithLookup = ({ children, onLookup, className }: { children: React.ReactNode; onLookup?: () => void; className?: string }) => (
-    <div className={className ? `misa-input-wrap ${className}` : 'misa-input-wrap'}>
-      {children}
-      <button type="button" onClick={onLookup ?? (() => {})} className="misa-lookup-btn" title="Chọn từ danh mục">
-        ...
-      </button>
-    </div>
-  )
 
   return (
     <>
@@ -1413,183 +1507,15 @@ const kichThuocSuffix = (md: string, mr: string) => {
           </div>
           <div className="htql-sub-tab-content">
             {activeSubTab === 1 && (
-              <div className="misa-form-grid htql-tab-grid htql-tab-ngam-dinh">
-                <LabelCell label="Kho ngầm định" />
-                <div ref={khoNgamDinhRef} className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div
-                    className="misa-input-wrap htql-kho-ngam-dinh-no-border"
-                    style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
-                    onClick={() => setLookupModal('kho')}
-                  >
-                    <input
-                      {...register('kho_ngam_dinh')}
-                      readOnly
-                      className="misa-input-solo"
-                      style={{ ...inputStyle, paddingRight: 26, cursor: 'pointer' }}
-                      placeholder="Chọn kho..."
-                    />
-                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-                      <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="misa-lookup-btn htql-dvt-plus-btn"
-                    style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
-                    title="Thêm kho"
-                    onClick={() => setShowThemKhoModal(true)}
-                  >
-                    +
-                  </button>
-                </div>
-                <LabelCell label="ĐG mua cố định" />
-                <div className="misa-grid-item htql-don-gia-wrap">
-                  <InputWithLookup onLookup={() => {}}>
-                    <Controller
-                      control={control}
-                      name="don_gia_mua_co_dinh"
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                          onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                          onBlur={field.onBlur}
-                          className="misa-input-solo"
-                          style={inputStyle}
-                          placeholder="0,00"
-                        />
-                      )}
-                    />
-                  </InputWithLookup>
-                </div>
-                <LabelCell label="TK kho" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('tai_khoan_kho')} className="misa-input-solo" style={inputStyle} placeholder="152, 156..." />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <LabelCell label="ĐG mua gần nhất" />
-                <div className="misa-grid-item htql-don-gia-wrap">
-                  <InputWithLookup onLookup={() => {}}>
-                    <Controller
-                      control={control}
-                      name="don_gia_mua_gan_nhat"
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                          onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                          onBlur={field.onBlur}
-                          className="misa-input-solo"
-                          style={inputStyle}
-                          placeholder="0,00"
-                        />
-                      )}
-                    />
-                  </InputWithLookup>
-                </div>
-                <LabelCell label="TK doanh thu" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('tai_khoan_doanh_thu')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <LabelCell label="ĐG bán" />
-                <div className="misa-grid-item htql-don-gia-wrap">
-                  <InputWithLookup onLookup={() => {}}>
-                    <Controller
-                      control={control}
-                      name="don_gia_ban"
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                          onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                          onBlur={field.onBlur}
-                          className="misa-input-solo"
-                          style={inputStyle}
-                          placeholder="0,00"
-                        />
-                      )}
-                    />
-                  </InputWithLookup>
-                </div>
-                <LabelCell label="TK chiết khấu" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('tk_chiet_khau')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <LabelCell label="Thuế GTGT (%)" />
-                <div className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <div
-                    className="misa-input-wrap htql-thue-gtgt-no-border"
-                    style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
-                  >
-                    <select
-                      {...register('thue_suat_gtgt_dau_ra')}
-                      className="misa-input-solo"
-                      style={{ ...selectStyle, width: '100%', paddingRight: 26, cursor: 'pointer', border: 'none' }}
-                    >
-                      {THUE_SUAT_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-                      <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
-                    </span>
-                  </div>
-                  {watch('thue_suat_gtgt_dau_ra') === 'Tự nhập' && (
-                    <Controller
-                      control={control}
-                      name="thue_suat_gtgt_tu_nhap"
-                      rules={{ validate: (v) => {
-                        if (!v.trim()) return true
-                        const n = parseFloat(parseNumber(v))
-                        if (Number.isNaN(n)) return true
-                        return n >= 0 || 'Phải lớn hơn hoặc bằng 0'
-                      } }}
-                      render={({ field, fieldState }) => (
-                        <input
-                          {...field}
-                          onChange={(e) => field.onChange(formatSoTien(e.target.value))}
-                          onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                          onBlur={field.onBlur}
-                          className="misa-input-solo"
-                          style={{ ...inputStyle, width: 72, flexShrink: 0, ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}) }}
-                          placeholder="VD: 7"
-                        />
-                      )}
-                    />
-                  )}
-                  {watch('thue_suat_gtgt_dau_ra') === 'Tự nhập' && errors.thue_suat_gtgt_tu_nhap && (
-                    <span style={{ fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>{errors.thue_suat_gtgt_tu_nhap.message}</span>
-                  )}
-                </div>
-                <LabelCell label="TK giảm giá" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('tk_giam_gia')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <div className="misa-grid-item" />
-                <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    <input type="checkbox" {...register('la_mat_hang_khuyen_mai')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-                    <span style={{ color: 'var(--text-primary)' }}>Là hàng khuyến mại</span>
-                  </label>
-                </div>
-                <LabelCell label="TK trả lại" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('tk_tra_lai')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <div className="misa-grid-item" />
-                <div className="misa-grid-item" />
-                <LabelCell label="TK chi phí" />
-                <div className="misa-grid-item" style={{ position: 'relative' }}>
-                  <input {...register('tai_khoan_chi_phi')} className="misa-input-solo" style={inputStyle} placeholder="632" />
-                  <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-                </div>
-                <div className="misa-grid-item" />
-                <div className="misa-grid-item" />
-              </div>
+              <VatTuHangHoaFormTabNgamDinh
+                control={control}
+                register={register}
+                watch={watch}
+                errors={errors}
+                onOpenKhoLookup={() => setLookupModal('kho')}
+                onOpenThemKho={() => setShowThemKhoModal(true)}
+                khoNgamDinhRef={khoNgamDinhRef}
+              />
             )}
             {activeSubTab === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1597,10 +1523,10 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: 36 }} />
-                      <col style={{ width: 110 }} />
-                      <col style={{ width: 110 }} />
-                      <col style={{ width: 100 }} />
-                      <col style={{ minWidth: 120 }} />
+                      <col style={{ width: 72 }} />
+                      <col style={{ width: 72 }} />
+                      <col style={{ width: 72 }} />
+                      <col />
                       <col style={{ width: 36 }} />
                     </colgroup>
                     <thead>
@@ -1626,13 +1552,13 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               <Controller
                                 control={control}
                                 name={`bang_chiet_khau.${idx}.so_luong_tu`}
-                                rules={{ validate: validateSoLuongTu(idx) }}
+                                rules={{ validate: validateSoLuongTu(idx, lastDataIndexBangGia) }}
                                 render={({ field: f, fieldState }) => (
                                   <input
                                     {...f}
                                     onChange={(e) => {
                                       f.onChange(formatSoNguyenInput(e.target.value))
-                                      void trigger('bang_chiet_khau')
+                                      setTimeout(() => { void trigger('bang_chiet_khau') }, 0)
                                     }}
                                     onBlur={() => void trigger('bang_chiet_khau')}
                                     className="misa-input-solo"
@@ -1646,13 +1572,13 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               <Controller
                                 control={control}
                                 name={`bang_chiet_khau.${idx}.so_luong_den`}
-                                rules={{ validate: validateSoLuongDen(idx) }}
+                                rules={{ validate: validateSoLuongDen(idx, lastDataIndexBangGia) }}
                                 render={({ field: f, fieldState }) => (
                                   <input
                                     {...f}
                                     onChange={(e) => {
                                       f.onChange(formatSoNguyenInput(e.target.value))
-                                      void trigger('bang_chiet_khau')
+                                      setTimeout(() => { void trigger('bang_chiet_khau') }, 0)
                                     }}
                                     onBlur={() => void trigger('bang_chiet_khau')}
                                     className="misa-input-solo"
@@ -1666,7 +1592,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               <Controller
                                 control={control}
                                 name={`bang_chiet_khau.${idx}.ty_le_chiet_khau`}
-                                rules={{ validate: validateSoKhongAm }}
+                                rules={{ validate: validateDonGiaBangGia(idx, lastDataIndexBangGia) }}
                                 render={({ field: f, fieldState }) => (
                                   <input
                                     {...f}
@@ -1677,7 +1603,6 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                     style={{
                                       ...inputStyle,
                                       width: '100%',
-                                      minWidth: 80,
                                       textAlign: 'right',
                                       ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}),
                                     }}
@@ -1688,13 +1613,15 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               />
                             </td>
                             <td style={{ ...tdChietKhau, color: 'var(--text-muted)', fontSize: 10 }}>
-                              {(() => {
-                                const r = bangChietKhauValues[idx]
-                                const tu = (r?.so_luong_tu ?? '').trim() || '—'
-                                const den = (r?.so_luong_den ?? '').trim() || '—'
-                                const gia = (r?.ty_le_chiet_khau ?? '').trim() || '—'
-                                return <>Từ {tu} đến {den}, đơn giá {gia}</>
-                              })()}
+                              <input
+                                type="text"
+                                readOnly
+                                tabIndex={-1}
+                                className="misa-input-solo"
+                                style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }}
+                                value={getMoTaBangGia(bangChietKhauValues, idx) || ''}
+                                placeholder="Tự động theo khoảng"
+                              />
                             </td>
                             <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
                               <button type="button" onClick={() => removeChietKhau(idx)} title="Xóa dòng" style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1706,28 +1633,27 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       )}
                     </tbody>
                   </table>
-                  {(() => {
-                    const msgs: string[] = []
-                    const arr = errors.bang_chiet_khau
-                    if (arr && Array.isArray(arr)) {
-                      arr.forEach((row, idx) => {
-                        if (!row) return
-                        if (row.so_luong_tu?.message) msgs.push(`Dòng số ${idx + 1}: ${row.so_luong_tu.message}`)
-                        if (row.so_luong_den?.message) msgs.push(`Dòng số ${idx + 1}: ${row.so_luong_den.message}`)
-                        if (row.ty_le_chiet_khau?.message) msgs.push(`Dòng số ${idx + 1}: ${row.ty_le_chiet_khau.message}`)
-                      })
-                    }
-                    return msgs.length > 0 ? (
-                      <div style={{ padding: '6px 8px', fontSize: 10, color: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)', borderTop: '1px solid var(--border)' }}>
-                        {msgs.join(' / ')}
-                      </div>
-                    ) : null
-                  })()}
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={() => canAddRow && appendChietKhau({ so_luong_tu: bangChietKhauValues.length === 0 ? '0' : (bangChietKhauValues[bangChietKhauValues.length - 1]?.so_luong_den ?? '0'), so_luong_den: '', ty_le_chiet_khau: '', mo_ta: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: canAddRow ? 'var(--accent)' : 'var(--bg-secondary)', color: canAddRow ? '#0d0d0d' : 'var(--text-muted)', border: 'none', borderRadius: 4, cursor: canAddRow ? 'pointer' : 'not-allowed', opacity: canAddRow ? 1 : 0.6 }}>
+                    <button type="button" onClick={handleThemDongBangGia} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
+                  {(() => {
+                    const arr = errors.bang_chiet_khau
+                    if (!arr || !Array.isArray(arr)) return null
+                    const msgs: string[] = []
+                    arr.forEach((row, idx) => {
+                      if (!row) return
+                      if (row.so_luong_tu?.message) msgs.push(`Dòng ${idx + 1} - Số lượng từ: ${row.so_luong_tu.message}`)
+                      if (row.so_luong_den?.message) msgs.push(`Dòng ${idx + 1} - Số lượng đến: ${row.so_luong_den.message}`)
+                      if (row.ty_le_chiet_khau?.message) msgs.push(`Dòng ${idx + 1} - Đơn giá: ${row.ty_le_chiet_khau.message}`)
+                    })
+                    return msgs.length > 0 ? (
+                      <div style={{ padding: '6px 8px', fontSize: 10, color: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)', borderTop: '1px solid var(--border)' }}>
+                        {msgs.join(' · ')}
+                      </div>
+                    ) : null
+                  })()}
                 </div>
               </div>
             )}
@@ -1745,10 +1671,10 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: 36 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: '100%' }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 90 }} />
+                      <col />
                       <col style={{ width: 36 }} />
                     </colgroup>
                     <thead>
@@ -1792,27 +1718,55 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               render={({ field }) => (
                                 <input
                                   {...field}
-                                  onChange={(e) => { const v = e.target.value; field.onChange(v ? formatSoTien(v) : '') }}
+                                  onChange={(e) => {
+                                    userEnteredTiLeByIndex.current.add(idx)
+                                    const v = e.target.value
+                                    field.onChange(v ? formatSoTien(v) : '')
+                                  }}
                                   onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
-                                  onBlur={field.onBlur}
+                                  onBlur={() => {
+                                    const trimmed = String(field.value ?? '').trim()
+                                    if (trimmed !== '') {
+                                      const n = parseFloatVN(field.value)
+                                      if (!Number.isNaN(n) && n < 0) {
+                                        field.onChange(formatSoTien('0'))
+                                      }
+                                    }
+                                    field.onBlur()
+                                  }}
                                   className="misa-input-solo"
                                   style={{ ...inputStyle, width: '100%', textAlign: 'left' }}
-                                  placeholder="1"
+                                  placeholder=""
+                                  title="Số thực lớn hơn hoặc bằng 0"
                                 />
                               )}
                             />
                           </td>
                           <td style={tdChietKhau}>
                             <select {...register(`don_vi_quy_doi.${idx}.phep_tinh`)} style={{ ...selectStyle, width: '100%' }}>
+                              <option value="">Chọn phép tính</option>
                               <option value="nhan">Phép nhân</option>
                               <option value="chia">Phép chia</option>
                             </select>
                           </td>
                           <td style={{ ...tdChietKhau, textAlign: 'left' }}>
-                            <input {...register(`don_vi_quy_doi.${idx}.mo_ta`)} className="misa-input-solo" style={{ ...inputStyle, width: '100%' }} placeholder="" />
+                            <input {...register(`don_vi_quy_doi.${idx}.mo_ta`)} readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }} placeholder="" />
                           </td>
                           <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
-                            <button type="button" onClick={() => { if (donViQuyDoiFields.length <= 1) { setValue('don_vi_quy_doi', []); } else { removeDonViQuyDoi(idx); } }} title="Xóa dòng" style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button type="button" onClick={() => {
+                              if (donViQuyDoiFields.length <= 1) {
+                                userEnteredTiLeByIndex.current = new Set()
+                                setValue('don_vi_quy_doi', [])
+                              } else {
+                                const next = new Set<number>()
+                                userEnteredTiLeByIndex.current.forEach((i) => {
+                                  if (i < idx) next.add(i)
+                                  else if (i > idx) next.add(i - 1)
+                                })
+                                userEnteredTiLeByIndex.current = next
+                                removeDonViQuyDoi(idx)
+                              }
+                            }} title="Xóa dòng" style={{ padding: 2, background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Trash2 size={14} />
                             </button>
                           </td>
@@ -1822,7 +1776,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={() => appendDonViQuyDoi({ dvt_chinh: donViQuyDoiValues[0]?.dvt_chinh ?? getValues('dvt_chinh') ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '1', phep_tinh: 'nhan', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => appendDonViQuyDoi({ dvt_chinh: donViQuyDoiValues[0]?.dvt_chinh ?? getValues('dvt_chinh') ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '', phep_tinh: '', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -1841,11 +1795,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: 36 }} />
-                      <col style={{ minWidth: 90 }} />
+                      <col style={{ width: 72 }} />
                       <col />
-                      <col style={{ width: 70 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 80 }} />
+                      <col style={{ width: 56 }} />
+                      <col style={{ width: 72 }} />
+                      <col style={{ width: 64 }} />
                       <col style={{ width: 36 }} />
                     </colgroup>
                     <thead>
@@ -1919,32 +1873,22 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               <input
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, width: '100%' }}
-                                value={row.so_luong || '0'}
+                                value={row.so_luong ?? ''}
                                 onChange={(e) => {
                                   const formatted = formatSoTuNhienInput(e.target.value)
                                   const r = [...dinhMucNvlRows]
                                   r[idx] = { ...r[idx], so_luong: formatted }
                                   setDinhMucNvlRows(r)
                                 }}
-                                onFocus={() => {
-                                  if (isZeroDisplay(row.so_luong || '0')) {
-                                    const r = [...dinhMucNvlRows]
-                                    r[idx] = { ...r[idx], so_luong: '' }
-                                    setDinhMucNvlRows(r)
-                                  }
-                                }}
                                 onBlur={() => {
-                                  if (String(row.so_luong).trim() === '') {
-                                    const r = [...dinhMucNvlRows]
-                                    r[idx] = { ...r[idx], so_luong: '0' }
-                                    setDinhMucNvlRows(r)
-                                    return
-                                  }
-                                  const n = parseFloatVN(row.so_luong)
-                                  if (Number.isNaN(n) || n <= 0) {
-                                    const r = [...dinhMucNvlRows]
-                                    r[idx] = { ...r[idx], so_luong: formatSoTuNhienInput('1') }
-                                    setDinhMucNvlRows(r)
+                                  const trimmed = String(row.so_luong ?? '').trim()
+                                  if (trimmed !== '') {
+                                    const n = parseFloatVN(row.so_luong)
+                                    if (Number.isNaN(n) || n < 0) {
+                                      const r = [...dinhMucNvlRows]
+                                      r[idx] = { ...r[idx], so_luong: formatSoTuNhienInput('1') }
+                                      setDinhMucNvlRows(r)
+                                    }
                                   }
                                 }}
                                 placeholder="Số lượng"
@@ -1954,29 +1898,17 @@ const kichThuocSuffix = (md: string, mr: string) => {
                               <input
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, width: '100%' }}
-                                value={row.hao_hut || '0'}
+                                value={row.hao_hut ?? ''}
                                 onChange={(e) => {
                                   const formatted = formatSoTuNhienInput(e.target.value)
                                   const r = [...dinhMucNvlRows]
                                   r[idx] = { ...r[idx], hao_hut: formatted }
                                   setDinhMucNvlRows(r)
                                 }}
-                                onFocus={() => {
-                                  if (isZeroDisplay(row.hao_hut || '0')) {
-                                    const r = [...dinhMucNvlRows]
-                                    r[idx] = { ...r[idx], hao_hut: '' }
-                                    setDinhMucNvlRows(r)
-                                  }
-                                }}
                                 onBlur={() => {
-                                  if (String(row.hao_hut).trim() === '') {
-                                    const r = [...dinhMucNvlRows]
-                                    r[idx] = { ...r[idx], hao_hut: '0' }
-                                    setDinhMucNvlRows(r)
-                                    return
-                                  }
-                                  const n = parseFloatVN(row.hao_hut)
-                                  if (row.hao_hut !== '') {
+                                  const trimmed = String(row.hao_hut ?? '').trim()
+                                  if (trimmed !== '') {
+                                    const n = parseFloatVN(row.hao_hut)
                                     if (Number.isNaN(n) || n < 0) {
                                       const r = [...dinhMucNvlRows]
                                       r[idx] = { ...r[idx], hao_hut: formatSoTuNhienInput('1') }
@@ -2002,7 +1934,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={() => setDinhMucNvlRows([...dinhMucNvlRows, { ma: '', ten: '', dvt: '', so_luong: '0', hao_hut: '0' }])} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => setDinhMucNvlRows([...dinhMucNvlRows, { ma: '', ten: '', dvt: '', so_luong: '', hao_hut: '' }])} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -2074,10 +2006,12 @@ const kichThuocSuffix = (md: string, mr: string) => {
             )}
             {((activeSubTab === 4 && tinhChat !== 'Sản phẩm') || (activeSubTab === 5 && tinhChat === 'Sản phẩm')) && (
               <div style={{ border: '1px solid #4b5563', padding: 16, borderRadius: 4 }}>
-                <div style={{ display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
-                  {/* Phần trái: Đặc tính - chiếm không gian còn lại */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gridTemplateRows: 'auto minmax(160px, 1fr)', gap: '6px 16px', alignItems: 'stretch' }}>
+                  <div style={{ minWidth: 0 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'Arial, sans-serif' }}>Đặc tính</label>
+                  </div>
+                  <div />
+                  <div style={{ minWidth: 0 }}>
                     <textarea
                       {...register('dac_tinh')}
                       className="misa-input-solo"
@@ -2100,32 +2034,33 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       placeholder="Mô tả đặc tính của sản phẩm"
                     />
                   </div>
-                  {/* Phần phải: Hình ảnh - khung cố định 180px rộng, ô ảnh 160x160 */}
-                  <div style={{ flex: '0 0 180px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'Arial, sans-serif' }}>Hình ảnh (tối đa {MAX_IMAGE_SIZE_MB}MB)</label>
+                  {/* Hình ảnh - cùng hàng với ô Đặc tính, canh giữa theo chiều dọc */}
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, minHeight: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                     <div
                       style={{
-                        width: 160,
-                        height: 160,
+                        minHeight: 100,
+                        maxWidth: 140,
+                        maxHeight: 140,
                         flexShrink: 0,
-                        border: '1px solid #374151',
+                        border: '1px dashed var(--border-strong)',
                         borderRadius: 4,
-                        background: imagePreview ? 'transparent' : 'rgba(59, 130, 246, 0.08)',
+                        background: imagePreview ? 'transparent' : 'var(--bg-primary)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
                         color: 'var(--text-muted)',
-                        fontSize: 11,
+                        fontSize: 10,
                         overflow: 'hidden',
                         position: 'relative',
                       }}
                       onClick={() => document.getElementById('htql-hinh-anh-input')?.click()}
-                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)' }}
-                      onDragLeave={(e) => { e.currentTarget.style.background = imagePreview ? 'transparent' : 'rgba(59, 130, 246, 0.08)' }}
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = imagePreview ? 'transparent' : 'rgba(59, 130, 246, 0.08)' }}
+                      onDragLeave={(e) => { e.currentTarget.style.background = imagePreview ? 'transparent' : 'var(--bg-primary)' }}
                       onDrop={(e) => {
                         e.preventDefault()
-                        e.currentTarget.style.background = imagePreview ? 'transparent' : 'rgba(59, 130, 246, 0.08)'
+                        e.currentTarget.style.background = imagePreview ? 'transparent' : 'var(--bg-primary)'
                         const f = e.dataTransfer.files[0]
                         if (f && isAllowedImageFile(f)) handleImageSelect(f)
                         else if (f) setImageUploadError('Chỉ chấp nhận ảnh có đuôi .jpg, .jpeg hoặc .png')
@@ -2134,8 +2069,24 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       {imageUploading ? (
                         <span>Đang nén ảnh...</span>
                       ) : imagePreview ? (
-                        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <img src={imagePreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                        <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 100, maxWidth: 140, maxHeight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                            onLoad={(e) => {
+                              const img = e.currentTarget
+                              const isDataUrl = imagePreview.startsWith('data:')
+                              const sizeBytes = isDataUrl
+                                ? Math.floor((imagePreview.length - (imagePreview.indexOf(',') + 1)) * 0.75)
+                                : 0
+                              setImageMeta({
+                                width: img.naturalWidth,
+                                height: img.naturalHeight,
+                                sizeMB: sizeBytes / (1024 * 1024),
+                              })
+                            }}
+                          />
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setValue('duong_dan_hinh_anh', ''); setValue('ten_file_hinh_anh', ''); }}
@@ -2146,8 +2097,21 @@ const kichThuocSuffix = (md: string, mr: string) => {
                           </button>
                         </div>
                       ) : (
-                        'Chọn hình ảnh...'
+                        <span style={{ textAlign: 'center', padding: 8 }}>
+                          Hình ảnh
+                          <br />
+                          <span style={{ fontSize: 9 }}>Chọn hình ảnh hoặc kéo thả</span>
+                        </span>
                       )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10, color: 'var(--text-muted)', minWidth: 0, flex: 1 }}>
+                      <div><span style={{ color: 'var(--text-primary)' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Ảnh nhúng (Base64)' : (watch('ten_file_hinh_anh') || imagePreview.split(/[/\\]/).pop() || '—')) : '—'}</span></div>
+                      <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta ? `${imageMeta.width}×${imageMeta.height}` : '—'}</span></div>
+                      <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta && imageMeta.sizeMB > 0 ? `${imageMeta.sizeMB.toFixed(2)} MB` : '—'}</span></div>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Base64' : (imagePreview.split(/[/\\]/).pop() ?? '—')) : '—'}</span>
+                      </div>
+                    </div>
                     </div>
                     <input
                       id="htql-hinh-anh-input"
@@ -2186,11 +2150,13 @@ const kichThuocSuffix = (md: string, mr: string) => {
         <>
           <div
             style={{ position: 'fixed', inset: 0, zIndex: 1999 }}
-            onClick={() => setLookupModal(null)}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) overlayKhoLookupMouseDownRef.current = true }}
+            onClick={(e) => { if (e.target === e.currentTarget && overlayKhoLookupMouseDownRef.current) setLookupModal(null); overlayKhoLookupMouseDownRef.current = false }}
             aria-hidden
           />
           {khoDropdownRect && ReactDOM.createPortal(
             <div
+              onMouseDown={() => { overlayKhoLookupMouseDownRef.current = false }}
               style={{
                 position: 'fixed',
                 top: khoDropdownRect.top,

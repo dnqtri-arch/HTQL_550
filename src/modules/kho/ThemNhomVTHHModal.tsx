@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { X, Save, Plus, Ban } from 'lucide-react'
 import type { NhomVTHHItem } from './NhomVTHHLookupModal'
 
@@ -139,6 +139,7 @@ export function ThemNhomVTHHModal({
   onSaveAndAdd,
   parentOptions = [],
 }: ThemNhomVTHHModalProps) {
+  const overlayMouseDownRef = useRef(false)
   const [ten, setTen] = useState('')
   const [thuoc, setThuoc] = useState('')
 
@@ -147,14 +148,14 @@ export function ThemNhomVTHHModal({
     [ten, parentOptions]
   )
 
-  const handleCất = () => {
+  const handleLuu = () => {
     const trimmedTen = ten.trim()
     if (!ma || !trimmedTen) return
     onSave({ id: ma, ma, ten: trimmedTen })
     onClose()
   }
 
-  const handleCấtVaThem = () => {
+  const handleLuuVaTiepTuc = () => {
     const trimmedTen = ten.trim()
     if (!ma || !trimmedTen) return
     const item: NhomVTHHItem = { id: ma, ma, ten: trimmedTen }
@@ -165,8 +166,12 @@ export function ThemNhomVTHHModal({
   }
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={box} onClick={(e) => e.stopPropagation()}>
+    <div
+      style={overlay}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
+      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
+    >
+      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <span>Thêm Nhóm vật tư, hàng hóa, dịch vụ</span>
           <button
@@ -293,12 +298,12 @@ export function ThemNhomVTHHModal({
         </div>
 
         <div style={footerStyle}>
-          <button type="button" style={btnPrimary} onClick={handleCất} disabled={!ma || !ten.trim()}>
+          <button type="button" style={btnPrimary} onClick={handleLuu} disabled={!ma || !ten.trim()}>
             <Save size={14} />
             <span>Lưu</span>
           </button>
           {onSaveAndAdd && (
-            <button type="button" style={btnPrimary} onClick={handleCấtVaThem} disabled={!ma || !ten.trim()}>
+            <button type="button" style={btnPrimary} onClick={handleLuuVaTiepTuc} disabled={!ma || !ten.trim()}>
               <Save size={14} />
               <Plus size={12} />
               <span>Lưu và tiếp tục</span>

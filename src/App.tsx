@@ -1,5 +1,13 @@
 import { Layout } from './components/Layout'
+import { ToastProvider } from './context/ToastContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 export default function App() {
-  return <Layout />
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <Layout />
+      </ToastProvider>
+    </ErrorBoundary>
+  )
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Save, Ban } from 'lucide-react'
 import { donViTinhPost, donViTinhMaTuDong } from './donViTinhApi'
 
@@ -101,6 +101,7 @@ const btnDanger: React.CSSProperties = {
 }
 
 export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps) {
+  const overlayMouseDownRef = useRef(false)
   const [ma_dvt, setMaDvt] = useState('')
   const [ten_dvt, setTenDvt] = useState('')
   const [ky_hieu, setKyHieu] = useState('')
@@ -112,7 +113,7 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
     donViTinhMaTuDong().then(setMaDvt)
   }, [])
 
-  const handleCất = async () => {
+  const handleLuu = async () => {
     const ten = ten_dvt.trim()
     if (!ten) {
       setLoi('Tên đơn vị tính là bắt buộc.')
@@ -137,8 +138,12 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
   }
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={box} onClick={(e) => e.stopPropagation()}>
+    <div
+      style={overlay}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
+      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
+    >
+      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <span>Thêm đơn vị tính</span>
           <button
@@ -217,7 +222,7 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
             <Ban size={14} />
             <span>Hủy bỏ</span>
           </button>
-          <button type="button" style={btnPrimary} onClick={handleCất} disabled={dangLuu}>
+          <button type="button" style={btnPrimary} onClick={handleLuu} disabled={dangLuu}>
             <Save size={14} />
             <span>{dangLuu ? 'Đang lưu...' : 'Lưu'}</span>
           </button>
