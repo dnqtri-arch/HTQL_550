@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Copy, Pencil, Trash2, RefreshCw, Download, Upload, Save, X, ChevronDown, Globe } from 'lucide-react'
+import { Plus, Copy, Pencil, Trash2, RefreshCw, Download, Upload, ChevronDown, Globe } from 'lucide-react'
 import { DataGrid } from '../../components/DataGrid'
 import { Modal } from '../../components/Modal'
 import { ListPageToolbar } from '../../components/ListPageToolbar'
@@ -10,6 +10,7 @@ import {
   type LoaiNhaCungCap,
   type TaiKhoanNganHangItem,
   type NhomKhNccItem,
+  type DieuKhoanThanhToanItem,
   nhaCungCapGetAll,
   nhaCungCapPost,
   nhaCungCapPut,
@@ -19,14 +20,20 @@ import {
   nhaCungCapTrungMa,
   loadNhomKhNcc,
   saveNhomKhNcc,
+  loadDieuKhoanThanhToan,
+  saveDieuKhoanThanhToan,
 } from './nhaCungCapApi'
 import { NhomKhNccLookupModal } from './NhomKhNccLookupModal'
+import { ThemDieuKhoanThanhToanModal } from './ThemDieuKhoanThanhToanModal'
 import { DANH_SACH_QUOC_GIA } from '../../constants/countries'
+import { LOOKUP_CONTROL_HEIGHT, lookupInputWithChevronStyle, lookupChevronOverlayStyle, lookupActionButtonStyle } from '../../constants/lookupControlStyles'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 import { DANH_SACH_TINH_THANH_VIET_NAM, MA_TINH_THEO_TEN } from '../../constants/provincesVietnam'
 import { getWardsByProvinceCode } from './wardsApi'
 import { suggestAddressVietnam, cleanAddressForDisplay } from './addressAutocompleteApi'
 import { lookupTaxCode } from './taxLookupApi'
 import { getBanksVietnam, type BankItem } from './banksApi'
+import { formatSoNguyenInput, formatSoTien, parseFloatVN, isZeroDisplay } from '../../utils/numberFormat'
 
 /** Chuẩn hóa chuỗi tiếng Việt để lọc (bỏ dấu, lowercase). */
 function normalizeForFilter(s: string): string {
@@ -87,17 +94,6 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: '4px',
   color: 'var(--text-primary)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  padding: '6px 12px',
-  fontSize: '11px',
-  background: 'var(--accent)',
-  color: '#0d0d0d',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontWeight: 600,
 }
 
 const panelChiTiet: React.CSSProperties = {
@@ -176,7 +172,7 @@ const emptyForm: FormState = {
   website: '',
   dien_giai: '',
   dieu_khoan_tt: '',
-  so_ngay_duoc_no: '',
+  so_ngay_duoc_no: '0',
   so_no_toi_da: '0',
   nv_mua_hang: '',
   tk_ngan_hang: '',
@@ -219,8 +215,8 @@ function recordToForm(r: NhaCungCapRecord): FormState {
     website: r.website ?? '',
     dien_giai: r.dien_giai ?? '',
     dieu_khoan_tt: r.dieu_khoan_tt ?? '',
-    so_ngay_duoc_no: r.so_ngay_duoc_no != null ? String(r.so_ngay_duoc_no) : '',
-    so_no_toi_da: r.so_no_toi_da != null ? String(r.so_no_toi_da) : '0',
+    so_ngay_duoc_no: r.so_ngay_duoc_no != null ? formatSoNguyenInput(String(r.so_ngay_duoc_no)) : '0',
+    so_no_toi_da: r.so_no_toi_da != null ? formatSoTien(String(r.so_no_toi_da)) : '0',
     nv_mua_hang: r.nv_mua_hang ?? '',
     tk_ngan_hang: r.tk_ngan_hang ?? '',
     ten_ngan_hang: r.ten_ngan_hang ?? '',
@@ -250,8 +246,8 @@ function recordToForm(r: NhaCungCapRecord): FormState {
 }
 
 function formToPayload(f: FormState): Omit<NhaCungCapRecord, 'id'> {
-  const soNoToiDa = parseInt(f.so_no_toi_da, 10)
-  const soNgayNo = f.so_ngay_duoc_no.trim() ? parseInt(f.so_ngay_duoc_no, 10) : undefined
+  const soNoToiDa = parseFloatVN(f.so_no_toi_da)
+  const soNgayNo = f.so_ngay_duoc_no.trim() ? Math.max(0, Math.floor(parseFloatVN(f.so_ngay_duoc_no))) : undefined
   const bankList = f.tai_khoan_ngan_hang.filter(
     (r) => (r.so_tai_khoan ?? '').trim() || (r.ten_ngan_hang ?? '').trim() || (r.chi_nhanh ?? '').trim() || (r.tinh_tp_ngan_hang ?? '').trim()
   )
@@ -311,6 +307,9 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
   const wardsFetchCodeRef = useRef<string | null>(null)
   const [modalOpen, setModalOpen] = useState<'add' | 'edit' | 'clone' | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
+  /** Lưu riêng form Tổ chức và Cá nhân để khi chuyển qua lại vẫn giữ nội dung (vd: mã số thuế đã lấy thông tin). */
+  const [formToChuc, setFormToChuc] = useState<FormState>(() => ({ ...emptyForm, loai_ncc: 'to_chuc' }))
+  const [formCaNhan, setFormCaNhan] = useState<FormState>(() => ({ ...emptyForm, loai_ncc: 'ca_nhan' }))
   const [tinhTpFilter, setTinhTpFilter] = useState('')
   const [xaPhuongFilter, setXaPhuongFilter] = useState('')
   const [openTinhTp, setOpenTinhTp] = useState(false)
@@ -335,6 +334,80 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
   const [banksLoading, setBanksLoading] = useState(false)
   const [bankDropdownRow, setBankDropdownRow] = useState<number | null>(null)
   const [bankFilter, setBankFilter] = useState('')
+  /** Điều khoản thanh toán: dropdown (Tổ chức / Cá nhân) và modal Thêm */
+  const [danhSachDKTT, setDanhSachDKTT] = useState<DieuKhoanThanhToanItem[]>(() => loadDieuKhoanThanhToan())
+  const [openDkttDropdownToChuc, setOpenDkttDropdownToChuc] = useState(false)
+  const [openDkttDropdownCaNhan, setOpenDkttDropdownCaNhan] = useState(false)
+  const [showThemDieuKhoanTT, setShowThemDieuKhoanTT] = useState(false)
+  const dkttToChucRef = useRef<HTMLDivElement>(null)
+  const dkttCaNhanRef = useRef<HTMLDivElement>(null)
+  const tinhTpWrapRef1 = useRef<HTMLDivElement>(null)
+  const tinhTpWrapRef2 = useRef<HTMLDivElement>(null)
+  const xaPhuongWrapRef1 = useRef<HTMLDivElement>(null)
+  const xaPhuongWrapRef2 = useRef<HTMLDivElement>(null)
+  const bankDropdownWrapRef = useRef<HTMLDivElement>(null)
+
+  /** Đóng dropdown Điều khoản TT (Tổ chức) khi bấm ra ngoài */
+  useEffect(() => {
+    if (!openDkttDropdownToChuc) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (dkttToChucRef.current && !dkttToChucRef.current.contains(e.target as Node)) {
+        setOpenDkttDropdownToChuc(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [openDkttDropdownToChuc])
+
+  /** Đóng dropdown Điều khoản TT (Cá nhân) khi bấm ra ngoài */
+  useEffect(() => {
+    if (!openDkttDropdownCaNhan) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (dkttCaNhanRef.current && !dkttCaNhanRef.current.contains(e.target as Node)) {
+        setOpenDkttDropdownCaNhan(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [openDkttDropdownCaNhan])
+
+  /** Đóng dropdown Tỉnh/TP khi bấm ra ngoài */
+  useEffect(() => {
+    if (!openTinhTp) return
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (!tinhTpWrapRef1.current?.contains(target) && !tinhTpWrapRef2.current?.contains(target)) {
+        setOpenTinhTp(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [openTinhTp])
+
+  /** Đóng dropdown Xã/Phường khi bấm ra ngoài */
+  useEffect(() => {
+    if (!openXaPhuong) return
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (!xaPhuongWrapRef1.current?.contains(target) && !xaPhuongWrapRef2.current?.contains(target)) {
+        setOpenXaPhuong(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [openXaPhuong])
+
+  /** Đóng dropdown Tên ngân hàng (theo dòng) khi bấm ra ngoài */
+  useEffect(() => {
+    if (bankDropdownRow === null) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (bankDropdownWrapRef.current && !bankDropdownWrapRef.current.contains(e.target as Node)) {
+        setBankDropdownRow(null)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [bankDropdownRow])
 
   /** Hiển thị tại ô Nhóm KH, NCC: chỉ mã (không hiển thị tên) */
   const displayNhomKhNcc = useMemo(() => {
@@ -363,6 +436,7 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
     () => filterByKeyword(banksList, (b) => `${b.name} ${b.shortName} ${b.code}`, bankFilter),
     [banksList, bankFilter]
   )
+  /** Điều khoản thanh toán: hiển thị toàn bộ khi mở dropdown để có thể đổi sang mục khác. */
 
   const napLai = async () => {
     setDangTai(true)
@@ -426,28 +500,59 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
   })
 
   const moThem = async () => {
-    setForm({ ...emptyForm, ma_ncc: await nhaCungCapMaTuDong() })
+    const ma = await nhaCungCapMaTuDong()
+    const baseToChuc: FormState = { ...emptyForm, loai_ncc: 'to_chuc', ma_ncc: ma }
+    const baseCaNhan: FormState = { ...emptyForm, loai_ncc: 'ca_nhan', ma_ncc: ma }
+    setFormToChuc(baseToChuc)
+    setFormCaNhan(baseCaNhan)
+    setForm(baseToChuc)
     setLoi('')
     setModalOpen('add')
   }
 
   const moSua = () => {
     if (!dongChon) return
-    setForm(recordToForm(dongChon))
+    const r = recordToForm(dongChon)
+    setForm(r)
+    if (dongChon.loai_ncc === 'to_chuc') {
+      setFormToChuc(r)
+      setFormCaNhan({ ...emptyForm, loai_ncc: 'ca_nhan', ma_ncc: dongChon.ma_ncc } as FormState)
+    } else {
+      setFormCaNhan(r)
+      setFormToChuc({ ...emptyForm, loai_ncc: 'to_chuc', ma_ncc: dongChon.ma_ncc } as FormState)
+    }
     setLoi('')
     setModalOpen('edit')
   }
 
   const moNhanBan = async () => {
     if (!dongChon) return
-    setForm({ ...recordToForm(dongChon), ma_ncc: await nhaCungCapMaTuDong(), ten_ncc: dongChon.ten_ncc + ' (bản sao)' })
+    const newMa = await nhaCungCapMaTuDong()
+    const cloned = { ...recordToForm(dongChon), ma_ncc: newMa, ten_ncc: dongChon.ten_ncc + ' (bản sao)' }
+    if (dongChon.loai_ncc === 'to_chuc') {
+      setFormToChuc(cloned)
+      setFormCaNhan({ ...emptyForm, loai_ncc: 'ca_nhan', ma_ncc: newMa } as FormState)
+      setForm(cloned)
+    } else {
+      setFormCaNhan(cloned)
+      setFormToChuc({ ...emptyForm, loai_ncc: 'to_chuc', ma_ncc: newMa } as FormState)
+      setForm(cloned)
+    }
     setLoi('')
     setModalOpen('clone')
   }
 
   const moSuaDoubleClick = (row: NhaCungCapRecord) => {
     setDongChon(row)
-    setForm(recordToForm(row))
+    const r = recordToForm(row)
+    setForm(r)
+    if (row.loai_ncc === 'to_chuc') {
+      setFormToChuc(r)
+      setFormCaNhan({ ...emptyForm, loai_ncc: 'ca_nhan', ma_ncc: row.ma_ncc })
+    } else {
+      setFormCaNhan(r)
+      setFormToChuc({ ...emptyForm, loai_ncc: 'to_chuc', ma_ncc: row.ma_ncc })
+    }
     setLoi('')
     setModalOpen('edit')
   }
@@ -514,7 +619,12 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
     try {
       await nhaCungCapPost(formToPayload(form))
       await napLai()
-      setForm({ ...emptyForm, ma_ncc: await nhaCungCapMaTuDong() })
+      const ma = await nhaCungCapMaTuDong()
+      const baseToChuc: FormState = { ...emptyForm, loai_ncc: 'to_chuc', ma_ncc: ma }
+      const baseCaNhan: FormState = { ...emptyForm, loai_ncc: 'ca_nhan', ma_ncc: ma }
+      setFormToChuc(baseToChuc)
+      setFormCaNhan(baseCaNhan)
+      setForm(baseToChuc)
       setLoi('')
     } catch (e) {
       setLoi(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
@@ -686,11 +796,22 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
             <span style={labelStyle}>Loại:</span>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer' }}>
-              <input type="radio" name="loaiForm" checked={form.loai_ncc === 'to_chuc'} onChange={() => setForm((f) => ({ ...f, loai_ncc: 'to_chuc' }))} />
+              <input type="radio" name="loaiForm" checked={form.loai_ncc === 'to_chuc'} onChange={() => {
+                setFormCaNhan(form)
+                const kept: FormState = { ...formToChuc, loai_ncc: 'to_chuc', ma_so_thue: form.ma_so_thue, ...((modalOpen === 'add' || modalOpen === 'clone') && { ma_ncc: form.ma_ncc }) }
+                setFormToChuc(kept)
+                setForm(kept)
+              }} />
               1. Tổ chức
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer' }}>
-              <input type="radio" name="loaiForm" checked={form.loai_ncc === 'ca_nhan'} onChange={() => setForm((f) => ({ ...f, loai_ncc: 'ca_nhan' }))} />
+              <input type="radio" name="loaiForm" checked={form.loai_ncc === 'ca_nhan'} onChange={() => {
+                setFormToChuc(form)
+                const next = { ...formCaNhan }
+                if (form.ma_so_thue.trim()) next.ma_so_thue = form.ma_so_thue
+                setFormCaNhan(next)
+                setForm(next)
+              }} />
               2. Cá nhân
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', marginLeft: 8 }}>
@@ -850,10 +971,37 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Điều khoản TT</label>
-                    <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-                      <input style={{ ...inputStyle, flex: 1 }} value={form.dieu_khoan_tt} onChange={(e) => setForm((f) => ({ ...f, dieu_khoan_tt: e.target.value }))} placeholder="" />
-                      <button type="button" style={{ ...btnSecondary, padding: '6px 10px', minWidth: 28 }} title="Chọn"><ChevronDown size={12} style={{ color: 'inherit' }} /></button>
-                      <button type="button" style={btnSecondary} title="Thêm">+</button>
+                    <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                      <div
+                        ref={dkttToChucRef}
+                        style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
+                        onClick={() => setOpenDkttDropdownToChuc((v) => !v)}
+                      >
+                        <input
+                          readOnly
+                          style={{ ...inputStyle, ...lookupInputWithChevronStyle, width: '100%', cursor: 'pointer' }}
+                          value={form.dieu_khoan_tt}
+                          placeholder="Chọn điều khoản..."
+                        />
+                        <span style={lookupChevronOverlayStyle}>
+                          <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                        </span>
+                        {openDkttDropdownToChuc && (
+                          <div
+                            style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 2, maxHeight: 200, overflowY: 'auto', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000 }}
+                          >
+                            {danhSachDKTT.length === 0 ? <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>Không có hoặc bấm + để thêm</div> : danhSachDKTT.map((d) => (
+                              <div
+                                key={d.ma}
+                                role="option"
+                                onMouseDown={(e) => { e.preventDefault(); setForm((f) => ({ ...f, dieu_khoan_tt: d.ten, so_ngay_duoc_no: formatSoNguyenInput(String(d.so_ngay_duoc_no)), so_no_toi_da: formatSoTien(String(d.so_cong_no_toi_da)) })); setOpenDkttDropdownToChuc(false) }}
+                                style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--border)', background: form.dieu_khoan_tt === d.ten ? 'var(--accent)' : undefined, color: form.dieu_khoan_tt === d.ten ? '#0d0d0d' : 'var(--text-primary)' }}
+                              >{d.ma} — {d.ten}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button type="button" style={lookupActionButtonStyle} title="Thêm điều khoản" onClick={() => setShowThemDieuKhoanTT(true)}><Plus size={12} style={{ color: '#0d0d0d' }} /></button>
                     </div>
                   </div>
                 </div>
@@ -861,23 +1009,41 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>NV mua hàng</label>
-                    <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-                      <input style={{ ...inputStyle, flex: 1 }} value={form.nv_mua_hang} onChange={(e) => setForm((f) => ({ ...f, nv_mua_hang: e.target.value }))} placeholder="" />
-                      <button type="button" style={{ ...btnSecondary, padding: '6px 10px', minWidth: 28 }} title="Chọn"><ChevronDown size={12} style={{ color: 'inherit' }} /></button>
-                      <button type="button" style={btnSecondary}>+</button>
+                    <div style={{ display: 'flex', gap: 2, flex: 1, alignItems: 'center' }}>
+                      <input style={{ ...inputStyle, flex: 1, height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT, boxSizing: 'border-box' }} value={form.nv_mua_hang} onChange={(e) => setForm((f) => ({ ...f, nv_mua_hang: e.target.value }))} placeholder="" />
+                      <button type="button" style={lookupActionButtonStyle} title="Chọn"><ChevronDown size={12} style={{ color: '#0d0d0d' }} /></button>
+                      <button type="button" style={lookupActionButtonStyle} title="Thêm"><Plus size={12} style={{ color: '#0d0d0d' }} /></button>
                     </div>
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Số ngày được nợ</label>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input type="number" style={{ ...inputStyle, width: 80 }} value={form.so_ngay_duoc_no} onChange={(e) => setForm((f) => ({ ...f, so_ngay_duoc_no: e.target.value }))} />
-                      <span style={labelStyle}>ngày</span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 0 }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="htql-no-spinner"
+                        style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                        value={form.so_ngay_duoc_no}
+                        onChange={(e) => setForm((f) => ({ ...f, so_ngay_duoc_no: formatSoNguyenInput(e.target.value) }))}
+                        onFocus={() => { if (isZeroDisplay(form.so_ngay_duoc_no)) setForm((f) => ({ ...f, so_ngay_duoc_no: '' })) }}
+                        onBlur={() => { if (form.so_ngay_duoc_no === '') setForm((f) => ({ ...f, so_ngay_duoc_no: '0' })) }}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-primary)', flexShrink: 0 }}>ngày</span>
                     </div>
                   </div>
                   <div />
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Số nợ tối đa</label>
-                    <input type="number" style={{ ...inputStyle, flex: 1 }} value={form.so_no_toi_da} onChange={(e) => setForm((f) => ({ ...f, so_no_toi_da: e.target.value }))} />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="htql-no-spinner"
+                      style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                      value={form.so_no_toi_da}
+                      onChange={(e) => setForm((f) => ({ ...f, so_no_toi_da: formatSoTien(e.target.value) }))}
+                      onFocus={() => { if (isZeroDisplay(form.so_no_toi_da)) setForm((f) => ({ ...f, so_no_toi_da: '' })) }}
+                      onBlur={() => { if (form.so_no_toi_da === '') setForm((f) => ({ ...f, so_no_toi_da: '0' })) }}
+                    />
                   </div>
                 </div>
               </div>
@@ -907,7 +1073,7 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                             <td style={{ padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>
                               <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} value={row.so_tai_khoan} onChange={(e) => capNhatDongNganHang(idx, 'so_tai_khoan', e.target.value)} />
                             </td>
-                            <td style={{ padding: '4px 6px', borderBottom: '1px solid var(--border)', position: 'relative' }}>
+                            <td style={{ padding: '4px 6px', borderBottom: '1px solid var(--border)', position: 'relative' }} ref={bankDropdownRow === idx ? bankDropdownWrapRef : undefined}>
                               <input
                                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', paddingRight: 26 }}
                                 value={bankDropdownRow === idx ? bankFilter : row.ten_ngan_hang}
@@ -919,7 +1085,6 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                                   setBankFilter(row.ten_ngan_hang)
                                   setBankDropdownRow(idx)
                                 }}
-                                onBlur={() => setTimeout(() => setBankDropdownRow(null), 180)}
                                 placeholder={banksLoading ? 'Đang tải...' : 'Nhập hoặc chọn ngân hàng'}
                                 disabled={banksLoading}
                               />
@@ -993,15 +1158,35 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
           {formTab === 'thong_tin_chung' && form.loai_ncc === 'ca_nhan' && (
             <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8, fontSize: 11 }}>
-                {/* Full width: Mã, Họ và tên, Địa chỉ, Diễn giải, Nhóm KH/NCC */}
-                <div style={fieldRow}>
-                  <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Mã (*)</label>
-                  <input
-                    style={{ ...(modalOpen === 'add' || modalOpen === 'clone' ? { ...inputStyle, background: 'var(--bg-tab)', color: 'var(--text-muted)' } : inputStyle), flex: 1, minWidth: 0 }}
-                    value={form.ma_ncc}
-                    readOnly={modalOpen === 'add' || modalOpen === 'clone'}
-                    onChange={modalOpen === 'edit' ? (e) => setForm((f) => ({ ...f, ma_ncc: e.target.value })) : undefined}
-                  />
+                {/* Full width: Mã + Xưng hô cùng dòng; Họ và tên, Địa chỉ, Diễn giải, Nhóm KH/NCC */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px' }}>
+                  <div style={fieldRow}>
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Mã (*)</label>
+                    <input
+                      style={{ ...(modalOpen === 'add' || modalOpen === 'clone' ? { ...inputStyle, background: 'var(--bg-tab)', color: 'var(--text-muted)' } : inputStyle), flex: 1, minWidth: 0 }}
+                      value={form.ma_ncc}
+                      readOnly={modalOpen === 'add' || modalOpen === 'clone'}
+                      onChange={modalOpen === 'edit' ? (e) => setForm((f) => ({ ...f, ma_ncc: e.target.value })) : undefined}
+                    />
+                  </div>
+                  <div style={fieldRow}>
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Xưng hô</label>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <select
+                        style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', appearance: 'none', paddingRight: 26 }}
+                        value={form.xung_ho}
+                        onChange={(e) => setForm((f) => ({ ...f, xung_ho: e.target.value }))}
+                      >
+                        <option value="">-- Chọn --</option>
+                        {['Ông', 'Bà', 'Anh', 'Chị'].map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
+                        <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <div style={fieldRow}>
                   <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Họ và tên (*)</label>
@@ -1022,64 +1207,109 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                     <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}><ChevronDown size={12} style={{ color: '#0d0d0d' }} /></span>
                   </div>
                 </div>
-                {/* Hai cột: Cột 1 - MST, ĐT di động, ĐT cố định, Email, NV Mua hàng; Cột 2 - Số CCCD, Ngày cấp, Nơi cấp, Điều khoản TT, Số ngày được nợ, Số nợ tối đa */}
+                {/* Hai cột đổi vị trí: Cột trái - Số CCCD, Ngày cấp, Nơi cấp, Điều khoản TT, Số ngày được nợ, Số nợ tối đa; Cột phải - Mã số thuế, ĐT di động, ĐT cố định, Email, NV Mua hàng */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px' }}>
-                  <div style={fieldRow}>
-                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Mã số thuế</label>
-                    <input style={{ ...inputStyle, flex: 1 }} value={form.ma_so_thue} onChange={(e) => setForm((f) => ({ ...f, ma_so_thue: e.target.value }))} placeholder="" />
-                  </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Số CCCD</label>
                     <input style={{ ...inputStyle, flex: 1 }} value={form.so_cccd} onChange={(e) => setForm((f) => ({ ...f, so_cccd: e.target.value }))} placeholder="" />
                   </div>
                   <div style={fieldRow}>
-                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>ĐT di động</label>
-                    <input style={{ ...inputStyle, flex: 1 }} value={form.dt_di_dong} onChange={(e) => setForm((f) => ({ ...f, dt_di_dong: e.target.value }))} placeholder="" />
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Mã số thuế</label>
+                    <input style={{ ...inputStyle, flex: 1 }} value={form.ma_so_thue} onChange={(e) => setForm((f) => ({ ...f, ma_so_thue: e.target.value }))} placeholder="" />
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Ngày cấp</label>
                     <input style={{ ...inputStyle, flex: 1 }} type="date" value={form.ngay_cap} onChange={(e) => setForm((f) => ({ ...f, ngay_cap: e.target.value }))} />
                   </div>
                   <div style={fieldRow}>
-                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>ĐT cố định</label>
-                    <input style={{ ...inputStyle, flex: 1 }} value={form.dt_co_dinh} onChange={(e) => setForm((f) => ({ ...f, dt_co_dinh: e.target.value }))} placeholder="" />
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>ĐT di động</label>
+                    <input style={{ ...inputStyle, flex: 1 }} value={form.dt_di_dong} onChange={(e) => setForm((f) => ({ ...f, dt_di_dong: e.target.value }))} placeholder="" />
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Nơi cấp</label>
                     <input style={{ ...inputStyle, flex: 1 }} value={form.noi_cap} onChange={(e) => setForm((f) => ({ ...f, noi_cap: e.target.value }))} placeholder="" />
                   </div>
                   <div style={fieldRow}>
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>ĐT cố định</label>
+                    <input style={{ ...inputStyle, flex: 1 }} value={form.dt_co_dinh} onChange={(e) => setForm((f) => ({ ...f, dt_co_dinh: e.target.value }))} placeholder="" />
+                  </div>
+                  <div style={fieldRow}>
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Điều khoản TT</label>
+                    <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                      <div
+                        ref={dkttCaNhanRef}
+                        style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
+                        onClick={() => setOpenDkttDropdownCaNhan((v) => !v)}
+                      >
+                        <input
+                          readOnly
+                          style={{ ...inputStyle, ...lookupInputWithChevronStyle, width: '100%', cursor: 'pointer' }}
+                          value={form.dieu_khoan_tt}
+                          placeholder="Chọn điều khoản..."
+                        />
+                        <span style={lookupChevronOverlayStyle}>
+                          <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                        </span>
+                        {openDkttDropdownCaNhan && (
+                          <div
+                            style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 2, maxHeight: 200, overflowY: 'auto', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000 }}
+                          >
+                            {danhSachDKTT.length === 0 ? <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>Không có hoặc bấm + để thêm</div> : danhSachDKTT.map((d) => (
+                              <div
+                                key={d.ma}
+                                role="option"
+                                onMouseDown={(e) => { e.preventDefault(); setForm((f) => ({ ...f, dieu_khoan_tt: d.ten, so_ngay_duoc_no: formatSoNguyenInput(String(d.so_ngay_duoc_no)), so_no_toi_da: formatSoTien(String(d.so_cong_no_toi_da)) })); setOpenDkttDropdownCaNhan(false) }}
+                                style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--border)', background: form.dieu_khoan_tt === d.ten ? 'var(--accent)' : undefined, color: form.dieu_khoan_tt === d.ten ? '#0d0d0d' : 'var(--text-primary)' }}
+                              >{d.ma} — {d.ten}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button type="button" style={lookupActionButtonStyle} title="Thêm điều khoản" onClick={() => setShowThemDieuKhoanTT(true)}><Plus size={12} style={{ color: '#0d0d0d' }} /></button>
+                    </div>
+                  </div>
+                  <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Email</label>
                     <input style={{ ...inputStyle, flex: 1 }} type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="" />
                   </div>
                   <div style={fieldRow}>
-                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Điều khoản TT</label>
-                    <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-                      <input style={{ ...inputStyle, flex: 1 }} value={form.dieu_khoan_tt} onChange={(e) => setForm((f) => ({ ...f, dieu_khoan_tt: e.target.value }))} placeholder="" />
-                      <button type="button" style={{ ...btnSecondary, padding: '6px 10px', minWidth: 28 }} title="Chọn"><ChevronDown size={12} style={{ color: 'inherit' }} /></button>
-                      <button type="button" style={btnSecondary}>+</button>
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Số ngày được nợ</label>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 0 }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="htql-no-spinner"
+                        style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                        value={form.so_ngay_duoc_no}
+                        onChange={(e) => setForm((f) => ({ ...f, so_ngay_duoc_no: formatSoNguyenInput(e.target.value) }))}
+                        onFocus={() => { if (isZeroDisplay(form.so_ngay_duoc_no)) setForm((f) => ({ ...f, so_ngay_duoc_no: '' })) }}
+                        onBlur={() => { if (form.so_ngay_duoc_no === '') setForm((f) => ({ ...f, so_ngay_duoc_no: '0' })) }}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-primary)', flexShrink: 0 }}>ngày</span>
                     </div>
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>NV Mua hàng</label>
-                    <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-                      <input style={{ ...inputStyle, flex: 1 }} value={form.nv_mua_hang} onChange={(e) => setForm((f) => ({ ...f, nv_mua_hang: e.target.value }))} placeholder="" />
-                      <button type="button" style={{ ...btnSecondary, padding: '6px 10px', minWidth: 28 }} title="Chọn"><ChevronDown size={12} style={{ color: 'inherit' }} /></button>
-                      <button type="button" style={btnSecondary}>+</button>
+                    <div style={{ display: 'flex', gap: 2, flex: 1, alignItems: 'center' }}>
+                      <input style={{ ...inputStyle, flex: 1, height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT, boxSizing: 'border-box' }} value={form.nv_mua_hang} onChange={(e) => setForm((f) => ({ ...f, nv_mua_hang: e.target.value }))} placeholder="" />
+                      <button type="button" style={lookupActionButtonStyle} title="Chọn"><ChevronDown size={12} style={{ color: '#0d0d0d' }} /></button>
+                      <button type="button" style={lookupActionButtonStyle} title="Thêm"><Plus size={12} style={{ color: '#0d0d0d' }} /></button>
                     </div>
                   </div>
-                  <div style={fieldRow}>
-                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Số ngày được nợ</label>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input type="number" style={{ ...inputStyle, width: 80 }} value={form.so_ngay_duoc_no} onChange={(e) => setForm((f) => ({ ...f, so_ngay_duoc_no: e.target.value }))} />
-                      <span style={labelStyle}>ngày</span>
-                    </div>
-                  </div>
-                  <div />
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Số nợ tối đa</label>
-                    <input type="number" style={{ ...inputStyle, flex: 1 }} value={form.so_no_toi_da} onChange={(e) => setForm((f) => ({ ...f, so_no_toi_da: e.target.value }))} />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="htql-no-spinner"
+                      style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                      value={form.so_no_toi_da}
+                      onChange={(e) => setForm((f) => ({ ...f, so_no_toi_da: formatSoTien(e.target.value) }))}
+                      onFocus={() => { if (isZeroDisplay(form.so_no_toi_da)) setForm((f) => ({ ...f, so_no_toi_da: '' })) }}
+                      onBlur={() => { if (form.so_no_toi_da === '') setForm((f) => ({ ...f, so_no_toi_da: '0' })) }}
+                    />
                   </div>
+                  <div />
                 </div>
               </div>
 
@@ -1108,13 +1338,12 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                             <td style={{ padding: '4px 6px', borderBottom: '1px solid var(--border)' }}>
                               <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} value={row.so_tai_khoan} onChange={(e) => capNhatDongNganHang(idx, 'so_tai_khoan', e.target.value)} />
                             </td>
-                            <td style={{ padding: '4px 6px', borderBottom: '1px solid var(--border)', position: 'relative' }}>
+                            <td style={{ padding: '4px 6px', borderBottom: '1px solid var(--border)', position: 'relative' }} ref={bankDropdownRow === idx ? bankDropdownWrapRef : undefined}>
                               <input
                                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', paddingRight: 26 }}
                                 value={bankDropdownRow === idx ? bankFilter : row.ten_ngan_hang}
                                 onChange={(e) => { setBankFilter(e.target.value); setBankDropdownRow(idx) }}
                                 onFocus={() => { setBankFilter(row.ten_ngan_hang); setBankDropdownRow(idx) }}
-                                onBlur={() => setTimeout(() => setBankDropdownRow(null), 180)}
                                 placeholder={banksLoading ? 'Đang tải...' : 'Nhập hoặc chọn ngân hàng'}
                                 disabled={banksLoading}
                               />
@@ -1173,7 +1402,7 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Tỉnh/TP</label>
-                    <div style={{ flex: 1, position: 'relative' }}>
+                    <div ref={tinhTpWrapRef1} style={{ flex: 1, position: 'relative' }}>
                       {form.quoc_gia === 'Việt Nam' ? (
                         <>
                           <input
@@ -1187,7 +1416,6 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                               setTinhTpFilter(form.tinh_tp)
                               setOpenTinhTp(true)
                             }}
-                            onBlur={() => setTimeout(() => setOpenTinhTp(false), 180)}
                             placeholder="Nhập để lọc hoặc chọn tỉnh/thành phố"
                           />
                           <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
@@ -1250,7 +1478,7 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Xã/Phường</label>
-                    <div style={{ flex: 1, position: 'relative' }}>
+                    <div ref={xaPhuongWrapRef1} style={{ flex: 1, position: 'relative' }}>
                       {form.quoc_gia === 'Việt Nam' && form.tinh_tp && MA_TINH_THEO_TEN[form.tinh_tp] ? (
                         <>
                           <input
@@ -1264,7 +1492,6 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                               setXaPhuongFilter(form.xa_phuong)
                               setOpenXaPhuong(true)
                             }}
-                            onBlur={() => setTimeout(() => setOpenXaPhuong(false), 180)}
                             placeholder={wardsLoading ? 'Đang tải...' : 'Nhập để lọc hoặc chọn xã/phường'}
                             disabled={wardsLoading}
                           />
@@ -1617,7 +1844,7 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Tỉnh/TP</label>
-                    <div style={{ flex: 1, position: 'relative' }}>
+                    <div ref={tinhTpWrapRef2} style={{ flex: 1, position: 'relative' }}>
                       {form.quoc_gia === 'Việt Nam' ? (
                         <>
                           <input
@@ -1631,7 +1858,6 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                               setTinhTpFilter(form.tinh_tp)
                               setOpenTinhTp(true)
                             }}
-                            onBlur={() => setTimeout(() => setOpenTinhTp(false), 180)}
                             placeholder="Nhập để lọc hoặc chọn tỉnh/thành phố"
                           />
                           <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
@@ -1694,7 +1920,7 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Xã/Phường</label>
-                    <div style={{ flex: 1, position: 'relative' }}>
+                    <div ref={xaPhuongWrapRef2} style={{ flex: 1, position: 'relative' }}>
                       {form.quoc_gia === 'Việt Nam' && form.tinh_tp && MA_TINH_THEO_TEN[form.tinh_tp] ? (
                         <>
                           <input
@@ -1708,7 +1934,6 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
                               setXaPhuongFilter(form.xa_phuong)
                               setOpenXaPhuong(true)
                             }}
-                            onBlur={() => setTimeout(() => setOpenXaPhuong(false), 180)}
                             placeholder={wardsLoading ? 'Đang tải...' : 'Nhập để lọc hoặc chọn xã/phường'}
                             disabled={wardsLoading}
                           />
@@ -1895,17 +2120,11 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
           {/* Footer: link trái, nút phải */}
           <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
             <a href="#video" style={{ fontSize: 11, color: 'var(--accent)' }} onClick={(e) => e.preventDefault()}>Xem video hướng dẫn</a>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" style={btnSecondary} onClick={dongModal}>
-                <X size={12} style={{ marginRight: 4 }} /> Hủy bỏ
-              </button>
-              <button type="button" style={btnPrimary} onClick={dongY}>
-                <Save size={12} style={{ marginRight: 4 }} /> Cất
-              </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" style={formFooterButtonCancel} onClick={dongModal}>Hủy bỏ</button>
+              <button type="button" style={formFooterButtonSave} onClick={dongY}>Lưu</button>
               {(modalOpen === 'add' || modalOpen === 'clone') && (
-                <button type="button" style={btnPrimary} onClick={dongYVaThem}>
-                  <Save size={12} style={{ marginRight: 4 }} /><Plus size={12} style={{ marginRight: 4 }} /> Cất & Thêm
-                </button>
+                <button type="button" style={formFooterButtonSaveAndAdd} onClick={dongYVaThem}>Lưu và tiếp tục</button>
               )}
             </div>
           </div>
@@ -1925,6 +2144,32 @@ export function NhaCungCap({ onQuayLai }: { onQuayLai?: () => void }) {
           onSaveNewGroup={(item) => {
             const list = loadNhomKhNcc()
             if (!list.some((x) => x.ma === item.ma)) saveNhomKhNcc([...list, item])
+          }}
+        />
+      )}
+
+      {showThemDieuKhoanTT && (
+        <ThemDieuKhoanThanhToanModal
+          existingItems={danhSachDKTT}
+          onClose={() => setShowThemDieuKhoanTT(false)}
+          onSave={(item) => {
+            const list = [...danhSachDKTT]
+            if (!list.some((x) => x.ma === item.ma)) {
+              list.push(item)
+              saveDieuKhoanThanhToan(list)
+              setDanhSachDKTT(list)
+            }
+            setForm((f) => ({ ...f, dieu_khoan_tt: item.ten, so_ngay_duoc_no: formatSoNguyenInput(String(item.so_ngay_duoc_no)), so_no_toi_da: formatSoTien(String(item.so_cong_no_toi_da)) }))
+            setShowThemDieuKhoanTT(false)
+          }}
+          onSaveAndAdd={(item) => {
+            const list = [...danhSachDKTT]
+            if (!list.some((x) => x.ma === item.ma)) {
+              list.push(item)
+              saveDieuKhoanThanhToan(list)
+              setDanhSachDKTT(list)
+            }
+            setForm((f) => ({ ...f, dieu_khoan_tt: item.ten, so_ngay_duoc_no: formatSoNguyenInput(String(item.so_ngay_duoc_no)), so_no_toi_da: formatSoTien(String(item.so_cong_no_toi_da)) }))
           }}
         />
       )}

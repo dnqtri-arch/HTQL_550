@@ -10,6 +10,7 @@ import { ThemDonViTinhModal } from './ThemDonViTinhModal'
 import { ThemKhoModal, MapsScriptPreloader } from './ThemKhoModal'
 import { mapsReady } from '../../config/htql_550_map'
 import { VatTuHangHoaFormTabNgamDinh, LabelCell } from './VatTuHangHoaFormTabNgamDinh'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 import './VatTuHangHoaForm.css'
 
 export type FormValues = {
@@ -2137,10 +2138,10 @@ const kichThuocSuffix = (md: string, mr: string) => {
         <div style={footerStyle}>
           <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 11, color: 'var(--accent-hover)', textDecoration: 'none' }}>Xem video hướng dẫn</a>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button type="button" onClick={onClose} style={{ ...btnFooter, background: 'var(--bg-tab)', color: 'var(--text-primary)' }}>Hủy bỏ</button>
-            <button type="submit" style={{ ...btnFooter, background: 'var(--accent)', color: '#0d0d0d' }}>Lưu</button>
+            <button type="button" onClick={onClose} style={formFooterButtonCancel}>Hủy bỏ</button>
+            <button type="submit" style={formFooterButtonSave}>Lưu</button>
             {mode === 'add' && (
-              <button type="button" onClick={(e) => { e.preventDefault(); onSaveAndAdd(e); }} style={{ ...btnFooter, background: 'var(--bg-tab)', color: 'var(--text-primary)' }}>Lưu và tiếp tục</button>
+              <button type="button" onClick={(e) => { e.preventDefault(); onSaveAndAdd(e); }} style={formFooterButtonSaveAndAdd}>Lưu và tiếp tục</button>
             )}
           </div>
         </div>

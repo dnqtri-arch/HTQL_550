@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { X, Save, Plus, Ban, Info, Trash2, Search } from 'lucide-react'
+import { X, Info, Trash2, Search } from 'lucide-react'
 import type { NhomKhNccItem } from './nhaCungCapApi'
 import type { NhaCungCapRecord } from './nhaCungCapApi'
 import { nhaCungCapGetAll } from './nhaCungCapApi'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 import { ChonKhachHangNccModal } from './ChonKhachHangNccModal'
 
 /** Chuẩn hóa một từ sang không dấu (dùng cho sinh mã). */
@@ -121,32 +122,6 @@ const footerStyle: React.CSSProperties = {
   gap: 8,
   background: 'var(--bg-tab)',
   flexShrink: 0,
-}
-
-const btnBase: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 4,
-  padding: '4px 12px',
-  fontSize: 11,
-  fontFamily: "var(--font-misa, 'Tahoma', Arial, sans-serif)",
-  border: '1px solid var(--border)',
-  borderRadius: 4,
-  cursor: 'pointer',
-  background: 'var(--bg-tab-active)',
-  color: 'var(--text-primary)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  ...btnBase,
-  background: 'var(--accent)',
-  color: '#0d0d0d',
-  borderColor: 'var(--connector)',
-}
-
-const btnDanger: React.CSSProperties = {
-  ...btnBase,
-  color: 'var(--text-muted)',
 }
 
 const thTable: React.CSSProperties = {
@@ -573,22 +548,12 @@ export function ThemNhomKhNccModal({
               Xem video hướng dẫn
             </a>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" style={btnPrimary} onClick={handleLuu} disabled={!ma || !ten.trim()}>
-              <Save size={14} />
-              <span>Lưu</span>
-            </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" style={formFooterButtonCancel} onClick={onClose}>Hủy bỏ</button>
+            <button type="button" style={formFooterButtonSave} onClick={handleLuu} disabled={!ma || !ten.trim()}>Lưu</button>
             {onSaveAndAdd && (
-              <button type="button" style={btnPrimary} onClick={handleLuuVaTiepTuc} disabled={!ma || !ten.trim()}>
-                <Save size={14} />
-                <Plus size={12} />
-                <span>Lưu và tiếp tục</span>
-              </button>
+              <button type="button" style={formFooterButtonSaveAndAdd} onClick={handleLuuVaTiepTuc} disabled={!ma || !ten.trim()}>Lưu và tiếp tục</button>
             )}
-            <button type="button" style={btnDanger} onClick={onClose}>
-              <Ban size={14} />
-              <span>Hủy bỏ</span>
-            </button>
           </div>
         </div>
       </div>

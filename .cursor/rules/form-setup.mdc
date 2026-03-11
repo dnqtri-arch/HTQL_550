@@ -1,0 +1,73 @@
+---
+description: Nguyên tắc thiết lập form — footer 3 nút, ô lookup; chuẩn theo form Vật tư hàng hóa (Kho)
+globs: **/*.{ts,tsx}
+---
+
+# Thiết lập form — nguyên tắc để gọi khi tạo/sửa form
+
+**Chuẩn tham chiếu:** Form **Thêm vật tư hàng hóa** (phân hệ Kho) — `src/modules/kho/VatTuHangHoaForm.tsx`.
+
+---
+
+## 1. Ba nút footer (Hủy bỏ | Lưu | Lưu và tiếp tục)
+
+### Nơi định nghĩa (gọi khi cần)
+
+- **File:** `src/constants/formFooterButtons.ts`
+- **Export:** `formFooterButtonCancel`, `formFooterButtonSave`, `formFooterButtonSaveAndAdd`
+
+### Nguyên tắc hiển thị
+
+- **Chỉ chữ, không icon** trên ba nút.
+- **Thứ tự cố định:** `Hủy bỏ` → `Lưu` → `Lưu và tiếp tục`.
+- **Nhãn thống nhất:** Luôn dùng **"Lưu"** và **"Lưu và tiếp tục"** (không dùng "Cất", "Cất & Thêm", "Đồng ý", "Đồng ý và thêm" trên giao diện).
+
+### Cách dùng trong form/modal
+
+```tsx
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
+
+// Trong JSX footer (gap: 6 giữa các nút):
+<div style={{ display: 'flex', gap: 6 }}>
+  <button type="button" style={formFooterButtonCancel} onClick={onClose}>Hủy bỏ</button>
+  <button type="button" style={formFooterButtonSave} onClick={handleLuu}>Lưu</button>
+  {mode === 'add' && (
+    <button type="button" style={formFooterButtonSaveAndAdd} onClick={handleLuuVaTiepTuc}>Lưu và tiếp tục</button>
+  )}
+</div>
+```
+
+- **Hủy bỏ:** đóng form/modal, không lưu.
+- **Lưu:** lưu và đóng (hoặc kết thúc thao tác).
+- **Lưu và tiếp tục:** chỉ hiện khi chế độ thêm mới; lưu → reset form → không đóng, nhập tiếp.
+
+### Đã áp dụng
+
+VatTuHangHoaForm, NhaCungCap (modal NCC), ThemDieuKhoanThanhToanModal, DonViTinh (modal ĐVT), ThemDonViTinhModal, ThemNhomVTHHModal, ThemKhoModal, ThemNhomKhNccModal.
+
+---
+
+## 2. Ô lookup (dropdown + nút +) — giống ĐVT chính / Nhóm KH,NCC
+
+### Nơi định nghĩa (gọi khi cần)
+
+- **File:** `src/constants/lookupControlStyles.ts`
+- **Export:** `LOOKUP_CONTROL_HEIGHT`, `lookupInputWithChevronStyle`, `lookupChevronOverlayStyle`, `lookupActionButtonStyle`
+
+### Nguyên tắc
+
+- **Chiều cao:** Ô nhập và nút cùng **24px** (`LOOKUP_CONTROL_HEIGHT`).
+- **Ô có chevron bên trong:** `readOnly` + overlay chevron bên phải (nền accent) + nút + cạnh bên phải; style ô dùng `lookupInputWithChevronStyle`, vùng chevron dùng `lookupChevronOverlayStyle`, nút + dùng `lookupActionButtonStyle`.
+- **Icon:** ChevronDown và Plus (lucide-react), màu `#0d0d0d`, size 12.
+
+### Cách dùng
+
+Import từ `lookupControlStyles.ts`, áp dụng cho ô Điều khoản TT, NV mua hàng, ĐVT chính, Nhóm VTHH, v.v. để đồng bộ toàn hệ thống.
+
+---
+
+## 3. Khi tạo form/modal mới
+
+1. **Footer 3 nút:** Import từ `formFooterButtons.ts`; nhãn **Hủy bỏ**, **Lưu**, **Lưu và tiếp tục**; không thêm icon vào ba nút này.
+2. **Ô có dropdown + nút thêm:** Import từ `lookupControlStyles.ts`, dùng đúng chiều cao 24px và style nút accent.
+3. **Nhãn chức năng:** Thống nhất "Lưu" / "Lưu và tiếp tục" (xem thêm rule `save-buttons.mdc`).

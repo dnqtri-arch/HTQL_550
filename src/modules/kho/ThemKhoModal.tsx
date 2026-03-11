@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { X, Save, Ban } from 'lucide-react'
+import { X } from 'lucide-react'
 import usePlacesAutocompleteService from 'react-google-autocomplete/lib/usePlacesAutocompleteService'
 import { mapsApiKey, mapsReady } from '../../config/htql_550_map'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 
 export interface KhoItem {
   id: string
@@ -85,32 +86,6 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--text-primary)',
   boxSizing: 'border-box',
   height: 28,
-}
-
-const btnBase: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 4,
-  padding: '4px 12px',
-  fontSize: 11,
-  fontFamily: "var(--font-misa, 'Tahoma', Arial, sans-serif)",
-  border: '1px solid var(--border)',
-  borderRadius: 4,
-  cursor: 'pointer',
-  background: 'var(--bg-tab-active)',
-  color: 'var(--text-primary)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  ...btnBase,
-  background: 'var(--accent)',
-  color: '#0d0d0d',
-  borderColor: 'var(--connector)',
-}
-
-const btnDanger: React.CSSProperties = {
-  ...btnBase,
-  color: '#e74c3c',
 }
 
 /** Lấy chữ cái đầu mỗi từ trong tên, viết hoa (vd: "Kho chính" → "KC") */
@@ -372,20 +347,11 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
         </div>
 
         <div style={footerStyle}>
-          <button type="button" style={btnDanger} onClick={onClose}>
-            <Ban size={14} />
-            <span>Hủy bỏ</span>
-          </button>
+          <button type="button" style={formFooterButtonCancel} onClick={onClose}>Hủy bỏ</button>
+          <button type="button" style={formFooterButtonSave} onClick={handleLuu}>Lưu</button>
           {!isEditMode && onSaveAndAdd && (
-            <button type="button" style={btnPrimary} onClick={handleLuuVaTiepTuc}>
-              <Save size={14} />
-              <span>Lưu và tiếp tục</span>
-            </button>
+            <button type="button" style={formFooterButtonSaveAndAdd} onClick={handleLuuVaTiepTuc}>Lưu và tiếp tục</button>
           )}
-          <button type="button" style={btnPrimary} onClick={handleLuu}>
-            <Save size={14} />
-            <span>Lưu</span>
-          </button>
         </div>
       </div>
     </div>

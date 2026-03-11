@@ -15,6 +15,7 @@ import {
   donViTinhMaTuDong,
   donViTinhDangDuongTrongVatTu,
 } from './donViTinhApi'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 
 const COT: { key: keyof DonViTinhRecord | string; label: string; width?: number | string }[] = [
   { key: 'ma_dvt', label: 'Mã ĐVT', width: '12%' },
@@ -22,16 +23,6 @@ const COT: { key: keyof DonViTinhRecord | string; label: string; width?: number 
   { key: 'ky_hieu', label: 'Ký hiệu', width: '18%' },
   { key: 'dien_giai', label: 'Diễn giải', width: '48%' },
 ]
-
-const btnSecondary: React.CSSProperties = {
-  padding: '6px 12px',
-  fontSize: '11px',
-  background: 'var(--bg-tab)',
-  color: 'var(--text-primary)',
-  border: '1px solid var(--border)',
-  borderRadius: '4px',
-  cursor: 'pointer',
-}
 
 const fieldWrap: React.CSSProperties = {
   display: 'flex',
@@ -51,17 +42,6 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: '4px',
   color: 'var(--text-primary)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  padding: '6px 12px',
-  fontSize: '11px',
-  background: 'var(--accent)',
-  color: '#0d0d0d',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontWeight: 600,
 }
 
 export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
@@ -271,16 +251,10 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
         size="sm"
         footer={
           <>
-            <button type="button" style={btnSecondary} onClick={dongModal}>
-              Hủy bỏ
-            </button>
-            <button type="button" style={btnPrimary} onClick={dongY}>
-              Đồng ý
-            </button>
+            <button type="button" style={formFooterButtonCancel} onClick={dongModal}>Hủy bỏ</button>
+            <button type="button" style={formFooterButtonSave} onClick={dongY}>Lưu</button>
             {modalOpen === 'add' && (
-              <button type="button" style={btnPrimary} onClick={dongYVaThem}>
-                Đồng ý và thêm
-              </button>
+              <button type="button" style={formFooterButtonSaveAndAdd} onClick={dongYVaThem}>Lưu và tiếp tục</button>
             )}
           </>
         }

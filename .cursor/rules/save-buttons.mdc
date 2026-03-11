@@ -12,6 +12,12 @@ globs: **/*.{ts,tsx}
 
 Không dùng "Cất", "Cất & Thêm" trong giao diện. Thống nhất toàn dự án: **Lưu** và **Lưu và tiếp tục**.
 
+### Style nút (chuẩn form Vật tư hàng hóa)
+
+- **File constants:** `src/constants/formFooterButtons.ts` — import `formFooterButtonCancel`, `formFooterButtonSave`, `formFooterButtonSaveAndAdd`.
+- **Chỉ chữ, không icon** trên ba nút; thứ tự: Hủy bỏ → Lưu → Lưu và tiếp tục; container dùng `gap: 6`.
+- Chi tiết thiết lập form: xem rule **form-setup.mdc**.
+
 ---
 
 ## Nguyên tắc 1: Nút **Lưu**

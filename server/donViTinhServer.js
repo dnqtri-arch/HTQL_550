@@ -142,8 +142,29 @@ app.delete('/api/nha-cung-cap/:id', (req, res) => {
   res.status(204).send()
 })
 
+// ——— Tra cứu CCCD (Căn cước công dân) ———
+// Trả về mã số thuế, ĐT di động, ĐT cố định, email, ngày cấp, nơi cấp.
+// Hiện dùng dữ liệu mẫu; có thể thay bằng tích hợp Cổng Dịch vụ công hoặc API thật.
+const CCCD_MOCK = {
+  '001234567890': {
+    ma_so_thue: '0123456789',
+    dt_di_dong: '0901234567',
+    dt_co_dinh: '02838234567',
+    email: 'nguyenvana@example.com',
+    ngay_cap: '2022-05-15',
+    noi_cap: 'Cục Cảnh sát QLHC về TTXH',
+  },
+}
+app.get('/api/cccd-lookup', (req, res) => {
+  const cccd = (req.query.cccd || '').toString().trim().replace(/\s/g, '')
+  if (!cccd) return res.json(null)
+  const found = CCCD_MOCK[cccd] || null
+  res.json(found)
+})
+
 const PORT = 3001
 app.listen(PORT, () => {
   console.log(`[HTQL_550] API: http://localhost:${PORT}/api/don-vi-tinh`)
   console.log(`[HTQL_550] API: http://localhost:${PORT}/api/nha-cung-cap (đồng bộ qua web, mở lại chương trình vẫn còn)`)
+  console.log(`[HTQL_550] API: http://localhost:${PORT}/api/cccd-lookup (tra cứu CCCD)`)
 })

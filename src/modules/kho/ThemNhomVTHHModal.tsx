@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
-import { X, Save, Plus, Ban } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { NhomVTHHItem } from './NhomVTHHLookupModal'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 
 /** Lấy ký tự đầu mỗi từ trong tên, viết hoa, nối lại (vd: "Công cụ dụng cụ" → "CCDC") */
 function maTuChuDauMoiTu(ten: string): string {
@@ -105,32 +106,6 @@ const footerStyle: React.CSSProperties = {
   gap: 8,
   background: 'var(--bg-tab)',
   flexShrink: 0,
-}
-
-const btnBase: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 4,
-  padding: '4px 12px',
-  fontSize: 11,
-  fontFamily: "var(--font-misa, 'Tahoma', Arial, sans-serif)",
-  border: '1px solid var(--border)',
-  borderRadius: 4,
-  cursor: 'pointer',
-  background: 'var(--bg-tab-active)',
-  color: 'var(--text-primary)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  ...btnBase,
-  background: 'var(--accent)',
-  color: '#0d0d0d',
-  borderColor: 'var(--connector)',
-}
-
-const btnDanger: React.CSSProperties = {
-  ...btnBase,
-  color: '#e74c3c',
 }
 
 export function ThemNhomVTHHModal({
@@ -298,21 +273,11 @@ export function ThemNhomVTHHModal({
         </div>
 
         <div style={footerStyle}>
-          <button type="button" style={btnPrimary} onClick={handleLuu} disabled={!ma || !ten.trim()}>
-            <Save size={14} />
-            <span>Lưu</span>
-          </button>
+          <button type="button" style={formFooterButtonCancel} onClick={onClose}>Hủy bỏ</button>
+          <button type="button" style={formFooterButtonSave} onClick={handleLuu} disabled={!ma || !ten.trim()}>Lưu</button>
           {onSaveAndAdd && (
-            <button type="button" style={btnPrimary} onClick={handleLuuVaTiepTuc} disabled={!ma || !ten.trim()}>
-              <Save size={14} />
-              <Plus size={12} />
-              <span>Lưu và tiếp tục</span>
-            </button>
+            <button type="button" style={formFooterButtonSaveAndAdd} onClick={handleLuuVaTiepTuc} disabled={!ma || !ten.trim()}>Lưu và tiếp tục</button>
           )}
-          <button type="button" style={btnDanger} onClick={onClose}>
-            <Ban size={14} />
-            <span>Hủy bỏ</span>
-          </button>
         </div>
       </div>
     </div>

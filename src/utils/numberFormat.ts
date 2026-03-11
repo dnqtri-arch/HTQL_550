@@ -2,22 +2,14 @@
  * Định dạng số toàn hệ thống:
  * - Phân cách hàng nghìn: dấu chấm (.)
  * - Phân cách thập phân: dấu phẩy (,)
- * VD: 1234567.89 -> "1.234.567,89"
+ * VD: 1.234.567,89
  *
- * Nguyên tắc nhập:
- * - Số tự nhiên, số tiền, phần trăm: tuân thủ phân cách hàng nghìn, phân cách thập phân, và số 0 ở đầu.
- * - Số nguyên: tuân thủ phân cách hàng nghìn và số 0 ở đầu (không có phần thập phân).
- *
- * Mục 2 — Dấu chấm (.) khi nhập:
- * - Nhập liên tục tự nhiên (chỉ số): hệ thống mặc định dùng dấu chấm (.) phân tách hàng nghìn. VD: 1234567 → "1.234.567".
- * - Nếu chủ động nhập dấu chấm (.) từ bàn phím thì dấu chấm đó tương đương dấu phẩy (,) — tức phân tách phần thập phân. VD: 1234567.88 → "1.234.567,88" (88 là thập phân vì đã gõ chấm).
- * - Ô chưa có số gõ "." → "0,"; ".5" → "0,5". Đã có dấu thập phân rồi gõ thêm "." → đứng im.
- *
- * --- LOGIC TOÀN HỆ THỐNG (dùng chung khi cần format nhập số có thập phân) ---
- * Chọn dấu phân cách thập phân trong chuỗi nhập (có thể nhiều dấu chấm/phẩy do vừa gõ hàng nghìn vừa gõ thập phân):
- * 1) Ưu tiên: dấu phải nhất mà ngay sau nó có đúng 1 hoặc 2 chữ số (phần thập phân thực sự) rồi hết chuỗi hoặc gặp dấu chấm/phẩy. VD: "123456.7." -> chọn dấu trước "7" -> hiển thị "123.456,7"; dấu chấm thứ 2 bỏ.
- * 2) Nếu không có dấu nào thỏa (vd chỉ có "1.234."): lấy dấu phải nhất -> hiển thị "1.234,".
- * Áp dụng trong: formatSoTien, formatPhanTramInput (và mọi ô nhập số có thập phân sau này). Hàm nội bộ: findDecimalSeparatorIndex.
+ * Số tiền (formatSoTien) — quy ước nhập (đồng bộ với .cursor/rules/number-format.mdc):
+ * - Chỉ gõ số: chấm (.) = phân tách hàng nghìn. VD: 12345678 → "12.345.678".
+ * - Chủ động gõ chấm (.) hoặc phẩy (,): thập phân, hiển thị thành phẩy. VD: "12.345.678" + "." → "12.345.678,"; gõ tiếp "5" → "12.345.678,5".
+ * - Chuỗi kết thúc bằng chấm: coi chấm cuối là thập phân → hiển thị phần nguyên + phẩy (cho phép nhập chấm sau số đã format).
+ * - Chưa có phẩy thì mọi chấm đều hàng nghìn (tránh "1.234.567"+"8" thành "1.234,56").
+ * - Đã có phẩy: dùng findDecimalSeparatorIndex để lấy tối đa 2 chữ số thập phân.
  */
 
 export const THOUSANDS_SEP = '.'
@@ -171,27 +163,31 @@ export function formatSoThapPhan(value: number | string, decimals: number = 2): 
 
 /**
  * Định dạng số tiền khi nhập.
- * - Nhập liên tục tự nhiên (chỉ số): dấu chấm (.) mặc định phân tách hàng nghìn (vd 1234567 → "1.234.567").
- * - Chủ động nhập dấu chấm (.) từ bàn phím = dấu phẩy (,) phân tách thập phân (vd 1234567.88 → "1.234.567,88").
- * Chuỗi chỉ có chấm với mỗi nhóm sau chấm đúng 3 chữ số (định dạng hàng nghìn do hệ thống) được chuẩn hóa bỏ chấm trước khi format để tránh nhầm với thập phân.
+ * - Nhập liên tục tự nhiên (chỉ số): dấu chấm (.) phân tách hàng nghìn (vd 1234567 → "1.234.567").
+ * - Chủ động nhập dấu chấm (.) hoặc dấu phẩy (,): hiểu là thập phân, hiển thị thành dấu phẩy (vd 12345678. → "12.345.678," rồi gõ "5" → "12.345.678,5").
  */
 export function formatSoTien(s: string): string {
   let cleaned = (s || '').replace(/[^\d.,]/g, '')
-  // Chuẩn hóa: không có phẩy, có chấm. Coi chấm là hàng nghìn (bỏ chấm) khi:
-  // - Nhiều chấm và mỗi nhóm sau chấm đúng 3 chữ số và (phần đầu 3/6/9... chữ số hoặc >2 nhóm), hoặc
-  // - Đúng một chấm mà phần sau chấm có từ 3 chữ số trở lên (vd "1.2345" → 12345 → "12.345", "12.345" → "12.345") — tránh hiển thị "1,23" khi người dùng gõ 12345.
-  if (cleaned.includes(',') === false && cleaned.includes('.')) {
-    const parts = cleaned.split('.')
-    const nonFirst = parts.slice(1)
-    const allNonFirstAre3 = nonFirst.every((p) => p.length === 3)
-    const firstLen = parts[0].length
-    const looksLikeThousands =
-      allNonFirstAre3 && (firstLen >= 3 && firstLen % 3 === 0 || parts.length > 2) ||
-      (parts.length === 2 && parts[1].length >= 3)
-    if (looksLikeThousands) cleaned = parts.join('')
+  // Chưa có phẩy trong chuỗi.
+  if (!cleaned.includes(',')) {
+    // Chuỗi kết thúc bằng chấm: người dùng chủ động gõ chấm = thập phân → hiển thị phần nguyên + dấu phẩy.
+    if (cleaned.endsWith('.')) {
+      const lastDotIndex = cleaned.lastIndexOf('.')
+      const intStr = cleaned.slice(0, lastDotIndex).replace(/\./g, '')
+      if (intStr === '') return '0' + DECIMAL_SEP
+      const intPart = stripLeadingZeros(intStr)
+      const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
+      return formatted + DECIMAL_SEP
+    }
+    // Không có chấm ở cuối: mọi chấm đều là hàng nghìn (bỏ chấm, format nguyên). Tránh "1.234.567"+"8" → "12.345.678".
+    const onlyDigits = cleaned.replace(/\./g, '').replace(/,/g, '')
+    if (onlyDigits === '') return ''
+    const intPart = stripLeadingZeros(onlyDigits)
+    return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
   }
+  // Đã có phẩy: tìm vị trí phân cách thập phân (phẩy hoặc chấm), lấy tối đa 2 chữ số sau đó.
   const lastSep = findDecimalSeparatorIndex(cleaned)
-  let hasDecimal = lastSep >= 0
+  const hasDecimal = lastSep >= 0
 
   let intStr: string
   let decStr: string
@@ -203,7 +199,6 @@ export function formatSoTien(s: string): string {
     intStr = cleaned.slice(0, lastSep).replace(/\./g, '').replace(/,/g, '')
     const decStrRaw = cleaned.slice(lastSep + 1).replace(/\D/g, '')
     decStr = decStrRaw.slice(0, 2)
-    // Quy ước: mọi dấu chấm (.) nhập từ bàn phím = dấu phẩy (,) ngăn tách thập phân. Không còn coi chấm là hàng nghìn khi nhập.
   }
 
   if (!intStr && !decStr) return ''

@@ -233,3 +233,14 @@ a:hover {
   background: var(--bg-tab-active) !important;
   color: var(--accent) !important;
 }
+
+/* Ô số không hiển thị nút tăng/giảm (spinner) */
+input[type="number"].htql-no-spinner {
+  appearance: none;
+  -moz-appearance: textfield;
+}
+input[type="number"].htql-no-spinner::-webkit-inner-spin-button,
+input[type="number"].htql-no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

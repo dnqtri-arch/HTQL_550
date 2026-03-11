@@ -5,6 +5,8 @@ globs: **/*.{ts,tsx}
 
 # Định dạng số — toàn dự án
 
+**Nguồn quy ước số tiền:** Rule này là chuẩn chung cho cách nhập số tiền toàn hệ thống. Code và comment trong `src/utils/numberFormat.ts`, `src/constants/inputFormats.ts` đồng bộ theo đây.
+
 ## Nguồn logic duy nhất
 
 - **File:** `src/utils/numberFormat.ts`
@@ -20,12 +22,33 @@ globs: **/*.{ts,tsx}
 
 Khi parse giá trị ra number: dùng `parseNumber(s)` hoặc `parseFloatVN(s)` từ cùng file.
 
-## Quy ước nhập dấu chấm (.)
+---
 
-- **Nhập liên tục chỉ số:** hệ thống mặc định dùng dấu chấm (.) **phân tách hàng nghìn**. VD: `12345` → hiển thị `12.345`.
-- **Chủ động gõ dấu chấm (.) từ bàn phím:** coi là **dấu phẩy (,)** phân tách **thập phân**. VD: `1234567.88` → hiển thị `1.234.567,88`.
+## Cách nhập số tiền (formatSoTien)
 
-Logic chuẩn hóa (chuỗi chỉ chấm, phần sau chấm ≥ 3 chữ số → coi là hàng nghìn) đã nằm trong `formatSoTien` / `formatPhanTramInput`; không lặp lại ở component.
+**Áp dụng:** Mọi ô nhập số tiền (Số nợ tối đa, đơn giá, thành tiền, v.v.) — dùng `formatSoTien(s)` khi onChange, `parseFloatVN(s)` khi lưu.
+
+### Hiển thị
+
+- **Phân cách hàng nghìn:** dấu chấm (.) — VD: `12.345.678`
+- **Phân cách thập phân:** dấu phẩy (,) — VD: `12.345.678,89` (tối đa 2 chữ số thập phân)
+
+### Quy tắc nhập
+
+1. **Chỉ gõ số:** Các chấm (.) do hệ thống tự thêm là phân cách hàng nghìn. VD: gõ `12345678` → hiển thị `12.345.678`.
+2. **Chủ động gõ dấu chấm (.) hoặc dấu phẩy (,):** Hiểu là **bắt đầu phần thập phân**; trên màn hình luôn hiển thị thành **dấu phẩy (,)**.
+   - VD: đang `12.345.678`, gõ **.** → hiển thị `12.345.678,` (chấm thành phẩy); gõ tiếp `5` → `12.345.678,5`.
+   - VD: gõ `12345678.88` hoặc `12345678,88` → hiển thị `12.345.678,88`.
+3. **Không nhầm khi gõ thêm số:** Nếu chưa gõ phẩy/chấm thập phân thì mọi chấm trong chuỗi đều coi là hàng nghìn. VD: `1.234.567` rồi gõ `8` → `12.345.678` (không thành `1.234,56`).
+
+Logic nằm trong `src/utils/numberFormat.ts` — **formatSoTien**; không lặp lại ở component.
+
+---
+
+## Quy ước nhập dấu chấm (.) (tổng quát)
+
+- **Nhập liên tục chỉ số:** dấu chấm (.) = phân tách hàng nghìn.
+- **Chủ động gõ chấm hoặc phẩy:** = thập phân (số tiền: xem mục "Cách nhập số tiền" trên).
 
 ## Hiển thị
 

@@ -3,13 +3,13 @@
  * Dùng để gọi tên khi cấu hình trường nhập liệu (form fields, grid columns, v.v.).
  *
  * Quy ước số (VN): phân cách hàng nghìn = dấu chấm (.), thập phân = dấu phẩy (,).
- * Logic format/parse thực tế: src/utils/numberFormat.ts (formatSoTien, formatSoNguyenInput, formatPhanTramInput, ...).
- * Quy ước nhập: nhập liên tục chỉ số → chấm nghìn; chủ động gõ chấm (.) → thập phân (hiển thị thành phẩy).
+ * Logic format/parse: src/utils/numberFormat.ts (formatSoTien, formatSoNguyenInput, formatPhanTramInput, ...).
+ * Số tiền: nhập chỉ số → chấm nghìn; chủ động gõ chấm (.) hoặc phẩy (,) → thập phân (hiển thị thành phẩy). Chi tiết: .cursor/rules/number-format.mdc.
  */
 
 /** Các loại định dạng nhập liệu */
 export const InputFormat = {
-  /** Số tiền – định dạng VND: dấu chấm nghìn, dấu phẩy thập phân, tối đa 2 chữ số thập phân (VD: 1.234.567,89) */
+  /** Số tiền – VND: chấm nghìn, phẩy thập phân (tối đa 2 chữ số). Gõ chấm hoặc phẩy = thập phân (hiển thị phẩy). */
   SO_TIEN: 'so_tien',
   /** Số nguyên – có thể âm, phân cách hàng nghìn bằng dấu chấm (VD: -1.234 hoặc 1.234) */
   SO_NGUYEN: 'so_nguyen',
@@ -50,7 +50,7 @@ export const InputFormatLabel: Record<InputFormatType, string> = {
 
 /** Mô tả ngắn – dùng cho tài liệu hoặc placeholder gợi ý */
 export const InputFormatDescription: Record<InputFormatType, string> = {
-  [InputFormat.SO_TIEN]: 'Định dạng theo số tiền Việt Nam đồng (dấu chấm nghìn, dấu phẩy thập phân)',
+  [InputFormat.SO_TIEN]: 'Định dạng số tiền VND: dấu chấm nghìn, dấu phẩy thập phân. Gõ chấm (.) hoặc phẩy (,) = thập phân (hiển thị phẩy).',
   [InputFormat.SO_NGUYEN]: 'Số nguyên, có thể âm, phân cách hàng nghìn bằng dấu chấm',
   [InputFormat.SO_TU_NHIEN]: 'Số tự nhiên (≥ 0), nguyên, phân cách hàng nghìn',
   [InputFormat.SO_THAP_PHAN]: 'Số thập phân, dấu chấm nghìn, dấu phẩy thập phân',

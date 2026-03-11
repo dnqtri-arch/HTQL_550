@@ -63,6 +63,7 @@ export interface NhaCungCapRecord {
 
 const STORAGE_KEY = 'htql550_nha_cung_cap'
 const STORAGE_KEY_NHOM = 'htql550_nhom_kh_ncc'
+const STORAGE_KEY_DKTT = 'htql550_dieu_khoan_thanh_toan'
 
 const DU_LIEU_MAU: NhaCungCapRecord[] = [
   {
@@ -87,6 +88,19 @@ const NHOM_MAU: NhomKhNccItem[] = [
   { ma: 'N1', ten: 'Nhóm 1' },
   { ma: 'NCC-DT', ten: 'Nhóm NCC đối tác' },
   { ma: 'VIP', ten: 'Nhóm VIP' },
+]
+
+/** Điều khoản thanh toán (dùng cho dropdown + form Thêm điều khoản) */
+export interface DieuKhoanThanhToanItem {
+  ma: string
+  ten: string
+  so_ngay_duoc_no: number
+  so_cong_no_toi_da: number
+}
+
+const DKTT_MAU: DieuKhoanThanhToanItem[] = [
+  { ma: 'T', ten: 'Thanh toán ngay', so_ngay_duoc_no: 0, so_cong_no_toi_da: 0 },
+  { ma: 'T', ten: 'Trả sau 30 ngày', so_ngay_duoc_no: 30, so_cong_no_toi_da: 0 },
 ]
 
 const API_BASE_NCC = '/api/nha-cung-cap'
@@ -193,6 +207,34 @@ export function loadNhomKhNcc(): NhomKhNccItem[] {
 
 export function saveNhomKhNcc(nhom: NhomKhNccItem[]) {
   localStorage.setItem(STORAGE_KEY_NHOM, JSON.stringify(nhom))
+}
+
+export function loadDieuKhoanThanhToan(): DieuKhoanThanhToanItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DKTT)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => {
+          if (!x || typeof x !== 'object') return DKTT_MAU[0]
+          const o = x as Record<string, unknown>
+          return {
+            ma: String(o.ma ?? ''),
+            ten: String(o.ten ?? ''),
+            so_ngay_duoc_no: Number(o.so_ngay_duoc_no) || 0,
+            so_cong_no_toi_da: Number(o.so_cong_no_toi_da) || 0,
+          }
+        }).filter((o) => o.ma || o.ten)
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [...DKTT_MAU]
+}
+
+export function saveDieuKhoanThanhToan(list: DieuKhoanThanhToanItem[]) {
+  localStorage.setItem(STORAGE_KEY_DKTT, JSON.stringify(list))
 }
 
 let cache: NhaCungCapRecord[] | null = null
