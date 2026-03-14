@@ -69,11 +69,11 @@ button, input, select, textarea {
   font-size: inherit;
 }
 
-/* Ô nhập liệu: viền rõ, chữ tối; focus cam (component có thể set background riêng) */
+/* Ô nhập liệu: viền 0.5px màu #D0D0D0 (bằng ô mô tả), focus cam */
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  border: 1px solid var(--input-border) !important;
+  border: 0.5px solid var(--input-border) !important;
   color: var(--text-primary) !important;
 }
 input:focus, select:focus, textarea:focus {
@@ -275,7 +275,7 @@ input[type="number"].htql-no-spinner::-webkit-outer-spin-button {
   padding: 4px 6px;
   font-size: 11px;
   background: var(--input-bg);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--input-border);
   border-radius: 4px;
   color: var(--text-primary);
   box-sizing: border-box;

@@ -96,6 +96,10 @@ export interface VatTuHangHoaRecord {
   cong_thuc_tinh_so_luong?: string
   /** Định mức nguyên vật liệu (chỉ khi tính chất = Sản phẩm); ma = Mã NVL, ten = Tên nguyên vật liệu */
   dinh_muc_nvl?: DinhMucNvlItem[]
+  /** Mã VTHH cấp cha (hàng hóa cấp cha) */
+  ma_vthh_cap_cha?: string
+  /** VT cấp cha (chỉ khi tính chất = Vật tư) */
+  vt_chinh?: boolean
 }
 
 const STORAGE_KEY = 'htql550_vat_tu_hang_hoa'

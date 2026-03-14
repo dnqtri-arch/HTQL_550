@@ -345,7 +345,7 @@
 .htql-form .misa-input-wrap,
 .htql-form .misa-input-solo {
   background: var(--bg-tab) !important;
-  border-color: var(--border) !important;
+  border: 0.5px solid #D0D0D0 !important;
   color: var(--text-primary) !important;
 }
 
@@ -567,7 +567,7 @@
   height: 20px;
   min-width: 0;
   max-width: 100%;
-  border: 1px solid #9ca3af;
+  border: 0.5px solid #D0D0D0;
   overflow: hidden;
   background: #fff;
 }
@@ -591,8 +591,8 @@
   height: 18px !important;
   align-self: center;
   background-color: #e5e7eb !important;
-  border: 1px solid #9ca3af !important;
-  border-left: 1px solid #9ca3af !important;
+  border: 0.5px solid #D0D0D0 !important;
+  border-left: 0.5px solid #D0D0D0 !important;
   color: #000;
   cursor: pointer;
   font-size: 10px;
@@ -609,9 +609,9 @@
   background-color: #d1d5db !important;
 }
 
-/* Input solo (không có lookup) */
+/* Input solo (không có lookup) - viền màu #D0D0D0, độ dày bằng ô mô tả (0.5px) */
 .misa-form .misa-input-solo {
-  border: 1px solid #9ca3af !important;
+  border: 0.5px solid #D0D0D0 !important;
   background: #fff !important;
   color: #000 !important;
 }

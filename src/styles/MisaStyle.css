@@ -31,7 +31,7 @@
   color: #ef4444 !important;
 }
 
-/* === MISA Input (height 20px chuẩn) === */
+/* === MISA Input (height 20px chuẩn) - viền 0.5px #D0D0D0 toàn hệ thống === */
 .misa-form input,
 .misa-form select {
   height: 20px !important;
@@ -40,7 +40,7 @@
   font-family: var(--font-misa, 'Tahoma', Arial, sans-serif) !important;
   padding: 0 4px !important;
   margin: 0 !important;
-  border: 1px solid #9ca3af !important;
+  border: 0.5px solid #D0D0D0 !important;
   background: #fff !important;
   color: #000 !important;
 }
@@ -57,7 +57,7 @@
   min-width: 20px !important;
   height: 18px !important;
   background-color: #e5e7eb !important;
-  border: 1px solid #9ca3af !important;
+  border: 0.5px solid #D0D0D0 !important;
   color: #000 !important;
   font-size: 10px !important;
   cursor: pointer;

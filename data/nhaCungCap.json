@@ -89,5 +89,36 @@
     "noi_cap": "Cần Thơ",
     "gioi_tinh": "Nam",
     "id": 4
+  },
+  {
+    "ma_ncc": "NCC00005",
+    "ten_ncc": "CÔNG TY CỔ PHẦN KỸ THUẬT SỐ SBC",
+    "loai_ncc": "to_chuc",
+    "khach_hang": false,
+    "dia_chi": "B5 LÔ 15 Khu đô thị mới Định Công, Phường Phương Liệt, Thành phố Hà Nội",
+    "nhom_kh_ncc": "Nhóm NCC đối tác",
+    "ma_so_thue": "0107161377",
+    "dien_thoai": "02437472768",
+    "dieu_khoan_tt": "Thanh toán ngay",
+    "so_ngay_duoc_no": 0,
+    "so_no_toi_da": 0,
+    "tk_ngan_hang": "0511000477467",
+    "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+    "ngung_theo_doi": false,
+    "tai_khoan_ngan_hang": [
+      {
+        "so_tai_khoan": "0511000477467",
+        "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+        "chi_nhanh": "",
+        "tinh_tp_ngan_hang": "",
+        "loai_tk": "cong_ty",
+        "ten_nguoi_nhan": "CÔNG TY CỔ PHẦN KỸ THUẬT SỐ SBC"
+      }
+    ],
+    "quoc_gia": "Việt Nam",
+    "tinh_tp": "Thành phố Hà Nội",
+    "xa_phuong": "Phường Phương Liệt",
+    "dia_chi_lien_he": "B5 LÔ 15 Khu đô thị mới Định Công, Phường Phương Liệt, Thành phố Hà Nội",
+    "id": 5
   }
 ]

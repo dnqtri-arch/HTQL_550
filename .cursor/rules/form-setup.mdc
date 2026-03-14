@@ -20,7 +20,7 @@ globs: **/*.{ts,tsx}
 
 - **Chỉ chữ, không icon** trên ba nút.
 - **Thứ tự cố định:** `Hủy bỏ` → `Lưu` → `Lưu và tiếp tục`.
-- **Nhãn thống nhất:** Luôn dùng **"Lưu"** và **"Lưu và tiếp tục"** (không dùng "Cất", "Cất & Thêm", "Đồng ý", "Đồng ý và thêm" trên giao diện).
+- **Nhãn thống nhất:** Luôn dùng **"Lưu"**, **"Lưu và cất"** (nếu có), **"Lưu và tiếp tục"** (không dùng "Cất", "Cất & Thêm", "Đồng ý", "Đồng ý và thêm" trên giao diện). Mọi nút lưu đều **lưu toàn bộ dữ liệu đang hiển thị tại các trường** (xem rule **save-buttons.mdc**).
 
 ### Cách dùng trong form/modal
 

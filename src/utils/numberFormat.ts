@@ -119,6 +119,44 @@ export function formatSoTuNhienInput(s: string): string {
 }
 
 /**
+ * Chuỗi lưu trữ: phẩy phân cách thập phân, không lưu dấu chấm hàng nghìn (dễ tính toán).
+ * VD: "1.234.567,5" → "1234567,5", "1,07" → "1,07".
+ */
+export function toStoredNumberString(s: string): string {
+  return (s || '').replace(/\./g, '')
+}
+
+/**
+ * Chuyển number sang chuỗi lưu trữ (phẩy thập phân, không chấm hàng nghìn).
+ * VD: 10.7 → "10,7", 1234567.89 → "1234567,89". Dùng khi ghi tỉ lệ từ phép tính.
+ */
+export function numberToStoredFormat(n: number, maxDecimals = 10): string {
+  if (!Number.isFinite(n)) return ''
+  const fixed = n.toFixed(maxDecimals).replace(/0+$/, '').replace(/\.0+$/, '')
+  if (fixed.includes('.')) {
+    const [i, d] = fixed.split('.')
+    return i + ',' + d
+  }
+  return fixed
+}
+
+/**
+ * Chuẩn hóa chuỗi nhập cho ô kích thước (mR, mC): nếu có một dấu chấm và phần sau là 1–2 chữ số thì coi là thập phân, đổi thành phẩy để formatSoTien không bỏ chấm (tránh "0.91" → "91").
+ */
+export function normalizeKichThuocInput(s: string): string {
+  const cleaned = (s || '').replace(/[^\d.,]/g, '')
+  if (cleaned.includes(',')) return s
+  const lastDot = cleaned.lastIndexOf('.')
+  if (lastDot < 0) return s
+  const after = cleaned.slice(lastDot + 1)
+  if (after.length <= 2 && /^\d+$/.test(after)) {
+    const before = cleaned.slice(0, lastDot)
+    return (before ? before.replace(/\./g, '') : '0') + ',' + after
+  }
+  return s
+}
+
+/**
  * Định dạng khi nhập phần trăm (%).
  * Cho phép nhập dấu chấm (.) → đổi thành phẩy (,) phân cách thập phân. Đã có "10" rồi gõ "." → "10,". Đã có "10,5" rồi gõ "." → đứng im. Nhập số vẫn cho phép.
  */
@@ -233,4 +271,23 @@ export function formatNumberDisplay(value: number, decimals: number = 0): string
   const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
   const result = decPart ? `${formatted}${DECIMAL_SEP}${decPart}` : formatted
   return value < 0 ? `-${result}` : result
+}
+
+/**
+ * Hiển thị giá tiền: có thập phân thì hiển thị phẩy + phần thập phân, không có thì không hiển thị dấu phẩy.
+ * VD: 455000 → "455.000"; 219,78 → "219,78"; 10,7 → "10,7".
+ */
+export function formatSoTienHienThi(value: number | string): string {
+  const n = typeof value === 'number' ? value : parseFloat(parseNumber(String(value)))
+  if (Number.isNaN(n) || !Number.isFinite(n)) return ''
+  const abs = Math.abs(n)
+  const intPart = Math.floor(abs)
+  const frac = abs - intPart
+  const hasDecimal = frac >= 1e-9
+  const formattedInt = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
+  const prefix = n < 0 ? '-' : ''
+  if (!hasDecimal) return prefix + formattedInt
+  const decNum = Math.round(frac * 100) / 100
+  const decStr = decNum.toFixed(2).split('.')[1].replace(/0+$/, '') || '0'
+  return prefix + formattedInt + DECIMAL_SEP + decStr
 }

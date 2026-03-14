@@ -13,9 +13,10 @@ import {
   vatTuHangHoaMaTuDong,
   VATTU_IMAGE_BASE,
 } from './vatTuHangHoaApi'
-import { formatNumberDisplay } from '../../utils/numberFormat'
+import { formatNumberDisplay, formatSoTienHienThi, parseFloatVN, parseDecimalFlex } from '../../utils/numberFormat'
 import { exportCsv } from '../../utils/exportCsv'
 import { useToastOptional } from '../../context/ToastContext'
+import { Modal } from '../../components/Modal'
 import { VatTuHangHoaForm } from './VatTuHangHoaForm'
 import { donViTinhGetAll } from './donViTinhApi'
 
@@ -42,6 +43,31 @@ function dvtHienThiLabel(
   return d ? (d.ky_hieu || d.ten_dvt || d.ma_dvt) : v
 }
 
+/** Giống form: lấy ĐG bán gốc để tính theo tỉ lệ — không có bậc giá thì dùng ĐG bán tab 1; có bậc giá thì tìm dòng chứa tỉ lệ. */
+function getBaseDgBanForDonViQuyDoiView(record: VatTuHangHoaRecord, tiLeNum: number): number {
+  const bangGia = record.bang_chiet_khau ?? []
+  const hasBangGiaRows = bangGia.some((r) => {
+    const tu = (r.so_luong_tu ?? '').trim()
+    const den = (r.so_luong_den ?? '').trim()
+    const gia = (r.ty_le_chiet_khau ?? '').trim()
+    return tu !== '' || den !== '' || gia !== ''
+  })
+  const donGiaBanTab1 = String(record.don_gia_ban ?? '')
+  if (!hasBangGiaRows) return parseFloatVN(donGiaBanTab1) || 0
+  const matchingRow = bangGia.find((r) => {
+    const tu = parseFloatVN(r.so_luong_tu ?? '')
+    const denStr = (r.so_luong_den ?? '').trim()
+    const den = parseFloatVN(r.so_luong_den ?? '')
+    if (denStr === '') return tiLeNum >= tu
+    return tiLeNum >= tu && tiLeNum <= den
+  })
+  if (!matchingRow) return parseFloatVN(donGiaBanTab1) || 0
+  const rowIdx = bangGia.indexOf(matchingRow)
+  const useDgBanTab1 = rowIdx === 0 || parseFloatVN(matchingRow.so_luong_tu ?? '') === 0
+  const baseNum = useDgBanTab1 ? parseFloatVN(donGiaBanTab1) : parseFloatVN(matchingRow.ty_le_chiet_khau ?? '')
+  return baseNum || parseFloatVN(donGiaBanTab1) || 0
+}
+
 const panelChiTiet: React.CSSProperties = {
   marginTop: '8px',
   border: '1px solid var(--border-strong)',
@@ -57,19 +83,21 @@ const truongChiTiet: React.CSSProperties = {
 }
 
 const nhan: React.CSSProperties = {
-  color: 'var(--text-muted)',
+  color: 'var(--text-secondary)',
   minWidth: '140px',
+  fontWeight: 500,
 }
 
 const giaTri: React.CSSProperties = {
-  color: '#e5e7eb',
+  color: 'var(--text-primary)',
+  fontWeight: 500,
 }
 
 const thStyle: React.CSSProperties = {
   padding: '6px 8px',
   textAlign: 'left',
   fontWeight: 600,
-  color: 'var(--text-muted)',
+  color: 'var(--text-primary)',
   borderBottom: '1px solid var(--border)',
   borderRight: '1px solid var(--border)',
   background: 'var(--bg-tab)',
@@ -110,8 +138,8 @@ const modalBox: React.CSSProperties = {
   background: 'transparent',
   border: '1px solid #4b5563',
   borderRadius: '6px',
-  width: '90vw',
-  maxWidth: 820,
+  width: '94vw',
+  maxWidth: 1000,
   height: '85vh',
   maxHeight: '85vh',
   display: 'flex',
@@ -137,6 +165,8 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
   const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | null>(null)
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
   const overlayMouseDownRef = useRef(false)
+  /** Dòng đang mở form cảnh báo xóa (null = đóng form) */
+  const [deleteTarget, setDeleteTarget] = useState<VatTuHangHoaRecord | null>(null)
 
 
   const napLai = useCallback(async () => {
@@ -179,11 +209,13 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && modalOpen) setModalOpen(null)
+      if (e.key !== 'Escape') return
+      if (deleteTarget) setDeleteTarget(null)
+      else if (modalOpen) setModalOpen(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [modalOpen])
+  }, [modalOpen, deleteTarget])
 
   useEffect(() => {
     setImageLoadError(false)
@@ -283,10 +315,15 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
     await napLai()
   }
 
-  const xoa = async () => {
+  const moFormXoa = () => {
     if (!dongChon) return
-    if (!window.confirm('Bạn có chắc chắn muốn xóa?')) return
-    const idXoa = dongChon.id
+    setDeleteTarget(dongChon)
+  }
+
+  const thucHienXoa = async () => {
+    if (!deleteTarget) return
+    const idXoa = deleteTarget.id
+    setDeleteTarget(null)
     try {
       await vatTuHangHoaDelete(idXoa)
       setDanhSach((prev) => prev.filter((r) => r.id !== idXoa))
@@ -327,7 +364,7 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
           { icon: <Plus size={14} />, label: 'Thêm', onClick: moThem },
           { icon: <Copy size={14} />, label: 'Nhân bản', onClick: nhanBan, disabled: !dongChon },
           { icon: <Pencil size={14} />, label: 'Sửa', onClick: moSua, disabled: !dongChon },
-          { icon: <Trash2 size={14} />, label: 'Xóa', onClick: xoa, disabled: !dongChon },
+          { icon: <Trash2 size={14} />, label: 'Xóa', onClick: moFormXoa, disabled: !dongChon },
           { icon: <RefreshCw size={14} />, label: 'Làm mới', onClick: () => napLai(), disabled: dangTai, title: 'Làm mới lại dữ liệu vật tư hàng hóa' },
           { icon: <Upload size={14} />, label: 'Nhập khẩu' },
           { icon: <Download size={14} />, label: 'Xuất khẩu', onClick: xuatKhau },
@@ -379,12 +416,13 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
                   height: 26,
                   boxSizing: 'border-box',
                   fontSize: 11,
-                  fontWeight: activeDetailTab === t.id ? 'bold' : 'normal',
-                  background: activeDetailTab === t.id ? 'var(--accent)' : 'transparent',
-                  color: activeDetailTab === t.id ? 'var(--accent-text)' : 'var(--text-muted)',
-                  border: '1px solid ' + (activeDetailTab === t.id ? 'var(--accent)' : 'var(--border)'),
+                  fontWeight: activeDetailTab === t.id ? 700 : 600,
+                  background: activeDetailTab === t.id ? 'var(--accent)' : 'var(--bg-primary)',
+                  color: activeDetailTab === t.id ? 'var(--accent-text)' : 'var(--text-primary)',
+                  border: '1px solid ' + (activeDetailTab === t.id ? 'var(--accent)' : 'var(--border-strong)'),
                   borderRadius: 4,
                   cursor: 'pointer',
+                  boxShadow: activeDetailTab === t.id ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
                 }}
               >
                 {i + 1}. {t.label}
@@ -466,6 +504,8 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: 36 }} />
+                  <col style={{ width: 92 }} />
+                  <col style={{ width: 72 }} />
                   <col style={{ width: 90 }} />
                   <col style={{ width: 90 }} />
                   <col style={{ width: 90 }} />
@@ -474,24 +514,44 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
                 <thead>
                   <tr>
                     <th style={{ ...thStyle, width: 36, textAlign: 'center' }}>STT</th>
-                    <th style={{ ...thStyle, width: 90 }}>ĐV quy đổi</th>
-                    <th style={{ ...thStyle, width: 90 }}>Tỉ lệ</th>
-                    <th style={{ ...thStyle, width: 90 }}>Phép tính</th>
+                    <th style={{ ...thStyle, width: 92 }}>ĐV quy đổi</th>
+                    <th style={{ ...thStyle, width: 72, textAlign: 'left' }}>Tỉ lệ</th>
+                    <th style={{ ...thStyle, width: 90 }} title="Phép nhân = nhân toán học, Phép chia = chia toán học">Phép tính</th>
+                    <th style={{ ...thStyle, width: 90, textAlign: 'right' }}>ĐG mua</th>
+                    <th style={{ ...thStyle, width: 90, textAlign: 'right' }}>ĐG bán</th>
                     <th style={thStyle}>Mô tả</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dongChon.don_vi_quy_doi
-                    .filter((r) => (r.dvt ?? '').trim() || (r.ti_le_quy_doi ?? '1') !== '1' || (r.mo_ta ?? '').trim() || (r.gia_ban ?? '').trim())
-                    .map((r, i) => (
-                      <tr key={i}>
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>{i + 1}</td>
-                        <td style={tdStyle}>{dvtHienThiLabel(r.dvt ?? '', dvtList) || '—'}</td>
-                        <td style={tdStyle}>{r.ti_le_quy_doi ?? '1'}</td>
-                        <td style={tdStyle}>{r.phep_tinh === 'chia' ? 'Phép chia' : 'Phép nhân'}</td>
-                        <td style={tdStyle}>{r.mo_ta || '—'}</td>
-                      </tr>
-                    ))}
+                    .filter((r) => (r.dvt ?? '').trim() || (r.ti_le_quy_doi ?? '1') !== '1' || (r.mo_ta ?? '').trim() || (r.gia_ban ?? '').trim() || (r.gia_mua ?? '').trim())
+                    .map((r, i) => {
+                      const tiLe = parseDecimalFlex(r.ti_le_quy_doi ?? '1')
+                      const phepTinh = r.phep_tinh === 'chia' ? 'chia' : r.phep_tinh === 'nhan' ? 'nhan' : null
+                      const baseDgMua = (dongChon.gia_mua_gan_nhat ?? 0) > 0 ? (dongChon.gia_mua_gan_nhat ?? 0) : (dongChon.don_gia_mua_co_dinh ?? dongChon.don_gia_mua ?? 0)
+                      let calculatedDgMua = baseDgMua
+                      if (phepTinh === 'nhan' && tiLe > 0) calculatedDgMua = baseDgMua * tiLe
+                      else if (phepTinh === 'chia' && tiLe > 0) calculatedDgMua = baseDgMua / tiLe
+                      const hasGiaMuaInput = r.gia_mua != null && String(r.gia_mua).trim() !== ''
+                      const dgMuaDisplay = hasGiaMuaInput ? parseFloatVN(String(r.gia_mua)) : calculatedDgMua
+                      const baseDgBan = getBaseDgBanForDonViQuyDoiView(dongChon, tiLe)
+                      let calculatedDgBan = baseDgBan
+                      if (phepTinh === 'nhan' && tiLe > 0) calculatedDgBan = baseDgBan * tiLe
+                      else if (phepTinh === 'chia' && tiLe > 0) calculatedDgBan = baseDgBan / tiLe
+                      const hasGiaBanInput = r.gia_ban != null && String(r.gia_ban).trim() !== ''
+                      const dgBanDisplay = hasGiaBanInput ? parseFloatVN(String(r.gia_ban)) : calculatedDgBan
+                      return (
+                        <tr key={i}>
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>{i + 1}</td>
+                          <td style={tdStyle}>{dvtHienThiLabel(r.dvt ?? '', dvtList) || '—'}</td>
+                          <td style={tdStyle}>{formatSoTienHienThi(parseDecimalFlex(r.ti_le_quy_doi ?? '1')) || '1'}</td>
+                          <td style={tdStyle}>{r.phep_tinh === 'chia' ? 'Phép chia' : 'Phép nhân'}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right' }}>{dgMuaDisplay > 0 || hasGiaMuaInput ? formatNumberDisplay(dgMuaDisplay) : '—'}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right' }}>{dgBanDisplay > 0 || hasGiaBanInput ? formatNumberDisplay(dgBanDisplay) : '—'}</td>
+                          <td style={tdStyle}>{r.mo_ta || '—'}</td>
+                        </tr>
+                      )
+                    })}
                 </tbody>
               </table>
             </div>
@@ -628,6 +688,40 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
           </div>
         </div>
       )}
+
+      <Modal
+        open={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title={deleteTarget?.vt_chinh ? 'Cảnh báo' : 'Xác nhận xóa'}
+        size="sm"
+        closeOnOverlayClick={false}
+        footer={
+          deleteTarget?.vt_chinh ? (
+            <button type="button" onClick={() => setDeleteTarget(null)} style={{ padding: '4px 12px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              Đóng
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => setDeleteTarget(null)} style={{ padding: '4px 12px', background: 'var(--bg-tab)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+                Đóng
+              </button>
+              <button type="button" onClick={thucHienXoa} style={{ padding: '4px 12px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+                Xóa
+              </button>
+            </>
+          )
+        }
+      >
+        {deleteTarget?.vt_chinh ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>
+            Không được phép xóa vật tư cấp cha. Vật tư hàng hóa này đã được đánh dấu VT cấp cha.
+          </p>
+        ) : deleteTarget ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>
+            Bạn có chắc chắn muốn xóa &quot;{deleteTarget.ten}&quot; (Mã: {deleteTarget.ma})?
+          </p>
+        ) : null}
+      </Modal>
     </div>
   )
 }

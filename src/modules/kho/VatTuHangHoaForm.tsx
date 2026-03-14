@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { X, ChevronDown, Info, Plus, Trash2, CheckCircle, XCircle, FileCheck, AlertTriangle } from 'lucide-react'
 import type { VatTuHangHoaRecord } from './vatTuHangHoaApi'
-import { formatSoTien, parseNumber, parseFloatVN, parseDecimalFlex, formatSoNguyenInput, formatSoTuNhienInput, isZeroDisplay } from '../../utils/numberFormat'
+import { formatSoTien, formatSoTienHienThi, parseNumber, parseFloatVN, parseDecimalFlex, formatSoNguyenInput, formatSoTuNhienInput, normalizeKichThuocInput, toStoredNumberString, numberToStoredFormat, isZeroDisplay } from '../../utils/numberFormat'
 import { matchSearchKeyword } from '../../utils/stringUtils'
 import { NhomVTHHLookupModal } from './NhomVTHHLookupModal'
 import { ThemDonViTinhModal } from './ThemDonViTinhModal'
@@ -16,8 +16,12 @@ import './VatTuHangHoaForm.css'
 export type FormValues = {
   ma_vthh: string
   ten_vthh: string
+  /** VT cấp cha (chỉ hiện khi tính chất = Vật tư) */
+  vt_chinh: boolean
   tinh_chat: string
   nhom_vthh: string
+  /** Mã VTHH cấp cha (hàng hóa cấp cha), rỗng = không chọn */
+  hang_hoa_cap_cha: string
   mo_ta: string
   dvt_chinh: string
   thoi_han_bh: string
@@ -375,8 +379,10 @@ function getEmptyFormValues(dvtList: { id: number; ma_dvt: string; ten_dvt: stri
   return {
     ma_vthh: '',
     ten_vthh: '',
+    vt_chinh: false,
     tinh_chat: 'Vật tư',
     nhom_vthh: '',
+    hang_hoa_cap_cha: '',
     mo_ta: '',
     dvt_chinh: dvtChinh,
     thoi_han_bh: '',
@@ -488,6 +494,8 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const [nvlDropdownRect, setNvlDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const nvlDropdownRef = useRef<HTMLDivElement>(null)
   const nvlOptions = useMemo(() => (vatTuList ?? []).filter((r) => r.tinh_chat === 'Vật tư' || r.tinh_chat === 'Vật tư hàng hóa'), [vatTuList])
+  /** Khi sửa bản ghi có VT cấp cha: checkbox VT cấp cha phải luôn tick và không cho bỏ (disabled); vẫn cho phép chỉnh sửa mọi trường khác và được phép lưu */
+  const vtChinhLocked = mode === 'edit' && initialData?.vt_chinh === true
   const inputMaRef = useRef<HTMLInputElement>(null)
   const inputTenRef = useRef<HTMLInputElement>(null)
   const khoNgamDinhRef = useRef<HTMLDivElement>(null)
@@ -598,6 +606,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const { register, handleSubmit, setValue, control, watch, getValues, trigger, reset, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       ma_vthh: initialData?.ma ?? '',
+      vt_chinh: (initialData as { vt_chinh?: boolean })?.vt_chinh ?? false,
       ten_vthh: (() => {
         const tenRaw = initialData?.ten ?? ''
         const matchNewMRMC = tenRaw.match(/\s+([\d.,]+)\s*mR\s*x\s*([\d.,]+)\s*mC\s*$/)
@@ -629,6 +638,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
         return ids.join(';')
       })(),
       mo_ta: initialData?.mo_ta ?? '',
+      hang_hoa_cap_cha: (initialData as { ma_vthh_cap_cha?: string })?.ma_vthh_cap_cha ?? '',
       dvt_chinh: initialData?.dvt_chinh ?? dvtList[0]?.ma_dvt ?? 'Cái',
       thoi_han_bh: initialData?.thoi_han_bh ?? '',
       so_luong_ton_toi_thieu: initialData?.so_luong_ton_toi_thieu != null ? formatSoTien(String(initialData.so_luong_ton_toi_thieu)) : '0',
@@ -682,17 +692,17 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
         const matchOnlyMR = tenRaw.match(/\s*\(KT:\s*(.+?)mR\)\s*$/)
         const matchOnlyM = tenRaw.match(/\s*\(KT:\s*(.+?)m\)\s*$/)
         const matchOld = tenRaw.match(/\s*\(kích thước:\s*([^x]*)x([^)]*)\)\s*$/)
-        if (matchNewMRMC) return matchNewMRMC[1].trim()
-        if (matchNewFull) return matchNewFull[1].trim()
-        if (matchNewSingle) return matchNewSingle[1].trim()
-        if (matchFull) return matchFull[1].trim()
-        if (matchFullMRMC) return matchFullMRMC[1].trim()
-        if (matchFullM) return matchFullM[1].trim()
-        if (matchOnlyMd) return matchOnlyMd[1].trim()
-        if (matchOnlyMR) return matchOnlyMR[1].trim()
-        if (matchOnlyM) return matchOnlyM[1].trim()
-        if (matchOld) return matchOld[1].trim()
-        return initialData?.kich_thuoc_md ?? ''
+        if (matchNewMRMC) return normalizeKichThuocInput(matchNewMRMC[1].trim())
+        if (matchNewFull) return normalizeKichThuocInput(matchNewFull[1].trim())
+        if (matchNewSingle) return normalizeKichThuocInput(matchNewSingle[1].trim())
+        if (matchFull) return normalizeKichThuocInput(matchFull[1].trim())
+        if (matchFullMRMC) return normalizeKichThuocInput(matchFullMRMC[1].trim())
+        if (matchFullM) return normalizeKichThuocInput(matchFullM[1].trim())
+        if (matchOnlyMd) return normalizeKichThuocInput(matchOnlyMd[1].trim())
+        if (matchOnlyMR) return normalizeKichThuocInput(matchOnlyMR[1].trim())
+        if (matchOnlyM) return normalizeKichThuocInput(matchOnlyM[1].trim())
+        if (matchOld) return normalizeKichThuocInput(matchOld[1].trim())
+        return normalizeKichThuocInput(initialData?.kich_thuoc_md ?? '')
       })(),
       kich_thuoc_mr: (() => {
         const tenRaw = initialData?.ten ?? ''
@@ -704,33 +714,53 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
         const matchOnlyMr = tenRaw.match(/\s*\(KT:\s*(.+?)mR\)\s*$/)
         const matchOnlyMC = tenRaw.match(/\s*\(KT:\s*(.+?)mC\)\s*$/)
         const matchOld = tenRaw.match(/\s*\(kích thước:\s*([^x]*)x([^)]*)\)\s*$/)
-        if (matchNewMRMC) return matchNewMRMC[2].trim()
-        if (matchNewFull) return matchNewFull[2].trim()
-        if (matchFull) return matchFull[2].trim()
-        if (matchFullMRMC) return matchFullMRMC[2].trim()
-        if (matchFullM) return matchFullM[2].trim()
-        if (matchOnlyMr) return matchOnlyMr[1].trim()
-        if (matchOnlyMC) return matchOnlyMC[1].trim()
-        if (matchOld) return matchOld[2].trim()
-        return initialData?.kich_thuoc_mr ?? ''
+        if (matchNewMRMC) return normalizeKichThuocInput(matchNewMRMC[2].trim())
+        if (matchNewFull) return normalizeKichThuocInput(matchNewFull[2].trim())
+        if (matchFull) return normalizeKichThuocInput(matchFull[2].trim())
+        if (matchFullMRMC) return normalizeKichThuocInput(matchFullMRMC[2].trim())
+        if (matchFullM) return normalizeKichThuocInput(matchFullM[2].trim())
+        if (matchOnlyMr) return normalizeKichThuocInput(matchOnlyMr[1].trim())
+        if (matchOnlyMC) return normalizeKichThuocInput(matchOnlyMC[1].trim())
+        if (matchOld) return normalizeKichThuocInput(matchOld[2].trim())
+        return normalizeKichThuocInput(initialData?.kich_thuoc_mr ?? '')
       })(),
       so_khung: initialData?.so_khung ?? '',
       so_may: initialData?.so_may ?? '',
       thoi_gian_bao_hanh: initialData?.thoi_gian_bao_hanh ?? '',
       xuat_xu: initialData?.xuat_xu ?? '',
       don_vi_quy_doi: Array.isArray(initialData?.don_vi_quy_doi) && initialData!.don_vi_quy_doi!.length > 0
-        ? (initialData!.don_vi_quy_doi as { dvt?: string; dvt_chinh?: string; ti_le_quy_doi?: string; phep_tinh?: string; mo_ta?: string; gia_mua?: unknown; gia_ban?: unknown; gia_ban_1?: unknown; gia_ban_2?: unknown; gia_ban_3?: unknown }[]).map((r) => ({
-            dvt_chinh: initialData?.dvt_chinh ?? dvtList[0]?.ma_dvt ?? 'Cái',
-            dvt_quy_doi: r.dvt ?? r.dvt_chinh ?? '',
-            ti_le_quy_doi: (r.ti_le_quy_doi != null && String(r.ti_le_quy_doi).trim() !== '') ? formatSoTien(String(r.ti_le_quy_doi)) : '',
-            phep_tinh: (r.phep_tinh === 'chia' ? 'chia' : r.phep_tinh === 'nhan' ? 'nhan' : '') as 'nhan' | 'chia' | '',
-            mo_ta: (r as { mo_ta?: string }).mo_ta ?? '',
-            gia_mua_gan_nhat: r.gia_mua != null ? String(r.gia_mua) : '',
-            gia_ban: r.gia_ban != null ? formatSoTien(String(r.gia_ban)) : '',
-            gia_ban_1: (r as { gia_ban_1?: unknown }).gia_ban_1 != null ? formatSoTien(String((r as { gia_ban_1?: unknown }).gia_ban_1)) : '',
-            gia_ban_2: (r as { gia_ban_2?: unknown }).gia_ban_2 != null ? formatSoTien(String((r as { gia_ban_2?: unknown }).gia_ban_2)) : '',
-            gia_ban_3: (r as { gia_ban_3?: unknown }).gia_ban_3 != null ? formatSoTien(String((r as { gia_ban_3?: unknown }).gia_ban_3)) : '',
-          }))
+        ? (() => {
+            const tenRaw = initialData?.ten ?? ''
+            const getMd = () => {
+              const m = tenRaw.match(/\s+([\d.,]+)\s*mR\s*x\s*([\d.,]+)\s*mC\s*$/) || tenRaw.match(/\s+([\d.,]+)m\s*$/)
+              if (m) return normalizeKichThuocInput(m[1].trim())
+              return normalizeKichThuocInput(initialData?.kich_thuoc_md ?? '')
+            }
+            const getMr = () => {
+              const m = tenRaw.match(/\s+([\d.,]+)\s*mR\s*x\s*([\d.,]+)\s*mC\s*$/)
+              if (m) return normalizeKichThuocInput(m[2].trim())
+              return normalizeKichThuocInput(initialData?.kich_thuoc_mr ?? '')
+            }
+            const mdVal = getMd()
+            const mrVal = getMr()
+            const productFirst = (() => {
+              const a = parseDecimalFlex(mdVal)
+              const b = parseDecimalFlex(mrVal)
+              return a > 0 && b > 0 ? numberToStoredFormat(a * b) : null
+            })()
+            return (initialData!.don_vi_quy_doi as { dvt?: string; dvt_chinh?: string; ti_le_quy_doi?: string; phep_tinh?: string; mo_ta?: string; gia_mua?: unknown; gia_ban?: unknown; gia_ban_1?: unknown; gia_ban_2?: unknown; gia_ban_3?: unknown }[]).map((r, idx) => ({
+              dvt_chinh: initialData?.dvt_chinh ?? dvtList[0]?.ma_dvt ?? 'Cái',
+              dvt_quy_doi: r.dvt ?? r.dvt_chinh ?? '',
+              ti_le_quy_doi: idx === 0 && productFirst != null ? productFirst : ((r.ti_le_quy_doi != null && String(r.ti_le_quy_doi).trim() !== '') ? numberToStoredFormat(parseDecimalFlex(String(r.ti_le_quy_doi))) : ''),
+              phep_tinh: (r.phep_tinh === 'chia' ? 'chia' : r.phep_tinh === 'nhan' ? 'nhan' : '') as 'nhan' | 'chia' | '',
+              mo_ta: (r as { mo_ta?: string }).mo_ta ?? '',
+              gia_mua_gan_nhat: r.gia_mua != null ? String(r.gia_mua) : '',
+              gia_ban: r.gia_ban != null ? formatSoTien(String(r.gia_ban)) : '',
+              gia_ban_1: (r as { gia_ban_1?: unknown }).gia_ban_1 != null ? formatSoTien(String((r as { gia_ban_1?: unknown }).gia_ban_1)) : '',
+              gia_ban_2: (r as { gia_ban_2?: unknown }).gia_ban_2 != null ? formatSoTien(String((r as { gia_ban_2?: unknown }).gia_ban_2)) : '',
+              gia_ban_3: (r as { gia_ban_3?: unknown }).gia_ban_3 != null ? formatSoTien(String((r as { gia_ban_3?: unknown }).gia_ban_3)) : '',
+            }))
+          })()
         : [],
       dien_giai: initialData?.dien_giai ?? '',
       la_bo_phan_lap_rap: initialData?.la_bo_phan_lap_rap ?? false,
@@ -859,6 +889,29 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     })
   }
 
+  /** Lấy ĐG bán gốc để tính toán tab 3: không có bậc giá thì lấy tab 1; có bậc giá thì tìm dòng có khoảng [SL từ, SL đến] chứa tỉ lệ, lấy ĐG bán của dòng đó. */
+  const getBaseDgBanForDonViQuyDoi = (tiLeNum: number, donGiaBanTab1: string): number => {
+    const hasBangGiaRows = (bangChietKhauValues ?? []).some((r) => {
+      const tu = (r.so_luong_tu ?? '').trim()
+      const den = (r.so_luong_den ?? '').trim()
+      const gia = (r.ty_le_chiet_khau ?? '').trim()
+      return tu !== '' || den !== '' || gia !== ''
+    })
+    if (!hasBangGiaRows) return parseFloatVN(donGiaBanTab1) || 0
+    const matchingRow = (bangChietKhauValues ?? []).find((r) => {
+      const tu = parseFloatVN(r.so_luong_tu ?? '')
+      const denStr = (r.so_luong_den ?? '').trim()
+      const den = parseFloatVN(r.so_luong_den ?? '')
+      if (denStr === '') return tiLeNum >= tu
+      return tiLeNum >= tu && tiLeNum <= den
+    })
+    if (!matchingRow) return parseFloatVN(donGiaBanTab1) || 0
+    const rowIdx = (bangChietKhauValues ?? []).indexOf(matchingRow)
+    const useDgBanTab1 = rowIdx === 0 || parseFloatVN(matchingRow.so_luong_tu ?? '') === 0
+    const baseNum = useDgBanTab1 ? parseFloatVN(donGiaBanTab1) : parseFloatVN(matchingRow.ty_le_chiet_khau ?? '')
+    return baseNum || parseFloatVN(donGiaBanTab1) || 0
+  }
+
   useEffect(() => {
     if (activeSubTab === 2 && (bangChietKhauValues?.length ?? 0) > 0) {
       const t = setTimeout(() => { void trigger('bang_chiet_khau') }, 0)
@@ -894,19 +947,34 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     setValue('dien_giai_khi_ban', tenDayDu, { shouldValidate: false })
   }, [watchedTenVthh, watchedKichThuocMd, watchedKichThuocMr, setValue])
 
-  /* Tự động sinh mô tả quy đổi khi ĐVT chính, ĐVQĐ, tỉ lệ, phép tính thay đổi. Khi tỉ lệ trống thì mô tả để trống. */
+  /* Tự động sinh mô tả quy đổi khi ĐVT chính, ĐVQĐ, tỉ lệ, phép tính thay đổi. Thêm dòng ĐG mua: phép tính, ĐG bán: phép tính. */
   useEffect(() => {
     const rows = donViQuyDoiValues
+    const donGiaBanTab1 = getValues('don_gia_ban') ?? ''
+    const latestMua = parseFloatVN(String(getValues('don_gia_mua_gan_nhat')))
+    const fixedMua = String(getValues('don_gia_mua_co_dinh') ?? '')
+    const latestVal = String(getValues('don_gia_mua_gan_nhat') ?? '')
+    const baseDgMuaDefault = latestMua > 0 ? parseFloatVN(latestVal) : parseFloatVN(fixedMua)
     const t = setTimeout(() => {
       const dvtChinh = (rows[0]?.dvt_chinh ?? '').trim()
       rows.forEach((row, idx) => {
-        const moTa = generateMoTaQuyDoi({
+        let moTa = generateMoTaQuyDoi({
           dvtChinh,
           dvtQuyDoi: (row.dvt_quy_doi ?? '').trim(),
           tiLe: (row.ti_le_quy_doi ?? '').trim(),
           phepTinh: row.phep_tinh === 'chia' ? 'chia' : (row.phep_tinh === 'nhan' ? 'nhan' : ''),
           dvtList,
         })
+        const tiLe = parseFloatVN(row.ti_le_quy_doi ?? '')
+        const phepTinh = row.phep_tinh === 'nhan' ? 'nhan' : (row.phep_tinh === 'chia' ? 'chia' : '')
+        if (phepTinh && tiLe > 0) {
+          const baseDgMua = baseDgMuaDefault > 0 ? baseDgMuaDefault : parseFloatVN(fixedMua || latestVal || '0')
+          const baseDgBan = getBaseDgBanForDonViQuyDoi(tiLe, donGiaBanTab1)
+          const sym = phepTinh === 'nhan' ? '×' : '÷'
+          const tiLeDisp = formatSoTienHienThi(tiLe)
+          const dgPart = `ĐG mua: ${formatSoTienHienThi(baseDgMua)}${sym}${tiLeDisp} / ĐG bán: ${formatSoTienHienThi(baseDgBan)}${sym}${tiLeDisp}`
+          moTa = moTa ? `${moTa} / ${dgPart}` : dgPart
+        }
         const currentMoTa = (row.mo_ta ?? '').trim()
         if (currentMoTa !== moTa) {
           setValue(`don_vi_quy_doi.${idx}.mo_ta`, moTa, { shouldValidate: false })
@@ -914,7 +982,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       })
     }, 0)
     return () => clearTimeout(t)
-  }, [donViQuyDoiInputSignature, donViQuyDoiValues, dvtList, setValue])
+  }, [donViQuyDoiInputSignature, donViQuyDoiValues, dvtList, setValue, getValues, getBaseDgBanForDonViQuyDoi, bangChietKhauValues])
 
   /* TL (tỉ lệ quy đổi) dòng đầu: nếu nhập đủ 2 ô kích thước (mR, mC) và cả hai > 0 thì TL = mR × mC; dùng parseDecimalFlex để "0,91" và "0.91" đều ra 0.91 (tránh 0.91 bị parse thành 91). */
   const kichThuocMd = watch('kich_thuoc_md')
@@ -927,7 +995,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     if (donViQuyDoiValues.length === 0) return
     if (mdNum > 0 && mrNum > 0) {
       const product = mdNum * mrNum
-      setValue('don_vi_quy_doi.0.ti_le_quy_doi', formatSoTien(String(product)), { shouldValidate: false })
+      setValue('don_vi_quy_doi.0.ti_le_quy_doi', numberToStoredFormat(product), { shouldValidate: false })
       userEnteredTiLeByIndex.current.add(0)
     }
   }, [kichThuocMd, kichThuocMr, donViQuyDoiValues.length, setValue])
@@ -944,21 +1012,62 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   }
 
   const buildPayload = (data: FormValues): Omit<VatTuHangHoaRecord, 'id'> => {
-    /* ĐV quy đổi: nếu không thay đổi, vẫn "Chọn đơn vị" (value '') = chưa nhập, chỉ gửi dòng đã chọn đơn vị + đủ Tỉ lệ + đã chọn Phép tính. */
+    /* Lấy ĐG bán gốc từ data (tab 1 hoặc bậc giá) — dùng khi lưu giá hiển thị. */
+    const getBaseDgBanFromData = (tiLeNum: number): number => {
+      const bangGia = data.bang_chiet_khau ?? []
+      const hasBangGiaRows = bangGia.some((r) => {
+        const tu = (r.so_luong_tu ?? '').trim()
+        const den = (r.so_luong_den ?? '').trim()
+        const gia = (r.ty_le_chiet_khau ?? '').trim()
+        return tu !== '' || den !== '' || gia !== ''
+      })
+      const donGiaBanTab1 = String(data.don_gia_ban ?? '')
+      if (!hasBangGiaRows) return parseFloatVN(donGiaBanTab1) || 0
+      const matchingRow = bangGia.find((r) => {
+        const tu = parseFloatVN(r.so_luong_tu ?? '')
+        const denStr = (r.so_luong_den ?? '').trim()
+        const den = parseFloatVN(r.so_luong_den ?? '')
+        if (denStr === '') return tiLeNum >= tu
+        return tiLeNum >= tu && tiLeNum <= den
+      })
+      if (!matchingRow) return parseFloatVN(donGiaBanTab1) || 0
+      const rowIdx = bangGia.indexOf(matchingRow)
+      const useDgBanTab1 = rowIdx === 0 || parseFloatVN(matchingRow.so_luong_tu ?? '') === 0
+      const baseNum = useDgBanTab1 ? parseFloatVN(donGiaBanTab1) : parseFloatVN(matchingRow.ty_le_chiet_khau ?? '')
+      return baseNum || parseFloatVN(donGiaBanTab1) || 0
+    }
+
+    /* ĐV quy đổi: chỉ gửi dòng đã chọn đơn vị + đủ Tỉ lệ + đã chọn Phép tính. Lưu giá trị hiển thị (nhập tay hoặc tính từ tỉ lệ) để truy xuất nhanh. */
     const dvd = data.don_vi_quy_doi
       .map((r, idx) => ({ r, idx }))
       .filter(({ r, idx }) => (r.dvt_quy_doi ?? '').trim() && (r.ti_le_quy_doi ?? '').trim() && (r.phep_tinh === 'nhan' || r.phep_tinh === 'chia') && userEnteredTiLeByIndex.current.has(idx))
-      .map(({ r }) => ({
-        dvt: r.dvt_quy_doi ?? '',
-        ti_le_quy_doi: r.ti_le_quy_doi?.trim() ? String(parseNumber(r.ti_le_quy_doi)) : '',
-        phep_tinh: r.phep_tinh as 'nhan' | 'chia',
-        mo_ta: r.mo_ta?.trim() || undefined,
-        gia_mua: r.gia_mua_gan_nhat ?? '',
-        gia_ban: r.gia_ban?.trim() ? formatSoTien(r.gia_ban) : '',
-        gia_ban_1: r.gia_ban_1?.trim() ? formatSoTien(r.gia_ban_1) : undefined,
-        gia_ban_2: r.gia_ban_2?.trim() ? formatSoTien(r.gia_ban_2) : undefined,
-        gia_ban_3: r.gia_ban_3?.trim() ? formatSoTien(r.gia_ban_3) : undefined,
-      }))
+      .map(({ r }) => {
+        const tiLe = parseFloatVN(r.ti_le_quy_doi ?? '1')
+        const phepTinh = r.phep_tinh as 'nhan' | 'chia'
+        const baseDgMua = parseFloatVN(String(data.don_gia_mua_gan_nhat ?? '')) > 0 ? parseFloatVN(String(data.don_gia_mua_gan_nhat ?? '')) : parseFloatVN(String(data.don_gia_mua_co_dinh ?? ''))
+        let calculatedDgMua = baseDgMua
+        if (phepTinh === 'nhan' && tiLe > 0) calculatedDgMua = baseDgMua * tiLe
+        else if (phepTinh === 'chia' && tiLe > 0) calculatedDgMua = baseDgMua / tiLe
+        const hasGiaMuaInput = (r.gia_mua_gan_nhat ?? '').toString().trim() !== ''
+        const giaMuaToSave = hasGiaMuaInput ? (r.gia_mua_gan_nhat ?? '') : (calculatedDgMua > 0 ? String(calculatedDgMua) : '')
+        const baseDgBan = getBaseDgBanFromData(tiLe)
+        let calculatedDgBan = baseDgBan
+        if (phepTinh === 'nhan' && tiLe > 0) calculatedDgBan = baseDgBan * tiLe
+        else if (phepTinh === 'chia' && tiLe > 0) calculatedDgBan = baseDgBan / tiLe
+        const hasGiaBanInput = (r.gia_ban ?? '').trim() !== ''
+        const giaBanToSave = hasGiaBanInput ? (r.gia_ban ?? '') : (calculatedDgBan > 0 ? String(calculatedDgBan) : '')
+        return {
+          dvt: r.dvt_quy_doi ?? '',
+          ti_le_quy_doi: r.ti_le_quy_doi?.trim() ? String(parseNumber(r.ti_le_quy_doi)) : '',
+          phep_tinh: phepTinh,
+          mo_ta: r.mo_ta?.trim() || undefined,
+          gia_mua: giaMuaToSave ? formatSoTien(giaMuaToSave) : '',
+          gia_ban: giaBanToSave ? formatSoTien(giaBanToSave) : '',
+          gia_ban_1: r.gia_ban_1?.trim() ? formatSoTien(r.gia_ban_1) : undefined,
+          gia_ban_2: r.gia_ban_2?.trim() ? formatSoTien(r.gia_ban_2) : undefined,
+          gia_ban_3: r.gia_ban_3?.trim() ? formatSoTien(r.gia_ban_3) : undefined,
+        }
+      })
     return {
       ma: data.ma_vthh.trim(),
       ten: (() => {
@@ -1016,14 +1125,18 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
         const arr = data.bang_chiet_khau
           .filter((r) => r.so_luong_tu || r.so_luong_den || r.ty_le_chiet_khau)
           .map((r, i, filtered) => {
+            const useDgBan = i === 0 || parseFloatVN(r.so_luong_tu ?? '') === 0
+            const tyLe = (r.ty_le_chiet_khau ?? '').trim() || (useDgBan ? (data.don_gia_ban ?? '').trim() : '')
             const mo_ta = getMoTaBangGia(filtered, i)
-            return { ...r, mo_ta: mo_ta || `Từ ${(r.so_luong_tu ?? '').trim() || '—'} đến ${(r.so_luong_den ?? '').trim() || '—'}, đơn giá ${(r.ty_le_chiet_khau ?? '').trim() || '—'}` }
+            return { ...r, ty_le_chiet_khau: tyLe, mo_ta: mo_ta || `Từ ${(r.so_luong_tu ?? '').trim() || '—'} đến ${(r.so_luong_den ?? '').trim() || '—'}, đơn giá ${tyLe || '—'}` }
           })
         return arr.length > 0 ? arr : undefined
       })(),
       dac_tinh: data.dac_tinh?.trim() || undefined,
       duong_dan_hinh_anh: data.duong_dan_hinh_anh?.trim() || undefined,
       cong_thuc_tinh_so_luong: data.cong_thuc_tinh_so_luong?.trim() || undefined,
+      ma_vthh_cap_cha: (data.tinh_chat === 'Vật tư' && data.hang_hoa_cap_cha?.trim()) ? data.hang_hoa_cap_cha.trim() : undefined,
+      vt_chinh: data.tinh_chat === 'Vật tư' ? data.vt_chinh : undefined,
       dinh_muc_nvl: (() => {
         const filtered = (dinhMucNvlRows ?? []).filter((r) => {
           const ma = (r?.ma ?? '').trim()
@@ -1251,65 +1364,84 @@ const kichThuocSuffix = (md: string, mr: string) => {
               <div style={{ marginLeft: -96 }}>
                 <LabelCell label="Tên" required />
               </div>
-              <div className="misa-grid-item" style={{ marginLeft: -56 }}>
-                <Controller
-                  control={control}
-                  name="ten_vthh"
-                  rules={{ required: 'Tên là bắt buộc' }}
-                  render={({ field, fieldState }) => {
-                    const md = (watch('kich_thuoc_md') ?? '').trim()
-                    const mr = (watch('kich_thuoc_mr') ?? '').trim()
-                    const suffix = kichThuocSuffix(md, mr)
-                    const displayValue = (field.value ?? '') + suffix
-                    return (
-                      <input
-                        ref={(el) => {
-                          field.ref(el)
-                          ;(inputTenRef as React.MutableRefObject<HTMLInputElement | null>).current = el
-                        }}
-                        value={displayValue}
-                        onChange={(e) => {
-                          const newVal = e.target.value
-                          const fullDisplay = (field.value ?? '') + suffix
-                          if (suffix && newVal.endsWith(suffix)) {
-                            field.onChange(newVal.slice(0, -suffix.length))
-                          } else if (suffix) {
-                            let prefixLen = 0
-                            for (let n = suffix.length; n >= 1; n--) {
-                              const p = suffix.slice(0, n)
-                              if (newVal.endsWith(p)) {
-                                prefixLen = p.length
-                                break
+              <div className="misa-grid-item" style={{ marginLeft: -56, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Controller
+                    control={control}
+                    name="ten_vthh"
+                    rules={{ required: 'Tên là bắt buộc' }}
+                    render={({ field, fieldState }) => {
+                      const md = (watch('kich_thuoc_md') ?? '').trim()
+                      const mr = (watch('kich_thuoc_mr') ?? '').trim()
+                      const suffix = kichThuocSuffix(md, mr)
+                      const displayValue = (field.value ?? '') + suffix
+                      return (
+                        <input
+                          ref={(el) => {
+                            field.ref(el)
+                            ;(inputTenRef as React.MutableRefObject<HTMLInputElement | null>).current = el
+                          }}
+                          value={displayValue}
+                          onChange={(e) => {
+                            const newVal = e.target.value
+                            const fullDisplay = (field.value ?? '') + suffix
+                            if (suffix && newVal.endsWith(suffix)) {
+                              field.onChange(newVal.slice(0, -suffix.length))
+                            } else if (suffix) {
+                              let prefixLen = 0
+                              for (let n = suffix.length; n >= 1; n--) {
+                                const p = suffix.slice(0, n)
+                                if (newVal.endsWith(p)) {
+                                  prefixLen = p.length
+                                  break
+                                }
                               }
-                            }
-                            if (prefixLen > 0) {
-                              setValue('kich_thuoc_md', '', { shouldValidate: false })
-                              setValue('kich_thuoc_mr', '', { shouldValidate: false })
-                              field.onChange(newVal.slice(0, -prefixLen))
-                            } else if (newVal.length > fullDisplay.length) {
-                              setValue('kich_thuoc_md', '', { shouldValidate: false })
-                              setValue('kich_thuoc_mr', '', { shouldValidate: false })
-                              field.onChange(newVal)
-                            } else {
-                              field.onChange(newVal)
-                              if (newVal === '') {
+                              if (prefixLen > 0) {
                                 setValue('kich_thuoc_md', '', { shouldValidate: false })
                                 setValue('kich_thuoc_mr', '', { shouldValidate: false })
+                                field.onChange(newVal.slice(0, -prefixLen))
+                              } else if (newVal.length > fullDisplay.length) {
+                                setValue('kich_thuoc_md', '', { shouldValidate: false })
+                                setValue('kich_thuoc_mr', '', { shouldValidate: false })
+                                field.onChange(newVal)
+                              } else {
+                                field.onChange(newVal)
+                                if (newVal === '') {
+                                  setValue('kich_thuoc_md', '', { shouldValidate: false })
+                                  setValue('kich_thuoc_mr', '', { shouldValidate: false })
+                                }
                               }
+                            } else {
+                              field.onChange(newVal)
                             }
-                          } else {
-                            field.onChange(newVal)
-                          }
+                          }}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          className="misa-input-solo"
+                          style={{ ...inputStyle, width: '100%', ...(fieldState.error ? { borderColor: REQUIRED_FIELD_ERROR_BORDER, borderWidth: 2 } : {}) }}
+                          placeholder="Tên"
+                        />
+                      )
+                    }}
+                  />
+                </div>
+                {(watch('tinh_chat') ?? '') === 'Vật tư' && (() => {
+                  const vtChinhReg = register('vt_chinh')
+                  return (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, cursor: vtChinhLocked ? 'default' : 'pointer', flexShrink: 0, fontSize: 11 }}>
+                      <input
+                        type="checkbox"
+                        {...(vtChinhLocked ? { checked: true, readOnly: true, disabled: true } : vtChinhReg)}
+                        onChange={vtChinhLocked ? undefined : (e) => {
+                          vtChinhReg.onChange(e)
+                          if (e.target.checked) setValue('hang_hoa_cap_cha', '', { shouldValidate: false })
                         }}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        className="misa-input-solo"
-                        style={{ ...inputStyle, ...(fieldState.error ? { borderColor: REQUIRED_FIELD_ERROR_BORDER, borderWidth: 2 } : {}) }}
-                        placeholder="Tên"
+                        style={{ width: 14, height: 14, margin: 0, cursor: vtChinhLocked ? 'default' : 'pointer' }}
                       />
-                    )
-                  }}
-                />
+                      <span>VT cấp cha</span>
+                    </label>
+                  )
+                })()}
               </div>
               {/* Row 2: Tính chất (*) | Nhóm VTHH | Kích thước (mD, mR) — cùng một dòng */}
               <div className="misa-grid-item" style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(82px, 108px) minmax(0, 1fr) minmax(62px, 76px) minmax(0, 2fr) minmax(34px, 48px) minmax(0, 1.5fr)', columnGap: 4, rowGap: 0, alignItems: 'center', width: '100%' }}>
@@ -1378,7 +1510,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       render={({ field, fieldState }) => (
                         <input
                           {...field}
-                          onChange={(e) => field.onChange(formatSoTuNhienInput(e.target.value))}
+                          value={formatSoTien(field.value ?? '')}
+                          onChange={(e) => {
+                            const displayed = formatSoTuNhienInput(normalizeKichThuocInput(e.target.value))
+                            field.onChange(toStoredNumberString(displayed))
+                          }}
                           onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
                           onBlur={field.onBlur}
                           className="misa-input-solo"
@@ -1397,7 +1533,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       render={({ field, fieldState }) => (
                         <input
                           {...field}
-                          onChange={(e) => field.onChange(formatSoTuNhienInput(e.target.value))}
+                          value={formatSoTien(field.value ?? '')}
+                          onChange={(e) => {
+                            const displayed = formatSoTuNhienInput(normalizeKichThuocInput(e.target.value))
+                            field.onChange(toStoredNumberString(displayed))
+                          }}
                           onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
                           onBlur={field.onBlur}
                           className="misa-input-solo"
@@ -1411,6 +1551,38 @@ const kichThuocSuffix = (md: string, mr: string) => {
                 </div>
               </div>
               </div>
+              {/* Row: Thuộc vật tư - chỉ hiện khi tính chất = Vật tư và chưa tick VT cấp cha */}
+              {(watch('tinh_chat') ?? '') === 'Vật tư' && !watch('vt_chinh') && (() => {
+                const vtChinhList = (vatTuList ?? []).filter((r) => (mode !== 'edit' || r.id !== initialData?.id) && r.vt_chinh === true)
+                return (
+                  <div className="misa-form-grid" style={{ gridTemplateColumns: 'minmax(82px, 108px) minmax(0, 1fr)', alignItems: 'center', gap: 4 }}>
+                    <LabelCell label="Thuộc vật tư" />
+                    <div className="misa-grid-item" style={{ minWidth: 0 }}>
+                      {vtChinhList.length === 0 ? (
+                        <input
+                          type="text"
+                          readOnly
+                          value=""
+                          placeholder="Chưa có vật tư cấp cha"
+                          className="misa-input-solo"
+                          style={{ ...inputStyle, width: '100%', color: 'var(--text-secondary)', cursor: 'default' }}
+                        />
+                      ) : (
+                        <select
+                          {...register('hang_hoa_cap_cha')}
+                          className="misa-input-solo"
+                          style={{ ...selectStyle, width: '100%' }}
+                        >
+                          <option value="">Chọn vật tư cấp cha</option>
+                          {vtChinhList.map((r) => (
+                            <option key={r.id} value={r.ma}>{r.ma} – {r.ten}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
               {/* Row 3: Mô tả - khối flex:1 để lấp đầy chiều cao form */}
               <div className="htql-mota-section">
                 <div className="misa-label misa-grid-item htql-mota-label">Mô tả</div>
@@ -1537,9 +1709,9 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     <thead>
                       <tr>
                         <th style={{ ...thChietKhau, textAlign: 'center' }}>STT</th>
-                        <th style={{ ...thChietKhau }}>Số lượng từ</th>
-                        <th style={{ ...thChietKhau }}>Số lượng đến</th>
-                        <th style={{ ...thChietKhau }}>Đơn giá</th>
+                        <th style={{ ...thChietKhau }}>SL từ</th>
+                        <th style={{ ...thChietKhau }}>SL đến</th>
+                        <th style={{ ...thChietKhau }}>ĐG bán</th>
                         <th style={{ ...thChietKhau }}>Mô tả</th>
                         <th style={{ ...thChietKhau }} />
                       </tr>
@@ -1598,23 +1770,34 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                 control={control}
                                 name={`bang_chiet_khau.${idx}.ty_le_chiet_khau`}
                                 rules={{ validate: validateDonGiaBangGia(idx, lastDataIndexBangGia) }}
-                                render={({ field: f, fieldState }) => (
-                                  <input
-                                    {...f}
-                                    onChange={(e) => { f.onChange(formatSoTien(e.target.value)) }}
-                                    onFocus={() => { if (isZeroDisplay(String(f.value))) f.onChange('') }}
-                                    onBlur={f.onBlur}
-                                    className="misa-input-solo"
-                                    style={{
-                                      ...inputStyle,
-                                      width: '100%',
-                                      textAlign: 'right',
-                                      ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}),
-                                    }}
-                                    placeholder="0"
-                                    inputMode="text"
-                                  />
-                                )}
+                                render={({ field: f, fieldState }) => {
+                                  const soLuongTu = bangChietKhauValues[idx]?.so_luong_tu ?? ''
+                                  const useDgBan = idx === 0 || parseFloatVN(soLuongTu) === 0
+                                  const donGiaBan = watch('don_gia_ban')
+                                  const hasInput = (f.value ?? '').toString().trim() !== ''
+                                  const displayVal = hasInput ? (f.value ?? '') : (useDgBan ? donGiaBan : (f.value ?? ''))
+                                  return (
+                                    <input
+                                      {...f}
+                                      value={formatSoTienHienThi(displayVal)}
+                                      onChange={(e) => {
+                                        const v = e.target.value
+                                        f.onChange(v ? formatSoTien(v) : '')
+                                      }}
+                                      onFocus={() => { if (isZeroDisplay(String(f.value))) f.onChange('') }}
+                                      onBlur={f.onBlur}
+                                      className="misa-input-solo"
+                                      style={{
+                                        ...inputStyle,
+                                        width: '100%',
+                                        textAlign: 'right',
+                                        ...(fieldState.error ? { borderColor: 'var(--accent)' } : {}),
+                                      }}
+                                      placeholder="0"
+                                      inputMode="text"
+                                    />
+                                  )
+                                }}
                               />
                             </td>
                             <td style={{ ...tdChietKhau, color: 'var(--text-muted)', fontSize: 10 }}>
@@ -1651,7 +1834,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       if (!row) return
                       if (row.so_luong_tu?.message) msgs.push(`Dòng ${idx + 1} - Số lượng từ: ${row.so_luong_tu.message}`)
                       if (row.so_luong_den?.message) msgs.push(`Dòng ${idx + 1} - Số lượng đến: ${row.so_luong_den.message}`)
-                      if (row.ty_le_chiet_khau?.message) msgs.push(`Dòng ${idx + 1} - Đơn giá: ${row.ty_le_chiet_khau.message}`)
+                      if (row.ty_le_chiet_khau?.message) msgs.push(`Dòng ${idx + 1} - ĐG bán: ${row.ty_le_chiet_khau.message}`)
                     })
                     return msgs.length > 0 ? (
                       <div style={{ padding: '6px 8px', fontSize: 10, color: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)', borderTop: '1px solid var(--border)' }}>
@@ -1675,13 +1858,14 @@ const kichThuocSuffix = (md: string, mr: string) => {
                 <div style={{ border: '0.5px solid var(--border)', borderRadius: 4, overflowX: 'auto', background: 'var(--bg-tab)' }}>
                   <table className="htql-dvt-quydoi-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0, fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: 36 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 90 }} />
+                      <col style={{ width: 32 }} />
+                      <col style={{ width: 92 }} />
+                      <col style={{ width: 92 }} />
+                      <col style={{ width: 92 }} />
+                      <col style={{ width: 92 }} />
+                      <col style={{ width: 92 }} />
                       <col />
-                      <col style={{ width: 36 }} />
+                      <col style={{ width: 32 }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -1690,6 +1874,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                         <th style={{ ...thChietKhau, textAlign: 'left' }}>Tỉ lệ</th>
                         <th style={{ ...thChietKhau }} title="Phép nhân = nhân toán học, Phép chia = chia toán học">Phép tính</th>
                         <th style={{ ...thChietKhau, textAlign: 'left' }}>ĐG mua</th>
+                        <th style={{ ...thChietKhau, textAlign: 'left' }}>ĐG bán</th>
                         <th style={{ ...thChietKhau }}>Mô tả</th>
                         <th style={{ ...thChietKhau }} />
                       </tr>
@@ -1697,14 +1882,16 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     <tbody>
                       {donViQuyDoiFields.length === 0 ? (
                         <tr>
-                          <td colSpan={7} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
+                          <td colSpan={8} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
                         </tr>
                       ) : (
-                        donViQuyDoiFields.map((field, idx) => (
+                        donViQuyDoiFields.map((field, idx) => {
+                          const hasDvtQuyDoi = (donViQuyDoiValues[idx]?.dvt_quy_doi ?? '').trim() !== ''
+                          return (
                         <tr key={field.id}>
                           <td style={{ ...tdChietKhau, textAlign: 'center' }}>{idx + 1}</td>
                           <td style={tdChietKhau}>
-                            <select {...register(`don_vi_quy_doi.${idx}.dvt_quy_doi`)} className="htql-dvt-quydoi-select" style={{ ...selectStyle, width: '100%', maxWidth: 'none' }}>
+                            <select {...register(`don_vi_quy_doi.${idx}.dvt_quy_doi`)} className="htql-dvt-quydoi-select misa-input-solo" style={{ ...inputStyle, width: '100%', maxWidth: 'none', textAlign: 'left', cursor: 'pointer', appearance: 'none', paddingRight: 20, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }}>
                               <option value="">Chọn đơn vị</option>
                               {dvtList.map((d) => {
                                 const dvtChinh = donViQuyDoiValues[0]?.dvt_chinh ?? ''
@@ -1719,16 +1906,22 @@ const kichThuocSuffix = (md: string, mr: string) => {
                             </select>
                           </td>
                           <td style={tdChietKhau}>
+                            {hasDvtQuyDoi ? (
                             <Controller
                               control={control}
                               name={`don_vi_quy_doi.${idx}.ti_le_quy_doi`}
-                              render={({ field }) => (
+                              render={({ field }) => {
+                                let disp = formatSoTien(field.value ?? '')
+                                if (disp.endsWith(',') && !/,\d+$/.test(disp)) disp = disp.slice(0, -1)
+                                return (
                                 <input
                                   {...field}
+                                  value={disp}
                                   onChange={(e) => {
                                     userEnteredTiLeByIndex.current.add(idx)
                                     const v = e.target.value
-                                    field.onChange(v ? formatSoTien(v) : '')
+                                    const displayed = v ? formatSoTien(v) : ''
+                                    field.onChange(displayed ? toStoredNumberString(displayed) : '')
                                   }}
                                   onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
                                   onBlur={() => {
@@ -1736,7 +1929,10 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                     if (trimmed !== '') {
                                       const n = parseFloatVN(field.value)
                                       if (!Number.isNaN(n) && n < 0) {
-                                        field.onChange(formatSoTien('0'))
+                                        field.onChange('0')
+                                      } else if (trimmed.endsWith(',') && !/,\d/.test(trimmed)) {
+                                        const num = parseFloatVN(trimmed)
+                                        if (!Number.isNaN(num)) field.onChange(num.toString().replace('.', ','))
                                       }
                                     }
                                     field.onBlur()
@@ -1746,28 +1942,104 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                   placeholder=""
                                   title="Số thực lớn hơn hoặc bằng 0"
                                 />
-                              )}
+                                );
+                              }}
                             />
+                            ) : (
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }} value="" />
+                            )}
                           </td>
                           <td style={tdChietKhau}>
-                            <select {...register(`don_vi_quy_doi.${idx}.phep_tinh`)} style={{ ...selectStyle, width: '100%' }}>
-                              <option value="">Chọn phép tính</option>
+                            {hasDvtQuyDoi ? (
+                            <select {...register(`don_vi_quy_doi.${idx}.phep_tinh`)} className="misa-input-solo" style={{ ...inputStyle, width: '100%', textAlign: 'left', cursor: 'pointer', appearance: 'none', paddingRight: 20, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }}>
+                              <option value="">Chọn</option>
                               <option value="nhan">Phép nhân</option>
                               <option value="chia">Phép chia</option>
                             </select>
+                            ) : (
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }} value="" />
+                            )}
                           </td>
                           <td style={{ ...tdChietKhau, textAlign: 'left' }}>
-                            <input
-                              readOnly
-                              tabIndex={-1}
-                              className="misa-input-solo"
-                              style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }}
-                              value={watch(`don_vi_quy_doi.${idx}.mo_ta`) ?? ''}
-                              placeholder=""
+                            {hasDvtQuyDoi ? (
+                            <Controller
+                              control={control}
+                              name={`don_vi_quy_doi.${idx}.gia_mua_gan_nhat`}
+                              render={({ field }) => {
+                                const latestNum = parseFloatVN(String(watch('don_gia_mua_gan_nhat')))
+                                const fixedVal = String(watch('don_gia_mua_co_dinh') ?? '')
+                                const latestVal = String(watch('don_gia_mua_gan_nhat') ?? '')
+                                const basePrice = latestNum > 0 ? parseFloatVN(latestVal) : parseFloatVN(fixedVal)
+                                const tiLe = parseFloatVN(String(donViQuyDoiValues[idx]?.ti_le_quy_doi))
+                                const phepTinh = donViQuyDoiValues[idx]?.phep_tinh
+                                let calculated = basePrice
+                                if (phepTinh === 'nhan' && tiLe > 0) calculated = basePrice * tiLe
+                                else if (phepTinh === 'chia' && tiLe > 0) calculated = basePrice / tiLe
+                                const hasInput = (field.value ?? '').toString().trim() !== ''
+                                const displayVal = hasInput ? (field.value ?? '') : (calculated > 0 ? calculated : (fixedVal || latestVal || '0'))
+                                return (
+                                  <input
+                                    {...field}
+                                    value={formatSoTienHienThi(displayVal)}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      field.onChange(v ? toStoredNumberString(formatSoTien(v)) : '')
+                                    }}
+                                    onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
+                                    onBlur={field.onBlur}
+                                    className="misa-input-solo"
+                                    style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
+                                    placeholder="0"
+                                  />
+                                )
+                              }}
                             />
+                            ) : (
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', textAlign: 'right', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }} value="" />
+                            )}
                           </td>
                           <td style={{ ...tdChietKhau, textAlign: 'left' }}>
-                            <input {...register(`don_vi_quy_doi.${idx}.mo_ta`)} readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }} placeholder="" />
+                            {hasDvtQuyDoi ? (
+                            <Controller
+                              control={control}
+                              name={`don_vi_quy_doi.${idx}.gia_ban`}
+                              render={({ field }) => {
+                                const tiLe = parseFloatVN(String(donViQuyDoiValues[idx]?.ti_le_quy_doi))
+                                const donGiaBanTab1 = String(watch('don_gia_ban') ?? '')
+                                const baseDgBan = getBaseDgBanForDonViQuyDoi(tiLe, donGiaBanTab1)
+                                const phepTinh = donViQuyDoiValues[idx]?.phep_tinh
+                                let calculated = baseDgBan
+                                if (phepTinh === 'nhan' && tiLe > 0) calculated = baseDgBan * tiLe
+                                else if (phepTinh === 'chia' && tiLe > 0) calculated = baseDgBan / tiLe
+                                const hasInput = (field.value ?? '').toString().trim() !== ''
+                                const displayVal = hasInput ? (field.value ?? '') : (calculated > 0 ? calculated : donGiaBanTab1 || '0')
+                                return (
+                                  <input
+                                    {...field}
+                                    value={formatSoTienHienThi(displayVal)}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      field.onChange(v ? toStoredNumberString(formatSoTien(v)) : '')
+                                    }}
+                                    onFocus={() => { if (isZeroDisplay(String(field.value))) field.onChange('') }}
+                                    onBlur={field.onBlur}
+                                    className="misa-input-solo"
+                                    style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
+                                    placeholder="0"
+                                  />
+                                )
+                              }}
+                            />
+                            ) : (
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', textAlign: 'right', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }} value="" />
+                            )}
+                          </td>
+                          <td style={{ ...tdChietKhau, textAlign: 'left' }}>
+                            {hasDvtQuyDoi ? (
+                              <input {...register(`don_vi_quy_doi.${idx}.mo_ta`)} readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }} placeholder="" />
+                            ) : (
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }} value="" />
+                            )}
                           </td>
                           <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
                             <button type="button" onClick={() => {
@@ -1788,7 +2060,8 @@ const kichThuocSuffix = (md: string, mr: string) => {
                             </button>
                           </td>
                         </tr>
-                      ))
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -2148,7 +2421,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
             )}
           </div>
 
-          {submitError && <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 12 }}>{submitError}</p>}
+          {submitError && (
+            <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 12 }}>
+              {submitError}
+            </p>
+          )}
         </div>
 
         <div style={footerStyle}>

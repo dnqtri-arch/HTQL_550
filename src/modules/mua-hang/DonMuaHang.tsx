@@ -8,10 +8,12 @@ import {
   KY_OPTIONS,
   donMuaHangGetAll,
   donMuaHangGetChiTiet,
+  donMuaHangDelete,
   getDefaultDonMuaHangFilter,
   getDateRangeForKy,
   type KyValue,
 } from './donMuaHangApi'
+import { Modal } from '../../components/Modal'
 import { DonMuaHangForm } from './DonMuaHangForm'
 import { formatNumberDisplay, formatSoThapPhan } from '../../utils/numberFormat'
 
@@ -132,6 +134,8 @@ export function DonMuaHang() {
   const [dropdownEmail, setDropdownEmail] = useState(false)
   const [dropdownXuatKhau, setDropdownXuatKhau] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [viewDon, setViewDon] = useState<DonMuaHangRecord | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DonMuaHangRecord | null>(null)
   const refEmail = useRef<HTMLDivElement>(null)
   const refXuatKhau = useRef<HTMLDivElement>(null)
   const modalBoxRef = useRef<HTMLDivElement>(null)
@@ -143,8 +147,8 @@ export function DonMuaHang() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    setDanhSach(donMuaHangGetAll(filter))
+  }, [filter])
 
   useEffect(() => {
     if (selectedId) setChiTiet(donMuaHangGetChiTiet(selectedId))
@@ -223,7 +227,7 @@ export function DonMuaHang() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={toolbarWrap}>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={() => setShowForm(true)}>
+        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={() => { setViewDon(null); setShowForm(true); }}>
           <Plus size={14} />
           <span>Thêm</span>
         </button>
@@ -231,7 +235,17 @@ export function DonMuaHang() {
           <Eye size={14} />
           <span>Xem</span>
         </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={() => {}}>
+        <button
+          type="button"
+          className="htql-toolbar-btn"
+          style={toolbarBtn}
+          disabled={!selectedId}
+          title={selectedId ? 'Xóa đơn đang chọn' : 'Chọn đơn cần xóa'}
+          onClick={() => {
+            const d = selectedId ? danhSach.find((r) => r.id === selectedId) : null
+            if (d) setDeleteTarget(d)
+          }}
+        >
           <Trash2 size={14} />
           <span>Xóa</span>
         </button>
@@ -349,6 +363,10 @@ export function DonMuaHang() {
           keyField="id"
           selectedRowId={selectedId}
           onRowSelect={(r) => setSelectedId(r.id)}
+          onRowDoubleClick={(r) => {
+            setViewDon(r)
+            setShowForm(true)
+          }}
           summary={[
             { label: 'Giá trị đơn hàng', value: formatNumberDisplay(tongGiaTri, 0) },
             { label: 'Số dòng', value: `= ${danhSach.length}` },
@@ -376,6 +394,44 @@ export function DonMuaHang() {
         </div>
       </div>
 
+      <Modal
+        open={deleteTarget != null}
+        onClose={() => setDeleteTarget(null)}
+        title="Xác nhận xóa"
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              style={{ ...toolbarBtn, marginRight: 8 }}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              style={{ ...toolbarBtn, background: 'var(--accent)', color: 'var(--accent-text)', borderColor: 'var(--accent)' }}
+              onClick={() => {
+                if (deleteTarget) {
+                  donMuaHangDelete(deleteTarget.id)
+                  loadData()
+                  setSelectedId(null)
+                  setDeleteTarget(null)
+                }
+              }}
+            >
+              Đồng ý
+            </button>
+          </>
+        }
+      >
+        {deleteTarget ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>
+            Bạn có chắc chắn muốn xóa đơn <strong>{deleteTarget.so_don_hang}</strong> – {deleteTarget.nha_cung_cap}?
+          </p>
+        ) : null}
+      </Modal>
+
       {showForm && (
         <div style={modalOverlay}>
           <div
@@ -387,10 +443,13 @@ export function DonMuaHang() {
             onClick={(e) => e.stopPropagation()}
           >
             <DonMuaHangForm
-              onClose={dongModal}
-              onSaved={() => { dongModal(); loadData(); }}
+              onClose={() => { setViewDon(null); dongModal() }}
+              onSaved={() => { setViewDon(null); dongModal(); loadData(); }}
               onHeaderPointerDown={handleHeaderPointerDown}
               dragging={dragStart != null}
+              readOnly={viewDon != null}
+              initialDon={viewDon ?? undefined}
+              initialChiTiet={viewDon ? donMuaHangGetChiTiet(viewDon.id) : undefined}
             />
           </div>
         </div>
