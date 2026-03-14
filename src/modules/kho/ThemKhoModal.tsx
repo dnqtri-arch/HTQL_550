@@ -128,6 +128,7 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
   const [tkKho, setTkKho] = useState(isEditMode ? (initialData.tk_kho ?? '') : '')
   const [diaChi, setDiaChi] = useState(isEditMode ? (initialData.dia_chi ?? '') : '')
   const [loi, setLoi] = useState('')
+  const refTen = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (initialData) {
@@ -194,6 +195,7 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
     const tenTrim = ten.trim()
     if (!tenTrim) {
       setLoi('Tên kho là bắt buộc.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     setLoi('')
@@ -206,6 +208,7 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
     const tenTrim = ten.trim()
     if (!tenTrim) {
       setLoi('Tên kho là bắt buộc.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     setLoi('')
@@ -224,8 +227,11 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
       onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
     >
       <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
-          <span>{isEditMode ? 'Sửa kho' : 'Thêm Kho'}</span>
+        <div style={{ ...headerStyle, gap: 12, flexWrap: 'nowrap' }}>
+          <span style={{ flexShrink: 0 }}>{isEditMode ? 'Sửa kho' : 'Thêm Kho'}</span>
+          <div style={{ flex: 1, minWidth: 0, height: 28, minHeight: 28, display: 'flex', alignItems: 'center', padding: '0 10px', background: loi ? 'rgba(255, 87, 34, 0.12)' : 'transparent', border: loi ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', boxSizing: 'border-box' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loi || '\u00A0'}</span>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -281,6 +287,7 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
           <div>
             <label style={labelStyle}>Tên (*)</label>
             <input
+              ref={refTen}
               type="text"
               value={ten}
               onChange={(e) => setTen(e.target.value)}
@@ -343,7 +350,6 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
               )}
             </div>
           </div>
-          {loi && <div style={{ fontSize: 11, color: 'var(--accent)' }}>{loi}</div>}
         </div>
 
         <div style={footerStyle}>

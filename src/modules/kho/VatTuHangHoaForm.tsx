@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { X, ChevronDown, Info, Plus, Trash2, CheckCircle, XCircle, FileCheck, AlertTriangle } from 'lucide-react'
 import type { VatTuHangHoaRecord } from './vatTuHangHoaApi'
-import { formatSoTien, parseNumber, parseFloatVN, formatSoNguyenInput, formatSoTuNhienInput, isZeroDisplay } from '../../utils/numberFormat'
+import { formatSoTien, parseNumber, parseFloatVN, parseDecimalFlex, formatSoNguyenInput, formatSoTuNhienInput, isZeroDisplay } from '../../utils/numberFormat'
 import { matchSearchKeyword } from '../../utils/stringUtils'
 import { NhomVTHHLookupModal } from './NhomVTHHLookupModal'
 import { ThemDonViTinhModal } from './ThemDonViTinhModal'
@@ -91,7 +91,11 @@ function isAllowedImageFile(file: File): boolean {
   )
 }
 
-/** Tự động sinh mô tả quy đổi: 1 ĐVQĐ = 1 nhân/chia tỉ lệ ĐVT chính. VD: 1 Ram = 500 tờ. Khi chưa chọn phép tính (phepTinh rỗng) trả về ''. */
+/** Tự động sinh mô tả quy đổi:
+ * - Phép nhân: 1 [ĐV quy đổi] = [tỉ lệ] [ĐVT chính]. VD: 1 Ram = 500 Tờ.
+ * - Phép chia: 1 [ĐVT chính] = [tỉ lệ] [ĐV quy đổi]. VD: 1 Kg = 10 Hộp.
+ * Khi chưa chọn phép tính (phepTinh rỗng) trả về ''.
+ */
 function generateMoTaQuyDoi(opts: {
   dvtChinh: string
   dvtQuyDoi: string
@@ -113,7 +117,7 @@ function generateMoTaQuyDoi(opts: {
   if (phepTinh === 'nhan') {
     return `1 ${dvtQuyDoiDisplay} = ${tiLe} ${dvtChinhDisplay}`
   }
-  return `1 ${dvtQuyDoiDisplay} = 1/${tiLe} ${dvtChinhDisplay}`
+  return `1 ${dvtChinhDisplay} = ${tiLe} ${dvtQuyDoiDisplay}`
 }
 
 /** Chuyển chuỗi tiếng Việt thành không dấu, viết liền (không khoảng trắng) để dùng làm tên file. */
@@ -912,14 +916,14 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     return () => clearTimeout(t)
   }, [donViQuyDoiInputSignature, donViQuyDoiValues, dvtList, setValue])
 
-  /* TL (tỉ lệ quy đổi) dòng đầu: nếu nhập đủ 2 ô kích thước (mD, mC) và cả hai > 0 thì TL = mD × mC; khi không có kích thước thì không ghi đè (tránh xóa tỉ lệ khi bấm Thêm dòng). Khi auto-fill từ kích thước thì coi như đã nhập. */
+  /* TL (tỉ lệ quy đổi) dòng đầu: nếu nhập đủ 2 ô kích thước (mR, mC) và cả hai > 0 thì TL = mR × mC; dùng parseDecimalFlex để "0,91" và "0.91" đều ra 0.91 (tránh 0.91 bị parse thành 91). */
   const kichThuocMd = watch('kich_thuoc_md')
   const kichThuocMr = watch('kich_thuoc_mr')
   useEffect(() => {
     const md = (kichThuocMd ?? '').trim()
     const mr = (kichThuocMr ?? '').trim()
-    const mdNum = parseFloat(parseNumber(md)) || 0
-    const mrNum = parseFloat(parseNumber(mr)) || 0
+    const mdNum = parseDecimalFlex(md)
+    const mrNum = parseDecimalFlex(mr)
     if (donViQuyDoiValues.length === 0) return
     if (mdNum > 0 && mrNum > 0) {
       const product = mdNum * mrNum
@@ -1321,8 +1325,8 @@ const kichThuocSuffix = (md: string, mr: string) => {
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
-                    <span className="htql-tinh-chat-chevron" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-                      <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                    <span className="htql-tinh-chat-chevron" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
+                      <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
                     </span>
                   </div>
                   <button
@@ -1357,8 +1361,8 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       style={{ ...inputStyle, paddingRight: 26, cursor: 'pointer', ...(errors.nhom_vthh ? { borderColor: REQUIRED_FIELD_ERROR_BORDER, borderWidth: 2 } : {}) }}
                       placeholder="Chọn nhóm..."
                     />
-                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-                      <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
+                      <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
                     </span>
                   </div>
                 </div>
@@ -1428,8 +1432,8 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     })}
                     {dvtList.length === 0 && <option value="Cái">Cái</option>}
                   </select>
-                  <span className="htql-dvt-chinh-chevron" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-                    <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+                  <span className="htql-dvt-chinh-chevron" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
+                    <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
                   </span>
                 </div>
                 <button type="button" className="misa-lookup-btn htql-dvt-plus-btn" style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }} title="Thêm đơn vị tính" onClick={() => setShowThemDvtModal(true)}>+</button>
@@ -1635,7 +1639,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={handleThemDongBangGia} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    <button type="button" onClick={handleThemDongBangGia} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -1675,6 +1679,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       <col style={{ width: 90 }} />
                       <col style={{ width: 90 }} />
                       <col style={{ width: 90 }} />
+                      <col style={{ width: 90 }} />
                       <col />
                       <col style={{ width: 36 }} />
                     </colgroup>
@@ -1684,6 +1689,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                         <th style={{ ...thChietKhau }}>ĐV quy đổi</th>
                         <th style={{ ...thChietKhau, textAlign: 'left' }}>Tỉ lệ</th>
                         <th style={{ ...thChietKhau }} title="Phép nhân = nhân toán học, Phép chia = chia toán học">Phép tính</th>
+                        <th style={{ ...thChietKhau, textAlign: 'left' }}>ĐG mua</th>
                         <th style={{ ...thChietKhau }}>Mô tả</th>
                         <th style={{ ...thChietKhau }} />
                       </tr>
@@ -1691,7 +1697,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     <tbody>
                       {donViQuyDoiFields.length === 0 ? (
                         <tr>
-                          <td colSpan={6} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
+                          <td colSpan={7} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.</td>
                         </tr>
                       ) : (
                         donViQuyDoiFields.map((field, idx) => (
@@ -1751,6 +1757,16 @@ const kichThuocSuffix = (md: string, mr: string) => {
                             </select>
                           </td>
                           <td style={{ ...tdChietKhau, textAlign: 'left' }}>
+                            <input
+                              readOnly
+                              tabIndex={-1}
+                              className="misa-input-solo"
+                              style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }}
+                              value={watch(`don_vi_quy_doi.${idx}.mo_ta`) ?? ''}
+                              placeholder=""
+                            />
+                          </td>
+                          <td style={{ ...tdChietKhau, textAlign: 'left' }}>
                             <input {...register(`don_vi_quy_doi.${idx}.mo_ta`)} readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default' }} placeholder="" />
                           </td>
                           <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
@@ -1777,7 +1793,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={() => appendDonViQuyDoi({ dvt_chinh: donViQuyDoiValues[0]?.dvt_chinh ?? getValues('dvt_chinh') ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '', phep_tinh: '', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => appendDonViQuyDoi({ dvt_chinh: donViQuyDoiValues[0]?.dvt_chinh ?? getValues('dvt_chinh') ?? dvtList[0]?.ma_dvt ?? 'Cái', dvt_quy_doi: '', ti_le_quy_doi: '', phep_tinh: '', mo_ta: '', gia_mua_gan_nhat: '', gia_ban: '', gia_ban_1: '', gia_ban_2: '', gia_ban_3: '' })} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -1837,7 +1853,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                                     dvt: cleared ? '' : (item ? item.dvt_chinh : r[idx].dvt),
                                   }
                                   setDinhMucNvlRows(r)
-                                }} onFocus={(e) => { const td = (e.target as HTMLElement).closest('td'); if (td) { const rect = (td as HTMLElement).getBoundingClientRect(); setNvlDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width }); setNvlDropdownRowIdx(idx); } }} placeholder="Mã NVL" />
+                                }} onFocus={(e) => { const td = (e.target as HTMLElement).closest('td'); if (td) { const rect = (td as HTMLElement).getBoundingClientRect(); setNvlDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width }); setNvlDropdownRowIdx(idx); } }} onClick={(e) => { if (nvlDropdownRowIdx !== idx) { const td = (e.target as HTMLElement).closest('td'); if (td) { const rect = (td as HTMLElement).getBoundingClientRect(); setNvlDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width }); setNvlDropdownRowIdx(idx); } } }} placeholder="Mã NVL" />
                                 <span role="button" tabIndex={0} onMouseDown={(e) => { e.preventDefault(); const td = (e.target as HTMLElement).closest('td'); if (!td) return; const rect = (td as HTMLElement).getBoundingClientRect(); setNvlDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width }); setNvlDropdownRowIdx(idx); }} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
                                   <ChevronDown size={12} />
                                 </span>
@@ -1935,7 +1951,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     </tbody>
                   </table>
                   <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                    <button type="button" onClick={() => setDinhMucNvlRows([...dinhMucNvlRows, { ma: '', ten: '', dvt: '', so_luong: '', hao_hut: '' }])} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: '#0d0d0d', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => setDinhMucNvlRows([...dinhMucNvlRows, { ma: '', ten: '', dvt: '', so_luong: '', hao_hut: '' }])} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', fontSize: 10, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
                       <Plus size={12} /> Thêm dòng
                     </button>
                   </div>
@@ -2091,7 +2107,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setValue('duong_dan_hinh_anh', ''); setValue('ten_file_hinh_anh', ''); }}
-                            style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#0d0d0d', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
+                            style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 4, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
                             title="Xóa ảnh"
                           >
                             <X size={12} />
@@ -2389,7 +2405,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     e.stopPropagation()
                     handleDongYCongThuc()
                   }}
-                  style={{ ...btnFooter, display: 'flex', alignItems: 'center', gap: 4, background: 'var(--accent)', color: '#0d0d0d', cursor: 'pointer' }}
+                  style={{ ...btnFooter, display: 'flex', alignItems: 'center', gap: 4, background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer' }}
                 >
                   <CheckCircle size={14} />
                   Đồng ý
@@ -2439,7 +2455,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
             <div style={{ padding: 20, display: 'flex', alignItems: 'flex-start', gap: 16 }}>
               {formulaAlert.valid ? (
                 <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <CheckCircle size={26} color="#0d0d0d" strokeWidth={2.5} />
+                  <CheckCircle size={26} color="var(--accent-text)" strokeWidth={2.5} />
                 </div>
               ) : (
                 <div style={{ width: 44, height: 44, flexShrink: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2460,7 +2476,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                   padding: '6px 20px',
                   fontSize: 12,
                   background: 'var(--accent)',
-                  color: '#0d0d0d',
+                  color: 'var(--accent-text)',
                   border: 'none',
                   borderRadius: 4,
                   cursor: 'pointer',

@@ -1,6 +1,6 @@
 # HTQL_550 - Hệ thống đa phân hệ (Kiểu MISA)
 
-Giao diện đa phân hệ với Sidebar nhóm menu, Multi-tab, màu Đen/Vàng/Cam.
+Giao diện đa phân hệ với Sidebar nhóm menu, Multi-tab. Theme trắng, màu chủ đạo cam — tương phản rõ, hiện đại, tối ưu giao diện.
 
 ## Yêu cầu
 
@@ -42,13 +42,13 @@ Mở http://localhost:5173
 
 Mỗi phân hệ mở trong một Tab; chuyển tab không mất dữ liệu đang nhập.
 
-## Màu sắc
+## Màu sắc (Theme trắng — cam chủ đạo)
 
-- Nền: Đen (`#0d0d0d`, `#1a1a1a`)
-- Chữ/icon: Vàng (`#f5d042`, `#e6c235`)
-- Highlight: Cam (`#e67e22`)
-
-Icon: Lucide-react (màu Vàng/Cam).
+- **Nền:** Trắng (`--bg-primary`), xám nhạt cho panel/sidebar (`--bg-secondary`, `--bg-tab`)
+- **Chữ:** Tối rõ trên nền trắng (`--text-primary`, `--text-secondary`) — tương phản cao
+- **Accent:** Cam (`--accent`, `--accent-hover`) — nút, link, tab active; chữ trên nút dùng trắng
+- **Form:** Viền rõ (`--input-border`), focus viền cam (`--input-border-focus`)
+- **Font:** Be Vietnam Pro
 
 ## Khởi tạo PostgreSQL
 

@@ -64,6 +64,20 @@ export function parseFloatVN(s: string): number {
 }
 
 /**
+ * Parse số từ chuỗi có thể dùng dấu chấm hoặc phẩy làm thập phân.
+ * VD: "0,91" → 0.91, "0.91" → 0.91 (tránh parseNumber coi . là hàng nghìn thành 91).
+ * Dùng cho ô nhập kích thước (mR, mC) khi tính tỉ lệ mR × mC.
+ */
+export function parseDecimalFlex(s: string): number {
+  const cleaned = (s || '').trim().replace(/[^\d.,]/g, '')
+  if (!cleaned) return 0
+  const idx = findDecimalSeparatorIndex(cleaned)
+  if (idx < 0) return parseFloat(parseNumber(cleaned)) || 0
+  if (cleaned[idx] === ',') return parseFloat(parseNumber(cleaned)) || 0
+  return parseFloat(cleaned.replace(/,/g, '')) || 0
+}
+
+/**
  * Kiểm tra chuỗi đang hiển thị là số 0 (0, 0,00, 0,0, 000...).
  * Dùng cho nguyên tắc: khi chọn ô nhập số đang hiển thị 0 thì xóa 0 để nhập bình thường.
  */

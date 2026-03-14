@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, Trash2, RefreshCw, Download } from 'lucide-react'
 import { DataGrid } from '../../components/DataGrid'
 import { Modal } from '../../components/Modal'
@@ -54,6 +54,7 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
   const [form, setForm] = useState({ ma_dvt: '', ten_dvt: '', ky_hieu: '', dien_giai: '' })
   const [loi, setLoi] = useState('')
   const [dangTai, setDangTai] = useState(true)
+  const refTenDvt = useRef<HTMLInputElement | null>(null)
   const [timKiem, setTimKiem] = useState('')
 
   const napLai = async () => {
@@ -117,6 +118,7 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
     const ten = form.ten_dvt.trim()
     if (!ten) {
       setLoi('Tên đơn vị tính là bắt buộc.')
+      setTimeout(() => refTenDvt.current?.focus(), 0)
       return null
     }
     setLoi('')
@@ -247,7 +249,14 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
       <Modal
         open={!!modalOpen}
         onClose={dongModal}
-        title={modalOpen === 'add' ? 'Thêm đơn vị tính' : 'Sửa đơn vị tính'}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 32 }}>
+            <span style={{ flexShrink: 0 }}>{modalOpen === 'add' ? 'Thêm đơn vị tính' : 'Sửa đơn vị tính'}</span>
+            <div style={{ flex: 1, minWidth: 0, height: 28, minHeight: 28, display: 'flex', alignItems: 'center', padding: '0 10px', background: loi ? 'rgba(255, 87, 34, 0.12)' : 'transparent', border: loi ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', boxSizing: 'border-box' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loi || '\u00A0'}</span>
+            </div>
+          </div>
+        }
         size="sm"
         footer={
           <>
@@ -272,6 +281,7 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
           <div style={fieldWrap}>
             <label style={labelStyle}>Tên đơn vị tính *</label>
             <input
+              ref={refTenDvt}
               style={inputStyle}
               value={form.ten_dvt}
               onChange={(e) => setForm((f) => ({ ...f, ten_dvt: e.target.value }))}
@@ -296,7 +306,6 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
               placeholder="Ghi chú thêm"
             />
           </div>
-          {loi && <p style={{ fontSize: '11px', color: 'var(--accent)' }}>{loi}</p>}
         </div>
       </Modal>
     </div>

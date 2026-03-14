@@ -1,6 +1,4 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { useDebouncedValue } from '../utils/useDebouncedValue'
 
 export interface DataGridColumn<T> {
   key: keyof T | string
@@ -58,17 +56,6 @@ const thStyles: React.CSSProperties = {
   whiteSpace: 'nowrap',
 }
 
-const filterInputStyles: React.CSSProperties = {
-  width: '100%',
-  marginTop: '2px',
-  padding: '2px 4px',
-  fontSize: '10px',
-  background: 'var(--bg-primary)',
-  border: '1px solid var(--border)',
-  borderRadius: '2px',
-  color: 'var(--text-primary)',
-}
-
 const tdStyles: React.CSSProperties = {
   padding: '3px 6px',
   borderBottom: '0.5px solid var(--border)',
@@ -100,24 +87,13 @@ export function DataGrid<T extends object>({
   onRowSelect,
   onRowDoubleClick,
   compact = false,
-  filterDebounceMs = 200,
+  filterDebounceMs: _filterDebounceMs = 200,
 }: DataGridProps<T>) {
-  const [filterInputs, setFilterInputs] = useState<Record<string, string>>({})
-  const debouncedFilters = useDebouncedValue(filterInputs, filterDebounceMs)
-
   const tableStyle = compact ? { ...tableStyles, fontSize: '11px' } : tableStyles
   const thStyle = compact ? { ...thStyles, padding: '2px 4px' } : thStyles
   const tdStyle = compact ? { ...tdStyles, padding: '2px 4px' } : tdStyles
 
-  const filteredData = data.filter((row) => {
-    return columns.every((col) => {
-      const filterVal = debouncedFilters[String(col.key)]
-      if (!filterVal) return true
-      const cell = row[col.key as keyof T]
-      const str = cell != null ? String(cell) : ''
-      return str.toLowerCase().includes(filterVal.toLowerCase())
-    })
-  })
+  const filteredData = data
 
   return (
     <div style={{ ...tableWrap, maxHeight: maxHeight + 2, display: 'flex', flexDirection: 'column' }}>
@@ -136,17 +112,6 @@ export function DataGrid<T extends object>({
                   }}
                 >
                   {col.label}
-                  {col.filterable !== false && (
-                    <input
-                      type="text"
-                      placeholder="Lọc..."
-                      style={filterInputStyles}
-                      value={filterInputs[String(col.key)] ?? ''}
-                      onChange={(e) =>
-                        setFilterInputs((prev) => ({ ...prev, [String(col.key)]: e.target.value }))
-                      }
-                    />
-                  )}
                 </th>
               ))}
             </tr>

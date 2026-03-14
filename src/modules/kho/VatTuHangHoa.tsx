@@ -46,7 +46,7 @@ const panelChiTiet: React.CSSProperties = {
   marginTop: '8px',
   border: '1px solid var(--border-strong)',
   borderRadius: '4px',
-  background: '#1a1a1a',
+  background: 'var(--bg-secondary)',
   overflow: 'hidden',
 }
 
@@ -320,7 +320,7 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
   }))
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#1a1a1a' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: 'var(--bg-secondary)' }}>
       <ListPageToolbar
         onQuayLai={onQuayLai}
         buttons={[
@@ -381,7 +381,7 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
                   fontSize: 11,
                   fontWeight: activeDetailTab === t.id ? 'bold' : 'normal',
                   background: activeDetailTab === t.id ? 'var(--accent)' : 'transparent',
-                  color: activeDetailTab === t.id ? '#0d0d0d' : 'var(--text-muted)',
+                  color: activeDetailTab === t.id ? 'var(--accent-text)' : 'var(--text-muted)',
                   border: '1px solid ' + (activeDetailTab === t.id ? 'var(--accent)' : 'var(--border)'),
                   borderRadius: 4,
                   cursor: 'pointer',

@@ -65,7 +65,7 @@ export function ModulePage({ title, subNav, children, defaultSubId }: ModulePage
               style={{
                 ...subNavButtonStyles,
                 background: activeSub === item.id ? 'var(--accent)' : 'var(--bg-secondary)',
-                color: activeSub === item.id ? '#0d0d0d' : 'var(--text-primary)',
+                color: activeSub === item.id ? 'var(--accent-text)' : 'var(--text-primary)',
                 borderColor: activeSub === item.id ? 'var(--accent)' : 'var(--border)',
               }}
               onClick={() => setActiveSub(item.id)}

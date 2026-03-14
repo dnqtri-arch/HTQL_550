@@ -151,7 +151,7 @@ const btnStyle: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   ...btnStyle,
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
   borderColor: 'var(--connector)',
 }
 

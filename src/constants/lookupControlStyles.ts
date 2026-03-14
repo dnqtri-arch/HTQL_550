@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 
 /**
  * Kiểu hiển thị chuẩn hệ thống cho ô có dropdown + nút thêm (giống ĐVT chính trong form Thêm hàng hóa).
- * Dùng cho: Điều khoản TT, NV mua hàng, và các ô lookup tương tự.
+ * Dùng cho: DKTT, NV mua hàng, và các ô lookup tương tự.
  * Import và dùng các hằng số / style này để đồng bộ toàn hệ thống.
  */
 
@@ -35,12 +35,12 @@ export const lookupChevronOverlayStyle: CSSProperties = {
   justifyContent: 'center',
   pointerEvents: 'none',
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
 }
 
 /**
  * Style cho nút sổ xuống (dropdown) hoặc nút + cạnh ô lookup — vuông 24x24, nền accent.
- * Dùng cho: nút ChevronDown riêng, nút Plus (Thêm) trong ĐVT chính, Điều khoản TT, NV mua hàng.
+ * Dùng cho: nút ChevronDown riêng, nút Plus (Thêm) trong ĐVT chính, DKTT, NV mua hàng.
  */
 export const lookupActionButtonStyle: CSSProperties = {
   width: LOOKUP_CONTROL_HEIGHT,
@@ -53,7 +53,7 @@ export const lookupActionButtonStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
   border: '1px solid var(--connector, var(--border))',
   borderRadius: '4px',
   cursor: 'pointer',

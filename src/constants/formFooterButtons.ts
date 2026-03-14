@@ -26,7 +26,7 @@ export const formFooterButtonCancel: CSSProperties = {
 export const formFooterButtonSave: CSSProperties = {
   ...formFooterButtonBase,
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
 }
 
 /** Nút Cất & Thêm / Lưu và tiếp tục / Đồng ý và thêm — cùng kiểu Hủy bỏ (nền tab) */

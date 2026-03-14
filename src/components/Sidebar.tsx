@@ -19,12 +19,12 @@ const groupStyles: React.CSSProperties = {
 }
 
 const GROUP_ACCENTS: Record<string, { solid: string; bg: string }> = {
-  group1: { solid: '#f5d042', bg: 'rgba(245, 208, 66, 0.10)' }, // Công việc
-  group2: { solid: '#e67e22', bg: 'rgba(230, 126, 34, 0.10)' }, // CRM
-  group3: { solid: '#c9a227', bg: 'rgba(201, 162, 39, 0.10)' }, // Tài chính
-  group4: { solid: '#f39c12', bg: 'rgba(243, 156, 18, 0.10)' }, // Kho & hàng hóa
-  group5: { solid: '#b8952e', bg: 'rgba(184, 149, 46, 0.10)' }, // HRM
-  group6: { solid: '#d35400', bg: 'rgba(211, 84, 0, 0.10)' }, // Hóa đơn
+  group1: { solid: '#E67E22', bg: 'rgba(230, 126, 34, 0.12)' },
+  group2: { solid: '#D9731A', bg: 'rgba(217, 115, 26, 0.12)' },
+  group3: { solid: '#C45C2C', bg: 'rgba(196, 92, 44, 0.12)' },
+  group4: { solid: '#E67E22', bg: 'rgba(230, 126, 34, 0.12)' },
+  group5: { solid: '#B85A24', bg: 'rgba(184, 90, 36, 0.12)' },
+  group6: { solid: '#D35400', bg: 'rgba(211, 84, 0, 0.12)' },
 }
 
 const groupLabelBtn: React.CSSProperties = {
@@ -93,7 +93,7 @@ export function Sidebar({ activeModuleId, onSelectModule }: SidebarProps) {
         {MODULE_GROUPS.map((group) => {
           const isExpanded = expandedGroups[group.id] !== false
           const accent = GROUP_ACCENTS[group.id]?.solid ?? 'var(--accent)'
-          const bg = GROUP_ACCENTS[group.id]?.bg ?? 'rgba(230, 126, 34, 0.10)'
+          const bg = GROUP_ACCENTS[group.id]?.bg ?? 'rgba(230, 126, 34, 0.12)'
           return (
             <div key={group.id} style={groupStyles}>
               <button
@@ -126,11 +126,11 @@ export function Sidebar({ activeModuleId, onSelectModule }: SidebarProps) {
                       style={{
                         ...itemStyles,
                         background: isActive ? 'var(--accent)' : 'transparent',
-                        color: isActive ? '#0d0d0d' : 'var(--text-primary)',
+                        color: isActive ? 'var(--accent-text)' : 'var(--text-primary)',
                       }}
                       onClick={() => onSelectModule(item.id)}
                     >
-                      <Icon size={18} style={{ flexShrink: 0, color: isActive ? '#0d0d0d' : 'var(--text-secondary)' }} />
+                      <Icon size={18} style={{ flexShrink: 0, color: isActive ? 'var(--accent-text)' : 'var(--text-secondary)' }} />
                       {item.label}
                     </button>
                   )

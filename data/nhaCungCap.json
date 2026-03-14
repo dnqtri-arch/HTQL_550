@@ -1,18 +1,5 @@
 [
   {
-    "ma_ncc": "NCC00001",
-    "ten_ncc": "CÔNG TY TNHH QUẢNG CÁO VÀ XÂY DỰNG NAM BẮC",
-    "loai_ncc": "to_chuc",
-    "khach_hang": false,
-    "dia_chi": "668/10 Khu vực Bình Trung, Phường Long Tuyên, TP Cần Thơ, Việt Nam",
-    "nhom_kh_ncc": "Khách hàng dự án",
-    "ma_so_thue": "1801659861",
-    "dien_thoai": "0939067007",
-    "so_no_toi_da": 0,
-    "ngung_theo_doi": false,
-    "id": 1
-  },
-  {
     "ma_ncc": "NCC00002",
     "ten_ncc": "CÔNG TY TNHH THƯƠNG MẠI VÀ DỊCH VỤ YẾN PHÁT NHA TRANG",
     "loai_ncc": "to_chuc",
@@ -23,7 +10,9 @@
     "dien_thoai": "0905256010",
     "email": "info@taynam.vn",
     "website": "taynam.vn",
-    "so_no_toi_da": 0,
+    "dieu_khoan_tt": "Trả sau 30 ngày",
+    "so_ngay_duoc_no": 30,
+    "so_no_toi_da": 5000000,
     "tk_ngan_hang": "0111000216976",
     "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
     "ngung_theo_doi": false,
@@ -32,7 +21,9 @@
         "so_tai_khoan": "0111000216976",
         "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
         "chi_nhanh": "",
-        "tinh_tp_ngan_hang": ""
+        "tinh_tp_ngan_hang": "",
+        "loai_tk": "cong_ty",
+        "ten_nguoi_nhan": ""
       }
     ],
     "quoc_gia": "Việt Nam",
@@ -47,5 +38,56 @@
       "78, Nguyễn Hiền, Khu dân cư 91B, Phường Tân An, Cần Thơ"
     ],
     "id": 2
+  },
+  {
+    "ma_ncc": "NCC00003",
+    "ten_ncc": "CÔNG TY TNHH QUẢNG CÁO VÀ XÂY DỰNG NAM BẮC",
+    "loai_ncc": "to_chuc",
+    "khach_hang": false,
+    "dia_chi": "669/10 Khu vực Bình Trung, Phường Long Tuyền, Thành phố Cần Thơ",
+    "nhom_kh_ncc": "Nhóm NCC đối tác",
+    "ma_so_thue": "1801659861",
+    "dieu_khoan_tt": "Trả sau 30 ngày",
+    "so_ngay_duoc_no": 30,
+    "so_no_toi_da": 500000,
+    "ngung_theo_doi": false,
+    "quoc_gia": "Việt Nam",
+    "tinh_tp": "Thành phố Cần Thơ",
+    "xa_phuong": "Phường Long Tuyền",
+    "dia_chi_lien_he": "669/10 Khu vực Bình Trung, Phường Long Tuyền, Thành phố Cần Thơ",
+    "id": 3
+  },
+  {
+    "ma_ncc": "NCC00004",
+    "ten_ncc": "ĐẶNG NGUYỄN QUANG TRÍ",
+    "loai_ncc": "ca_nhan",
+    "khach_hang": false,
+    "dia_chi": "78, Nguyễn Hiền, Khu dân cư 91B, Phường Tân An, Cần Thơ",
+    "nhom_kh_ncc": "Nhóm VIP; Nhóm NCC đối tác",
+    "email": "dnqtri@gmail.com",
+    "dieu_khoan_tt": "Thanh toán ngay",
+    "so_ngay_duoc_no": 0,
+    "so_no_toi_da": 0,
+    "tk_ngan_hang": "0111000206976",
+    "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+    "ngung_theo_doi": false,
+    "tai_khoan_ngan_hang": [
+      {
+        "so_tai_khoan": "0111000206976",
+        "ten_ngan_hang": "Ngân hàng TMCP Ngoại Thương Việt Nam",
+        "chi_nhanh": "",
+        "tinh_tp_ngan_hang": "",
+        "loai_tk": "cong_ty",
+        "ten_nguoi_nhan": ""
+      }
+    ],
+    "quoc_gia": "Việt Nam",
+    "xung_ho": "Ông",
+    "dt_di_dong": "0399399692",
+    "so_cccd": "086092009929",
+    "ngay_cap": "2022-12-21",
+    "noi_cap": "Cần Thơ",
+    "gioi_tinh": "Nam",
+    "id": 4
   }
 ]

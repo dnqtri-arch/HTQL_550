@@ -66,8 +66,49 @@ Import từ `lookupControlStyles.ts`, áp dụng cho ô Điều khoản TT, NV m
 
 ---
 
-## 3. Khi tạo form/modal mới
+## 3. Ô Điều khoản TT (trong form Nhà cung cấp)
+
+### Nguyên tắc khi bấm chọn
+
+- **Bấm vào ô Điều khoản TT:** Dropdown mở và hiển thị **toàn bộ** danh sách điều khoản (không lọc theo giá trị đang chọn), để người dùng có thể đổi sang mục khác bất kỳ lúc nào.
+- **Khi chọn một dòng trong dropdown:**
+  1. Gán **Tên** điều khoản vào ô Điều khoản TT.
+  2. Tự điền **Số ngày được nợ** theo điều khoản đã chọn (format số nguyên dương ≥ 0).
+  3. Tự điền **Số nợ tối đa** theo điều khoản đã chọn (format số tiền).
+  4. Đóng dropdown.
+- **Khi bấm ra ngoài (không chọn):** Dropdown tự đóng (xử lý click-outside).
+- **Nút +:** Mở modal Thêm Điều khoản thanh toán; sau khi Lưu / Lưu và tiếp tục, form nhận luôn Tên + Số ngày được nợ + Số nợ tối đa của điều khoản vừa thêm.
+
+Đã áp dụng trong `NhaCungCap.tsx` (Tổ chức và Cá nhân).
+
+---
+
+## 4. Khi tạo form/modal mới
 
 1. **Footer 3 nút:** Import từ `formFooterButtons.ts`; nhãn **Hủy bỏ**, **Lưu**, **Lưu và tiếp tục**; không thêm icon vào ba nút này.
 2. **Ô có dropdown + nút thêm:** Import từ `lookupControlStyles.ts`, dùng đúng chiều cao 24px và style nút accent.
 3. **Nhãn chức năng:** Thống nhất "Lưu" / "Lưu và tiếp tục" (xem thêm rule `save-buttons.mdc`).
+
+---
+
+## 5. Validation: hiển thị thông báo + focus ô cần nhập
+
+**Chuẩn tham chiếu:** Form **Thêm nhà cung cấp** (NhaCungCap) — khi Lưu mà thiếu trường bắt buộc (*) hoặc dữ liệu không hợp lệ.
+
+### Nguyên tắc
+
+1. **Hiển thị thông báo:** Khi validation thất bại, hiển thị nội dung lỗi **cùng dòng với tiêu đề** form/modal (trong header), không dùng toast/alert riêng phía dưới.
+2. **Vùng thông báo cố định:** Ô thông báo trong header luôn chiếm một vùng có **chiều cao và bề rộng cố định** (ví dụ `minHeight: 32`, ô cảnh báo `height: 28`, `flex: 1`), để khi có/không có lỗi **tab và nội dung form không bị nhảy**.
+3. **Focus ô cần nhập:** Ngay sau khi set nội dung lỗi, **đưa focus (chuột) vào ô đang thiếu** hoặc ô vi phạm:
+   - Dùng `useRef<HTMLInputElement | null>(null)` gắn vào ô đó.
+   - Trong hàm validate, khi phát hiện lỗi: `setLoi(msg)`, nếu cần chuyển tab thì `setFormTab('...')`, rồi `setTimeout(() => ref.current?.focus(), 0)` để focus sau khi React cập nhật DOM.
+
+### Cách dùng
+
+- **Modal dùng component Modal:** Truyền `title` dạng React node: một `div` flex chứa tiêu đề + ô thông báo (luôn render, khi không lỗi dùng `'\u00A0'` hoặc border trong suốt để giữ layout).
+- **Modal custom header:** Header là một `div` flex, bên phải tiêu đề thêm ô thông báo cố định (minHeight/height), khi có `loi` thì hiển thị text, khi không thì để trống nhưng vẫn giữ kích thước.
+- **Ref và focus:** Mỗi trường bắt buộc (Mã *, Tên *, …) gắn một ref; trong logic validate, tùy lỗi mà gọi `refTen.current?.focus()` hoặc `refMa.current?.focus()` (sau `setTimeout(..., 0)`).
+
+### Đã áp dụng
+
+NhaCungCap (form Thêm/Sửa NCC), ThemDieuKhoanThanhToanModal, ThemDonViTinhModal, ThemKhoModal, DonViTinh (modal Thêm/Sửa ĐVT).

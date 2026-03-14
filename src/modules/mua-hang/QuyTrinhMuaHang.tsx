@@ -22,14 +22,15 @@ const BAO_CAO = [
   'Số chi tiết mua hàng (Việt - Anh)',
 ]
 
+/* Theme 2026 - dùng biến CSS toàn cục */
 const DARK = {
-  bg: '#1a1a1a',
-  panel: '#242424',
-  text: '#f59e0b',
-  textLight: '#ffab00',
-  border: '#3f3f46',
-  hover: '#374151',
-  connector: '#d97706',
+  bg: 'var(--bg-secondary)',
+  panel: 'var(--bg-tab)',
+  text: 'var(--text-primary)',
+  textLight: 'var(--text-secondary)',
+  border: 'var(--border)',
+  hover: 'var(--bg-tab-active)',
+  connector: 'var(--connector)',
 }
 
 const COL_GAP = 24
@@ -68,7 +69,7 @@ type DanhMucId = 'nha-cung-cap' | 'hang-hoa-dich-vu' | 'dieu-khoan-thanh-toan' |
 const DANH_MUC: { id: DanhMucId; label: string; Icon: React.ElementType }[] = [
   { id: 'nha-cung-cap', label: 'Nhà cung cấp', Icon: Users },
   { id: 'hang-hoa-dich-vu', label: 'Hàng hóa, dịch vụ', Icon: ShoppingBag },
-  { id: 'dieu-khoan-thanh-toan', label: 'Điều khoản thanh toán', Icon: FileCheck },
+  { id: 'dieu-khoan-thanh-toan', label: 'DKTT', Icon: FileCheck },
   { id: 'tien-ich', label: 'Tiện ích', Icon: Wrench },
 ]
 

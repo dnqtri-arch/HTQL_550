@@ -110,7 +110,7 @@ export function DanhSachKho({ onQuayLai }: DanhSachKhoProps) {
   }, [danhSach])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#1a1a1a' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: 'var(--bg-secondary)' }}>
       <MapsScriptPreloader />
       <ListPageToolbar
         onQuayLai={onQuayLai}

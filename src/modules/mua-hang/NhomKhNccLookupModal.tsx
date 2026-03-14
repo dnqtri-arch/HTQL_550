@@ -108,7 +108,7 @@ const btnStyle: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   ...btnStyle,
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
   borderColor: 'var(--accent)',
 }
 
@@ -121,7 +121,7 @@ const btnHelpStyle: React.CSSProperties = {
   borderRadius: '50%',
   justifyContent: 'center',
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
   borderColor: 'var(--accent)',
 }
 
@@ -277,7 +277,7 @@ export function NhomKhNccLookupModal({
 
         <div style={footerStyle}>
           <button type="button" style={btnHelpStyle} title="Giúp">
-            <HelpCircle size={16} style={{ color: '#0d0d0d' }} />
+            <HelpCircle size={16} style={{ color: 'var(--accent-text)' }} />
           </button>
           {onSaveNewGroup && (
             <button type="button" style={btnPrimary} onClick={() => setShowThemNhomKhNcc(true)}>

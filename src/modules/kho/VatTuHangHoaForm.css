@@ -1,4 +1,4 @@
-/* VatTuHangHoaForm - HTQL_550 theme (đen, vàng, cam) */
+/* VatTuHangHoaForm - HTQL_550 theme (trắng, cam) */
 
 /* Fieldset Thông tin chung - cân đối với vùng tab, không chiếm quá 45% để tab đủ chỗ không scroll */
 .htql-form .htql-fieldset {
@@ -203,7 +203,7 @@
 
 .htql-form .htql-sub-tab-active {
   background: var(--text-primary) !important;
-  color: #0d0d0d !important;
+  color: var(--accent-text) !important;
   font-weight: bold;
   border-color: var(--connector);
   border-width: 1px;
@@ -391,10 +391,10 @@
   justify-content: center;
   pointer-events: none;
   background: var(--accent);
-  color: #0d0d0d;
+  color: var(--accent-text);
 }
 .htql-form .misa-input-wrap.htql-dvt-chinh-no-border .htql-dvt-chinh-chevron svg {
-  color: #0d0d0d;
+  color: var(--accent-text);
 }
 .htql-form .misa-input-wrap.htql-dvt-chinh-no-border:focus-within {
   border: none !important;
@@ -426,10 +426,10 @@
   justify-content: center;
   pointer-events: none;
   background: var(--accent);
-  color: #0d0d0d;
+  color: var(--accent-text);
 }
 .htql-form .misa-input-wrap.htql-tinh-chat-no-border .htql-tinh-chat-chevron svg {
-  color: #0d0d0d;
+  color: var(--accent-text);
 }
 .htql-form .misa-input-wrap.htql-tinh-chat-no-border:focus-within {
   border: none !important;
@@ -531,13 +531,13 @@
 .htql-form .misa-lookup-btn {
   background-color: var(--accent) !important;
   border-color: var(--connector) !important;
-  color: #0d0d0d !important;
+  color: var(--accent-text) !important;
 }
 
 .htql-form .misa-lookup-btn:hover {
   background-color: var(--accent-hover) !important;
   border-color: var(--connector-highlight) !important;
-  color: #0d0d0d !important;
+  color: var(--accent-text) !important;
 }
 
 .htql-form select option {

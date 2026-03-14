@@ -20,15 +20,15 @@ const BAO_CAO = [
   'Tổng hợp tồn trên nhiều kho (Dạng bảng chéo)',
 ]
 
-/* Dark Theme - bảng màu ảnh 2 */
+/* Theme 2026 - dùng biến CSS toàn cục */
 const DARK = {
-  bg: '#1a1a1a',
-  panel: '#242424',
-  text: '#f59e0b',
-  textLight: '#ffab00',
-  border: '#3f3f46',
-  hover: '#374151',
-  connector: '#d97706',
+  bg: 'var(--bg-secondary)',
+  panel: 'var(--bg-tab)',
+  text: 'var(--text-primary)',
+  textLight: 'var(--text-secondary)',
+  border: 'var(--border)',
+  hover: 'var(--bg-tab-active)',
+  connector: 'var(--connector)',
 }
 
 /* Bố cục T-junction: [Nghiệp vụ] -> [Thủ kho] --ngang--> [Báo cáo]; nhánh dọc xuống [Kiểm kê]. */

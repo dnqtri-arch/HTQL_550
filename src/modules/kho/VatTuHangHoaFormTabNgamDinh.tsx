@@ -101,8 +101,8 @@ export function VatTuHangHoaFormTabNgamDinh({
             style={{ ...inputStyle, paddingRight: 26, cursor: 'pointer' }}
             placeholder="Chọn kho..."
           />
-          <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-            <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+          <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
+            <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
           </span>
         </div>
         <button
@@ -205,8 +205,8 @@ export function VatTuHangHoaFormTabNgamDinh({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: '#0d0d0d' }}>
-            <ChevronDown size={12} style={{ color: '#0d0d0d' }} />
+          <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
+            <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
           </span>
         </div>
         {watch('thue_suat_gtgt_dau_ra') === 'Tự nhập' && (

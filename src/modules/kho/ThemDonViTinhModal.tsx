@@ -83,6 +83,7 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
   const [dien_giai, setDienGiai] = useState('')
   const [loi, setLoi] = useState('')
   const [dangLuu, setDangLuu] = useState(false)
+  const refTenDvt = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     donViTinhMaTuDong().then(setMaDvt)
@@ -92,6 +93,7 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
     const ten = ten_dvt.trim()
     if (!ten) {
       setLoi('Tên đơn vị tính là bắt buộc.')
+      setTimeout(() => refTenDvt.current?.focus(), 0)
       return
     }
     setLoi('')
@@ -119,8 +121,11 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
       onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
     >
       <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
-          <span>Thêm đơn vị tính</span>
+        <div style={{ ...headerStyle, gap: 12, flexWrap: 'nowrap' }}>
+          <span style={{ flexShrink: 0 }}>Thêm đơn vị tính</span>
+          <div style={{ flex: 1, minWidth: 0, height: 28, minHeight: 28, display: 'flex', alignItems: 'center', padding: '0 10px', background: loi ? 'rgba(255, 87, 34, 0.12)' : 'transparent', border: loi ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', boxSizing: 'border-box' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loi || '\u00A0'}</span>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -158,6 +163,7 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
           <div>
             <label style={labelStyle}>Tên đơn vị tính (*)</label>
             <input
+              ref={refTenDvt}
               type="text"
               value={ten_dvt}
               onChange={(e) => setTenDvt(e.target.value)}
@@ -185,11 +191,6 @@ export function ThemDonViTinhModal({ onClose, onSaved }: ThemDonViTinhModalProps
               placeholder="Tùy chọn"
             />
           </div>
-          {loi && (
-            <div style={{ fontSize: 11, color: 'var(--accent)' }}>
-              {loi}
-            </div>
-          )}
         </div>
 
         <div style={footerStyle}>

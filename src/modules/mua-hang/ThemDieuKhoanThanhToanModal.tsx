@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X, HelpCircle } from 'lucide-react'
 import type { DieuKhoanThanhToanItem } from './nhaCungCapApi'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
@@ -89,6 +89,7 @@ export function ThemDieuKhoanThanhToanModal({
   /** Số công nợ tối đa — hiển thị/nhập theo số tiền (formatSoTien) */
   const [soCongNoDisplay, setSoCongNoDisplay] = useState('0')
   const [loi, setLoi] = useState('')
+  const refTen = useRef<HTMLInputElement | null>(null)
 
   /** Mã = chữ cái đầu tiên của ô Tên (khóa, không cho sửa) */
   const maHienThi = ten.trim().charAt(0).toUpperCase()
@@ -98,14 +99,17 @@ export function ThemDieuKhoanThanhToanModal({
     const maTrim = maHienThi
     if (!tenTrim) {
       setLoi('Tên là bắt buộc.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     if (!maTrim) {
       setLoi('Tên phải có ít nhất một ký tự để tạo Mã.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     if (existingItems.some((x) => x.ma === maTrim && x.ten === tenTrim)) {
       setLoi('Điều khoản này đã tồn tại.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     setLoi('')
@@ -126,14 +130,17 @@ export function ThemDieuKhoanThanhToanModal({
     const maTrim = maHienThi
     if (!tenTrim) {
       setLoi('Tên là bắt buộc.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     if (!maTrim) {
       setLoi('Tên phải có ít nhất một ký tự để tạo Mã.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     if (existingItems.some((x) => x.ma === maTrim && x.ten === tenTrim)) {
       setLoi('Điều khoản này đã tồn tại.')
+      setTimeout(() => refTen.current?.focus(), 0)
       return
     }
     setLoi('')
@@ -158,9 +165,12 @@ export function ThemDieuKhoanThanhToanModal({
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div style={boxStyle} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
-          <span>Thêm Điều khoản thanh toán</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ ...headerStyle, gap: 12, flexWrap: 'nowrap' }}>
+          <span style={{ flexShrink: 0 }}>Thêm DKTT</span>
+          <div style={{ flex: 1, minWidth: 0, height: 28, minHeight: 28, display: 'flex', alignItems: 'center', padding: '0 10px', background: loi ? 'rgba(255, 87, 34, 0.12)' : 'transparent', border: loi ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', boxSizing: 'border-box' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loi || '\u00A0'}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             <button type="button" style={{ ...btnSecondary, padding: 4, minWidth: 28 }} title="Giúp" aria-label="Giúp">
               <HelpCircle size={16} />
             </button>
@@ -177,7 +187,7 @@ export function ThemDieuKhoanThanhToanModal({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={labelStyle}>Tên (*)</label>
-            <input style={{ ...inputStyle, borderColor: !ten.trim() ? 'var(--accent)' : undefined }} value={ten} onChange={(e) => setTen(e.target.value)} placeholder="" />
+            <input ref={refTen} style={{ ...inputStyle, borderColor: !ten.trim() ? 'var(--accent)' : undefined }} value={ten} onChange={(e) => setTen(e.target.value)} placeholder="" />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={labelStyle}>Số ngày công nợ</label>
@@ -208,8 +218,6 @@ export function ThemDieuKhoanThanhToanModal({
               onBlur={() => { if (soCongNoDisplay === '') setSoCongNoDisplay('0') }}
             />
           </div>
-
-          {loi && <p style={{ fontSize: 11, color: 'var(--accent)', margin: 0 }}>{loi}</p>}
 
           <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
             <a href="#video" style={{ fontSize: 11, color: 'var(--accent)' }} onClick={(e) => e.preventDefault()}>Xem video hướng dẫn</a>

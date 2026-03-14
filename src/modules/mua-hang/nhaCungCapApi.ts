@@ -7,11 +7,17 @@
 export type LoaiNhaCungCap = 'to_chuc' | 'ca_nhan'
 
 /** Một dòng trong bảng Tài khoản ngân hàng */
+export type LoaiTaiKhoanNganHang = 'cong_ty' | 'ca_nhan'
+
 export interface TaiKhoanNganHangItem {
   so_tai_khoan: string
   ten_ngan_hang: string
   chi_nhanh: string
   tinh_tp_ngan_hang: string
+  /** Loại TK: Công ty hoặc Cá nhân (dùng trong mục Tổ chức) */
+  loai_tk?: LoaiTaiKhoanNganHang
+  /** Tên người nhận (dùng trong mục Tổ chức) */
+  ten_nguoi_nhan?: string
 }
 
 export interface NhaCungCapRecord {
@@ -45,6 +51,8 @@ export interface NhaCungCapRecord {
   xa_phuong?: string
   /** Tab Khác: thông tin liên hệ */
   xung_ho?: string
+  /** Cá nhân: Giới tính (Chọn, Nam, Nữ, Khác) */
+  gioi_tinh?: string
   ho_va_ten_lien_he?: string
   chuc_danh?: string
   dt_di_dong?: string
@@ -90,7 +98,7 @@ const NHOM_MAU: NhomKhNccItem[] = [
   { ma: 'VIP', ten: 'Nhóm VIP' },
 ]
 
-/** Điều khoản thanh toán (dùng cho dropdown + form Thêm điều khoản) */
+/** DKTT (dùng cho dropdown + form Thêm điều khoản) */
 export interface DieuKhoanThanhToanItem {
   ma: string
   ten: string
@@ -307,6 +315,57 @@ export function nhaCungCapNapLai(): void {
 export function nhaCungCapTrungMa(ma: string, loaiTrungId?: number): boolean {
   const list = cache ?? loadFromStorage()
   return list.some((r) => r.ma_ncc === ma && r.id !== (loaiTrungId ?? -1))
+}
+
+/** Trường cần kiểm tra trùng khi lưu */
+export type NhaCungCapTrungField = 'ma_so_thue' | 'so_cccd' | 'dt_di_dong' | 'dt_co_dinh' | 'email'
+
+export interface NhaCungCapTrungResult {
+  valid: boolean
+  field?: NhaCungCapTrungField
+  message?: string
+}
+
+const TRUNG_LABELS: Record<NhaCungCapTrungField, string> = {
+  ma_so_thue: 'Mã số thuế',
+  so_cccd: 'Số CCCD',
+  dt_di_dong: 'ĐTDD',
+  dt_co_dinh: 'ĐT khác',
+  email: 'Email',
+}
+
+/** Kiểm tra các trường không được trùng với dữ liệu đã có (khi bấm Lưu / Lưu và tiếp tục). excludeId = id bản ghi đang sửa (bỏ qua khi so sánh). */
+export async function nhaCungCapValidateTrung(
+  payload: { ma_so_thue?: string; so_cccd?: string; dt_di_dong?: string; dt_co_dinh?: string; dtdd_khac?: string; email?: string },
+  excludeId?: number
+): Promise<NhaCungCapTrungResult> {
+  const list = await nhaCungCapGetAll()
+  const others = excludeId != null ? list.filter((r) => r.id !== excludeId) : list
+
+  const checks: { key: NhaCungCapTrungField; val: string }[] = [
+    { key: 'ma_so_thue', val: (payload.ma_so_thue ?? '').trim() },
+    { key: 'so_cccd', val: (payload.so_cccd ?? '').trim() },
+    { key: 'dt_di_dong', val: (payload.dt_di_dong ?? '').trim() },
+    { key: 'dt_co_dinh', val: (payload.dt_co_dinh ?? payload.dtdd_khac ?? '').trim() },
+    { key: 'email', val: (payload.email ?? '').trim().toLowerCase() },
+  ]
+
+  for (const { key, val } of checks) {
+    if (!val) continue
+    const trung = others.some((r) => {
+      const raw = key === 'dt_co_dinh' ? ((r.dt_co_dinh ?? r.dtdd_khac) ?? '') : (r[key] ?? '')
+      const rVal = key === 'email' ? raw.trim().toLowerCase() : raw.trim()
+      return rVal === val
+    })
+    if (trung) {
+      return {
+        valid: false,
+        field: key,
+        message: `${TRUNG_LABELS[key]} đã tồn tại. Vui lòng điều chỉnh.`,
+      }
+    }
+  }
+  return { valid: true }
 }
 
 export async function nhaCungCapMaTuDong(): Promise<string> {

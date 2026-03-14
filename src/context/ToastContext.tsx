@@ -63,7 +63,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             maxWidth: '90vw',
             boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             background: toast.type === 'error' ? 'var(--accent)' : toast.type === 'success' ? '#22c55e' : 'var(--bg-tab)',
-            color: toast.type === 'error' ? '#0d0d0d' : 'var(--text-primary)',
+            color: toast.type === 'error' ? 'var(--accent-text)' : 'var(--text-primary)',
             border: '1px solid var(--border-strong)',
           }}
         >

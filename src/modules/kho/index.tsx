@@ -137,7 +137,7 @@ const btnQuayLai: React.CSSProperties = {
   padding: '4px 8px',
   fontSize: '11px',
   background: 'var(--accent)',
-  color: '#0d0d0d',
+  color: 'var(--accent-text)',
   border: 'none',
   borderRadius: '4px',
   cursor: 'pointer',

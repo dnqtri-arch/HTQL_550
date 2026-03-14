@@ -352,6 +352,7 @@ export function ThemNhomKhNccModal({
                       setSearchDropdownOpen(true)
                     }}
                     onFocus={() => setSearchDropdownOpen(true)}
+                    onClick={() => { if (!searchDropdownOpen) setSearchDropdownOpen(true) }}
                     placeholder="Tìm kiếm Mã hoặc Tên KH/NCC (gần đúng)..."
                     style={{ ...inputStyle, paddingLeft: 28, maxWidth: '100%', width: '100%' }}
                   />
