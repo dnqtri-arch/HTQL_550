@@ -1,20 +1,127 @@
 /**
- * API Đề xuất mua hàng — cấu trúc giống Đơn mua hàng, lưu riêng storage.
- * Dùng chung types từ donMuaHangApi.
+ * API và types cho Đề xuất mua hàng — module tách biệt 100% với Đơn mua hàng.
+ * Cơ sở dữ liệu (storage), form, trường, nội dung riêng.
  */
 
-import type {
-  DonMuaHangRecord,
-  DonMuaHangChiTiet,
-  DonMuaHangCreatePayload,
-  DonMuaHangFilter,
-  DonMuaHangDraftLine,
-} from './donMuaHangApi'
-import {
-  getDateRangeForKy,
-  KY_OPTIONS,
-  type KyValue,
-} from './donMuaHangApi'
+export interface DeXuatMuaHangRecord {
+  id: string
+  tinh_trang: string
+  ngay_don_hang: string
+  so_don_hang: string
+  ngay_giao_hang: string | null
+  nha_cung_cap: string
+  dia_chi: string
+  ma_so_thue: string
+  dien_giai: string
+  nv_mua_hang: string
+  dieu_khoan_tt: string
+  so_ngay_duoc_no: string
+  dia_diem_giao_hang: string
+  dieu_khoan_khac: string
+  gia_tri_don_hang: number
+  so_chung_tu_cukcuk: string
+}
+
+export interface DeXuatMuaHangChiTiet {
+  id: string
+  de_xuat_mua_hang_id: string
+  ma_hang: string
+  ten_hang: string
+  ma_quy_cach: string
+  dvt: string
+  chieu_dai: number
+  chieu_rong: number
+  chieu_cao: number
+  ban_kinh: number
+  luong: number
+  so_luong: number
+  so_luong_nhan: number
+  don_gia: number
+  thanh_tien: number
+  pt_thue_gtgt: number | null
+  tien_thue_gtgt: number | null
+  lenh_san_xuat: string
+}
+
+export interface DeXuatMuaHangCreatePayload {
+  tinh_trang: string
+  ngay_don_hang: string
+  so_don_hang: string
+  ngay_giao_hang: string | null
+  nha_cung_cap: string
+  dia_chi: string
+  ma_so_thue: string
+  dien_giai: string
+  nv_mua_hang: string
+  dieu_khoan_tt: string
+  so_ngay_duoc_no: string
+  dia_diem_giao_hang: string
+  dieu_khoan_khac: string
+  gia_tri_don_hang: number
+  so_chung_tu_cukcuk: string
+  chiTiet: Array<{
+    ma_hang: string
+    ten_hang: string
+    dvt: string
+    so_luong: number
+    don_gia: number
+    thanh_tien: number
+    pt_thue_gtgt: number | null
+    tien_thue_gtgt: number | null
+  }>
+}
+
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  return `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+export function getDateRangeForKy(ky: string): { tu: string; den: string } {
+  const now = new Date()
+  const den = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  let tu: Date
+  switch (ky) {
+    case 'tuan-nay': {
+      const day = now.getDay()
+      const diff = day === 0 ? 6 : day - 1
+      tu = new Date(den)
+      tu.setDate(tu.getDate() - diff)
+      break
+    }
+    case 'thang-nay':
+      tu = new Date(now.getFullYear(), now.getMonth(), 1)
+      break
+    case 'quy-nay': {
+      const q = Math.floor(now.getMonth() / 3) + 1
+      tu = new Date(now.getFullYear(), (q - 1) * 3, 1)
+      break
+    }
+    case 'nam-nay':
+      tu = new Date(now.getFullYear(), 0, 1)
+      break
+    default:
+      tu = new Date(now.getFullYear(), now.getMonth(), 1)
+  }
+  return { tu: formatLocalDate(tu), den: formatLocalDate(den) }
+}
+
+export const KY_OPTIONS = [
+  { value: 'dau-thang-hien-tai', label: 'Đầu tháng đơn hiện tại' },
+  { value: 'tuan-nay', label: 'Tuần này' },
+  { value: 'thang-nay', label: 'Tháng này' },
+  { value: 'quy-nay', label: 'Quý này' },
+  { value: 'nam-nay', label: 'Năm nay' },
+] as const
+
+export type KyValue = (typeof KY_OPTIONS)[number]['value']
+
+export interface DeXuatMuaHangFilter {
+  ky: KyValue
+  tu: string
+  den: string
+}
 
 const STORAGE_KEY_DON = 'htql_de_xuat_mua_hang_list'
 const STORAGE_KEY_CHI_TIET = 'htql_de_xuat_mua_hang_chi_tiet'
@@ -22,7 +129,7 @@ const STORAGE_KEY_DRAFT = 'htql_de_xuat_mua_hang_draft'
 const ID_PREFIX = 'dx'
 const SO_PREFIX = 'DXMH'
 
-function normalizeDon(d: Partial<DonMuaHangRecord> & { id: string }): DonMuaHangRecord {
+function normalizeDon(d: Partial<DeXuatMuaHangRecord> & { id: string }): DeXuatMuaHangRecord {
   return {
     id: d.id,
     tinh_trang: d.tinh_trang ?? 'Chưa thực hiện',
@@ -43,17 +150,21 @@ function normalizeDon(d: Partial<DonMuaHangRecord> & { id: string }): DonMuaHang
   }
 }
 
-const MOCK_DON: DonMuaHangRecord[] = []
-const MOCK_CHI_TIET: DonMuaHangChiTiet[] = []
+const MOCK_DON: DeXuatMuaHangRecord[] = []
+const MOCK_CHI_TIET: DeXuatMuaHangChiTiet[] = []
 
-function loadFromStorage(): { don: DonMuaHangRecord[]; chiTiet: DonMuaHangChiTiet[] } {
+function loadFromStorage(): { don: DeXuatMuaHangRecord[]; chiTiet: DeXuatMuaHangChiTiet[] } {
   try {
     const rawDon = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DON) : null
     const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const don = rawDon ? JSON.parse(rawDon) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(don) && Array.isArray(chiTiet)) {
-      return { don: don.map((d: Partial<DonMuaHangRecord> & { id: string }) => normalizeDon(d)), chiTiet }
+      const ct: DeXuatMuaHangChiTiet[] = chiTiet.map((c: Record<string, unknown>) => ({
+        ...c,
+        de_xuat_mua_hang_id: (c.de_xuat_mua_hang_id as string) ?? (c.don_mua_hang_id as string),
+      })) as DeXuatMuaHangChiTiet[]
+      return { don: don.map((d: Partial<DeXuatMuaHangRecord> & { id: string }) => normalizeDon(d)), chiTiet: ct }
     }
   } catch {
     /* ignore */
@@ -73,18 +184,17 @@ function saveToStorage(): void {
 }
 
 const _initial = loadFromStorage()
-let _donList: DonMuaHangRecord[] = _initial.don
-let _chiTietList: DonMuaHangChiTiet[] = _initial.chiTiet
+let _donList: DeXuatMuaHangRecord[] = _initial.don
+let _chiTietList: DeXuatMuaHangChiTiet[] = _initial.chiTiet
 
-export { KY_OPTIONS, getDateRangeForKy }
-export type { KyValue, DonMuaHangFilter, DonMuaHangDraftLine }
+export type DeXuatMuaHangDraftLine = Record<string, string> & { _dvtOptions?: string[] }
 
-export function getDefaultFilter(): DonMuaHangFilter {
+export function getDefaultFilter(): DeXuatMuaHangFilter {
   const { tu, den } = getDateRangeForKy('dau-thang-hien-tai')
   return { ky: 'dau-thang-hien-tai', tu, den }
 }
 
-export function deXuatMuaHangGetAll(filter: DonMuaHangFilter): DonMuaHangRecord[] {
+export function deXuatMuaHangGetAll(filter: DeXuatMuaHangFilter): DeXuatMuaHangRecord[] {
   const { tu, den } = filter
   return _donList.filter((d) => {
     const ngay = d.ngay_don_hang
@@ -92,19 +202,19 @@ export function deXuatMuaHangGetAll(filter: DonMuaHangFilter): DonMuaHangRecord[
   })
 }
 
-export function deXuatMuaHangGetChiTiet(donId: string): DonMuaHangChiTiet[] {
-  return _chiTietList.filter((c) => c.don_mua_hang_id === donId)
+export function deXuatMuaHangGetChiTiet(donId: string): DeXuatMuaHangChiTiet[] {
+  return _chiTietList.filter((c) => c.de_xuat_mua_hang_id === donId)
 }
 
 export function deXuatMuaHangDelete(donId: string): void {
   _donList = _donList.filter((d) => d.id !== donId)
-  _chiTietList = _chiTietList.filter((c) => c.don_mua_hang_id !== donId)
+  _chiTietList = _chiTietList.filter((c) => c.de_xuat_mua_hang_id !== donId)
   saveToStorage()
 }
 
-export function deXuatMuaHangPost(payload: DonMuaHangCreatePayload): DonMuaHangRecord {
+export function deXuatMuaHangPost(payload: DeXuatMuaHangCreatePayload): DeXuatMuaHangRecord {
   const id = `${ID_PREFIX}${Date.now()}`
-  const don: DonMuaHangRecord = {
+  const don: DeXuatMuaHangRecord = {
     id,
     tinh_trang: payload.tinh_trang,
     ngay_don_hang: payload.ngay_don_hang,
@@ -126,7 +236,7 @@ export function deXuatMuaHangPost(payload: DonMuaHangCreatePayload): DonMuaHangR
   payload.chiTiet.forEach((c, i) => {
     _chiTietList.push({
       id: `ct${id}-${i}`,
-      don_mua_hang_id: id,
+      de_xuat_mua_hang_id: id,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
       ma_quy_cach: '',
@@ -149,7 +259,7 @@ export function deXuatMuaHangPost(payload: DonMuaHangCreatePayload): DonMuaHangR
   return don
 }
 
-export function deXuatMuaHangPut(donId: string, payload: DonMuaHangCreatePayload): void {
+export function deXuatMuaHangPut(donId: string, payload: DeXuatMuaHangCreatePayload): void {
   const idx = _donList.findIndex((d) => d.id === donId)
   if (idx < 0) return
   _donList[idx] = {
@@ -170,11 +280,11 @@ export function deXuatMuaHangPut(donId: string, payload: DonMuaHangCreatePayload
     gia_tri_don_hang: payload.gia_tri_don_hang,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
   }
-  _chiTietList = _chiTietList.filter((c) => c.don_mua_hang_id !== donId)
+  _chiTietList = _chiTietList.filter((c) => c.de_xuat_mua_hang_id !== donId)
   payload.chiTiet.forEach((c, i) => {
     _chiTietList.push({
       id: `ct${donId}-${i}`,
-      don_mua_hang_id: donId,
+      de_xuat_mua_hang_id: donId,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
       ma_quy_cach: '',
@@ -207,7 +317,7 @@ export function deXuatMuaHangSoDonHangTiepTheo(): string {
   return `${SO_PREFIX}${String(maxNum + 1).padStart(5, '0')}`
 }
 
-export function getDeXuatDraft(): DonMuaHangDraftLine[] | null {
+export function getDeXuatDraft(): DeXuatMuaHangDraftLine[] | null {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT) : null
     if (!raw) return null

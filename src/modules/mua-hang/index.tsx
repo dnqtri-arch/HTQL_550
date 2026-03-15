@@ -4,6 +4,7 @@ import { VatTuHangHoa } from '../kho/VatTuHangHoa'
 import { QuyTrinhMuaHang } from './QuyTrinhMuaHang'
 import { NhaCungCap } from './NhaCungCap'
 import { DonMuaHang } from './DonMuaHang'
+import { DeXuatMuaHang } from './DeXuatMuaHang'
 import { ListPageToolbar } from '../../components/ListPageToolbar'
 import { loadDieuKhoanThanhToan, saveDieuKhoanThanhToan, type DieuKhoanThanhToanItem } from './nhaCungCapApi'
 import { formatNumberDisplay } from '../../utils/numberFormat'
@@ -139,7 +140,7 @@ export function MuaHang() {
     if (tabHienTai === 'de-xuat-mua-hang') {
       return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <DonMuaHang variant="de-xuat" />
+          <DeXuatMuaHang />
         </div>
       )
     }

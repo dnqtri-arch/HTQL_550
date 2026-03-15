@@ -156,6 +156,8 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
   const [dongChon, setDongChon] = useState<VatTuHangHoaRecord | null>(null)
   const [modalOpen, setModalOpen] = useState<'add' | 'edit' | null>(null)
   const [addPrefill, setAddPrefill] = useState<Partial<VatTuHangHoaRecord> | null>(null)
+  /** Tăng mỗi lần bấm Thêm để form remount → reset các tab và nội dung phía dưới. */
+  const [addFormKey, setAddFormKey] = useState(0)
   const [dvtList, setDvtList] = useState<{ id: number; ma_dvt: string; ten_dvt: string; ky_hieu?: string }[]>([])
   const [dangTai, setDangTai] = useState(true)
   const [imageLoadError, setImageLoadError] = useState(false)
@@ -275,6 +277,7 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
 
   const moThem = () => {
     setAddPrefill(null)
+    setAddFormKey((k) => k + 1)
     setModalOpen('add')
   }
 
@@ -673,6 +676,7 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
             onClick={(e) => e.stopPropagation()}
           >
             <VatTuHangHoaForm
+              key={modalOpen === 'edit' ? `edit-${dongChon?.id ?? ''}` : `add-${addFormKey}`}
               mode={modalOpen}
               initialData={modalOpen === 'edit' ? dongChon ?? undefined : addPrefill ? { ...addPrefill, id: addPrefill.id ?? 0, so_luong_ton: addPrefill.so_luong_ton ?? 0, gia_tri_ton: addPrefill.gia_tri_ton ?? 0 } as VatTuHangHoaRecord : undefined}
               dvtList={dvtList}

@@ -2,30 +2,29 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Eye, Trash2, Mail, Download, MessageCircle, HelpCircle, ChevronDown } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../components/DataGrid'
 import {
-  type DonMuaHangRecord,
-  type DonMuaHangChiTiet,
-  type DonMuaHangFilter,
-  KY_OPTIONS,
-  donMuaHangGetAll,
-  donMuaHangGetChiTiet,
-  donMuaHangDelete,
-  getDefaultDonMuaHangFilter,
-  getDateRangeForKy,
-  donMuaHangPost,
-  donMuaHangPut,
-  getDonMuaHangDraft,
-  setDonMuaHangDraft,
-  clearDonMuaHangDraft,
-  donMuaHangSoDonHangTiepTheo,
+  type DeXuatMuaHangRecord,
+  type DeXuatMuaHangChiTiet,
+  type DeXuatMuaHangFilter,
   type KyValue,
-} from './donMuaHangApi'
-import { MuaHangApiProvider, useMuaHangApi, type MuaHangApi } from './MuaHangApiContext'
+  KY_OPTIONS,
+  getDateRangeForKy,
+  deXuatMuaHangGetAll,
+  deXuatMuaHangGetChiTiet,
+  deXuatMuaHangDelete,
+  getDefaultFilter,
+  deXuatMuaHangPost,
+  deXuatMuaHangPut,
+  getDeXuatDraft,
+  setDeXuatDraft,
+  clearDeXuatDraft,
+  deXuatMuaHangSoDonHangTiepTheo,
+} from './deXuatMuaHangApi'
+import { DeXuatMuaHangApiProvider, useDeXuatMuaHangApi, type DeXuatMuaHangApi } from './DeXuatMuaHangApiContext'
 import { Modal } from '../../components/Modal'
-import { DonMuaHangForm } from './DonMuaHangForm'
+import { DeXuatMuaHangForm } from './DeXuatMuaHangForm'
 import { formatNumberDisplay, formatSoThapPhan } from '../../utils/numberFormat'
 import { exportCsv } from '../../utils/exportCsv'
 
-/** ISO date (yyyy-mm-dd) -> dd/MM/yyyy */
 function formatIsoToDdMmYyyy(iso: string | null): string {
   if (!iso) return ''
   const m = iso.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -79,7 +78,6 @@ const filterInput: React.CSSProperties = {
   color: 'var(--text-primary)',
 }
 
-/** Overlay và hộp modal giống form Vật tư hàng hóa */
 const modalOverlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
@@ -104,18 +102,18 @@ const modalBox: React.CSSProperties = {
   overflow: 'hidden',
 }
 
-const columnsDon: DataGridColumn<DonMuaHangRecord>[] = [
+const columnsDeXuat: DataGridColumn<DeXuatMuaHangRecord>[] = [
   { key: 'tinh_trang', label: 'Tình trạng', width: '14%' },
-  { key: 'ngay_don_hang', label: 'Ngày đơn hàng', width: '11%', renderCell: (v) => formatIsoToDdMmYyyy(v as string) },
-  { key: 'so_don_hang', label: 'Số đơn hàng', width: 100 },
+  { key: 'ngay_don_hang', label: 'Ngày đề xuất', width: '11%', renderCell: (v) => formatIsoToDdMmYyyy(v as string) },
+  { key: 'so_don_hang', label: 'Số đề xuất', width: 100 },
   { key: 'ngay_giao_hang', label: 'Ngày giao hàng', width: '11%', renderCell: (v) => formatIsoToDdMmYyyy(v as string | null) },
   { key: 'nha_cung_cap', label: 'Nhà cung cấp', width: '18%' },
   { key: 'dien_giai', label: 'Diễn giải', width: '12%' },
-  { key: 'gia_tri_don_hang', label: 'Giá trị đơn hàng', width: '12%', align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+  { key: 'gia_tri_don_hang', label: 'Giá trị đề xuất', width: '12%', align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
   { key: 'so_chung_tu_cukcuk', label: 'Số chứng từ CUKCUK', width: '14%' },
 ]
 
-const columnsChiTiet: DataGridColumn<DonMuaHangChiTiet>[] = [
+const columnsChiTietDeXuat: DataGridColumn<DeXuatMuaHangChiTiet>[] = [
   { key: 'ma_hang', label: 'Mã hàng', width: 90 },
   { key: 'ten_hang', label: 'Tên hàng', width: 140 },
   { key: 'ma_quy_cach', label: 'Mã quy cách', width: 90 },
@@ -134,34 +132,33 @@ const columnsChiTiet: DataGridColumn<DonMuaHangChiTiet>[] = [
   { key: 'lenh_san_xuat', label: 'Lệnh sản xuất', width: 100 },
 ]
 
-const apiDon: MuaHangApi = {
-  getAll: donMuaHangGetAll,
-  getChiTiet: donMuaHangGetChiTiet,
-  delete: donMuaHangDelete,
-  getDefaultFilter: getDefaultDonMuaHangFilter,
+const apiDeXuat: DeXuatMuaHangApi = {
+  getAll: deXuatMuaHangGetAll,
+  getChiTiet: deXuatMuaHangGetChiTiet,
+  delete: deXuatMuaHangDelete,
+  getDefaultFilter: getDefaultFilter,
   getDateRangeForKy,
   KY_OPTIONS,
-  post: donMuaHangPost,
-  put: donMuaHangPut,
-  soDonHangTiepTheo: donMuaHangSoDonHangTiepTheo,
-  getDraft: getDonMuaHangDraft,
-  setDraft: setDonMuaHangDraft,
-  clearDraft: clearDonMuaHangDraft,
+  post: deXuatMuaHangPost,
+  put: deXuatMuaHangPut,
+  soDonHangTiepTheo: deXuatMuaHangSoDonHangTiepTheo,
+  getDraft: getDeXuatDraft,
+  setDraft: setDeXuatDraft,
+  clearDraft: clearDeXuatDraft,
 }
 
-function DonMuaHangContent() {
-  const api = useMuaHangApi()
-  const [filter, setFilter] = useState<DonMuaHangFilter>(api.getDefaultFilter)
-  const [danhSach, setDanhSach] = useState<DonMuaHangRecord[]>([])
+function DeXuatMuaHangContent() {
+  const api = useDeXuatMuaHangApi()
+  const [filter, setFilter] = useState<DeXuatMuaHangFilter>(api.getDefaultFilter)
+  const [danhSach, setDanhSach] = useState<DeXuatMuaHangRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [chiTiet, setChiTiet] = useState<DonMuaHangChiTiet[]>([])
+  const [chiTiet, setChiTiet] = useState<DeXuatMuaHangChiTiet[]>([])
   const [dropdownEmail, setDropdownEmail] = useState(false)
   const [dropdownXuatKhau, setDropdownXuatKhau] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [viewDon, setViewDon] = useState<DonMuaHangRecord | null>(null)
-  /** Tăng mỗi lần bấm Thêm để form remount → reset tab và nội dung phía dưới. */
+  const [viewDon, setViewDon] = useState<DeXuatMuaHangRecord | null>(null)
   const [addFormKey, setAddFormKey] = useState(0)
-  const [deleteTarget, setDeleteTarget] = useState<DonMuaHangRecord | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DeXuatMuaHangRecord | null>(null)
   const refEmail = useRef<HTMLDivElement>(null)
   const refXuatKhau = useRef<HTMLDivElement>(null)
   const modalBoxRef = useRef<HTMLDivElement>(null)
@@ -170,9 +167,7 @@ function DonMuaHangContent() {
   const [formMinimized, setFormMinimized] = useState(false)
   const [formMaximized, setFormMaximized] = useState(false)
 
-  const loadData = () => {
-    setDanhSach(api.getAll(filter))
-  }
+  const loadData = () => setDanhSach(api.getAll(filter))
 
   useEffect(() => {
     setDanhSach(api.getAll(filter))
@@ -268,7 +263,7 @@ function DonMuaHangContent() {
           className="htql-toolbar-btn"
           style={toolbarBtn}
           disabled={!selectedId}
-          title={selectedId ? 'Xem đơn đang chọn' : 'Chọn đơn cần xem'}
+          title={selectedId ? 'Xem đề xuất đang chọn' : 'Chọn đề xuất cần xem'}
           onClick={() => {
             if (selectedId) {
               const d = danhSach.find((r) => r.id === selectedId)
@@ -287,7 +282,7 @@ function DonMuaHangContent() {
           className="htql-toolbar-btn"
           style={toolbarBtn}
           disabled={!selectedId}
-          title={selectedId ? 'Xóa đơn đang chọn' : 'Chọn đơn cần xóa'}
+          title={selectedId ? 'Xóa đề xuất đang chọn' : 'Chọn đề xuất cần xóa'}
           onClick={() => {
             const d = selectedId ? danhSach.find((r) => r.id === selectedId) : null
             if (d) setDeleteTarget(d)
@@ -297,111 +292,75 @@ function DonMuaHangContent() {
           <span>Xóa</span>
         </button>
         <div ref={refEmail} style={{ position: 'relative' }}>
-          <button
-            type="button"
-            className="htql-toolbar-btn"
-            style={toolbarBtn}
-            onClick={() => setDropdownEmail((v) => !v)}
-          >
+          <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={() => setDropdownEmail((v) => !v)}>
             <Mail size={14} />
             <span>Gửi email, Zalo</span>
             <ChevronDown size={12} />
           </button>
           {dropdownEmail && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: 2,
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                zIndex: 10,
-                minWidth: 140,
-              }}
-            >
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, minWidth: 140 }}>
               <button type="button" style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}>Email</button>
               <button type="button" style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}>Zalo</button>
             </div>
           )}
         </div>
         <div ref={refXuatKhau} style={{ position: 'relative' }}>
-          <button
-            type="button"
-            className="htql-toolbar-btn"
-            style={toolbarBtn}
-            onClick={() => setDropdownXuatKhau((v) => !v)}
-          >
+          <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={() => setDropdownXuatKhau((v) => !v)}>
             <Download size={14} />
             <span>Xuất khẩu</span>
             <ChevronDown size={12} />
           </button>
           {dropdownXuatKhau && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: 2,
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                zIndex: 10,
-                minWidth: 160,
-              }}
-            >
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, minWidth: 160 }}>
               <button
                 type="button"
                 style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}
                 onClick={() => {
-                  const header = columnsDon.map((c) => c.label)
+                  const header = columnsDeXuat.map((c) => c.label)
                   const dataRows = danhSach.map((d) =>
-                    columnsDon.map((col) => {
-                      const v = d[col.key as keyof DonMuaHangRecord]
+                    columnsDeXuat.map((col) => {
+                      const v = d[col.key as keyof DeXuatMuaHangRecord]
                       if (col.key === 'ngay_don_hang' || col.key === 'ngay_giao_hang') return formatIsoToDdMmYyyy(v as string | null)
                       if (col.key === 'gia_tri_don_hang') return formatNumberDisplay(Number(v), 0)
                       return String(v ?? '')
                     })
                   )
-                  exportCsv([header, ...dataRows], 'Don_mua_hang.csv')
+                  exportCsv([header, ...dataRows], 'De_xuat_mua_hang.csv')
                   setDropdownXuatKhau(false)
                 }}
               >
-                Excel (danh sách đơn)
+                Excel (danh sách đề xuất)
               </button>
               <button
                 type="button"
                 style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}
                 onClick={() => {
-                  const header = columnsDon.map((c) => c.label)
+                  const header = columnsDeXuat.map((c) => c.label)
                   const dataRows = danhSach.map((d) =>
-                    columnsDon.map((col) => {
-                      const v = d[col.key as keyof DonMuaHangRecord]
+                    columnsDeXuat.map((col) => {
+                      const v = d[col.key as keyof DeXuatMuaHangRecord]
                       if (col.key === 'ngay_don_hang' || col.key === 'ngay_giao_hang') return formatIsoToDdMmYyyy(v as string | null)
                       if (col.key === 'gia_tri_don_hang') return formatNumberDisplay(Number(v), 0)
                       return String(v ?? '')
                     })
                   )
-                  exportCsv([header, ...dataRows], 'Don_mua_hang.csv')
+                  exportCsv([header, ...dataRows], 'De_xuat_mua_hang.csv')
                   setDropdownXuatKhau(false)
                 }}
               >
-                CSV (danh sách đơn)
+                CSV (danh sách đề xuất)
               </button>
               <button
                 type="button"
                 style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}
                 disabled={chiTiet.length === 0}
-                title={chiTiet.length === 0 ? 'Chọn đơn để xem chi tiết' : 'Xuất chi tiết đơn đang chọn'}
+                title={chiTiet.length === 0 ? 'Chọn đề xuất để xem chi tiết' : 'Xuất chi tiết đề xuất đang chọn'}
                 onClick={() => {
                   if (chiTiet.length === 0) return
-                  const header = columnsChiTiet.map((c) => c.label)
+                  const header = columnsChiTietDeXuat.map((c) => c.label)
                   const dataRows = chiTiet.map((row) =>
-                    columnsChiTiet.map((col) => {
-                      const v = row[col.key as keyof DonMuaHangChiTiet]
+                    columnsChiTietDeXuat.map((col) => {
+                      const v = row[col.key as keyof DeXuatMuaHangChiTiet]
                       if (['chieu_dai', 'chieu_rong', 'chieu_cao', 'ban_kinh', 'luong', 'so_luong', 'so_luong_nhan'].includes(col.key)) return formatSoThapPhan(Number(v), 2)
                       if (['don_gia', 'thanh_tien', 'tien_thue_gtgt'].includes(col.key)) return formatNumberDisplay(Number(v), 0)
                       if (col.key === 'pt_thue_gtgt') return v != null ? formatSoThapPhan(Number(v), 2) : ''
@@ -409,11 +368,11 @@ function DonMuaHangContent() {
                     })
                   )
                   const soDon = selectedId ? danhSach.find((d) => d.id === selectedId)?.so_don_hang ?? 'chi-tiet' : 'chi-tiet'
-                  exportCsv([header, ...dataRows], `Don_mua_hang_${soDon}_chi_tiet.csv`)
+                  exportCsv([header, ...dataRows], `De_xuat_mua_hang_${soDon}_chi_tiet.csv`)
                   setDropdownXuatKhau(false)
                 }}
               >
-                CSV (chi tiết đơn chọn)
+                CSV (chi tiết đề xuất chọn)
               </button>
             </div>
           )}
@@ -430,42 +389,21 @@ function DonMuaHangContent() {
 
       <div style={filterWrap}>
         <span style={filterLabel}>Kỳ</span>
-        <select
-          style={{ ...filterInput, minWidth: 180 }}
-          value={filter.ky}
-          onChange={(e) => onKyChange(e.target.value as KyValue)}
-        >
+        <select style={{ ...filterInput, minWidth: 180 }} value={filter.ky} onChange={(e) => onKyChange(e.target.value as KyValue)}>
           {api.KY_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         <span style={filterLabel}>Từ</span>
-        <input
-          type="date"
-          style={filterInput}
-          value={filter.tu}
-          onChange={(e) => setFilter((f) => ({ ...f, tu: e.target.value }))}
-        />
+        <input type="date" style={filterInput} value={filter.tu} onChange={(e) => setFilter((f) => ({ ...f, tu: e.target.value }))} />
         <span style={filterLabel}>Đến</span>
-        <input
-          type="date"
-          style={filterInput}
-          value={filter.den}
-          onChange={(e) => setFilter((f) => ({ ...f, den: e.target.value }))}
-        />
-        <button
-          type="button"
-          className="htql-toolbar-btn"
-          style={toolbarBtn}
-          onClick={loadData}
-        >
-          Lấy dữ liệu
-        </button>
+        <input type="date" style={filterInput} value={filter.den} onChange={(e) => setFilter((f) => ({ ...f, den: e.target.value }))} />
+        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={loadData}>Lấy dữ liệu</button>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <DataGrid<DonMuaHangRecord>
-          columns={columnsDon}
+        <DataGrid<DeXuatMuaHangRecord>
+          columns={columnsDeXuat}
           data={danhSach}
           keyField="id"
           selectedRowId={selectedId}
@@ -475,17 +413,16 @@ function DonMuaHangContent() {
             setShowForm(true)
           }}
           summary={[
-            { label: 'Giá trị đơn hàng', value: formatNumberDisplay(tongGiaTri, 0) },
+            { label: 'Giá trị đề xuất', value: formatNumberDisplay(tongGiaTri, 0) },
             { label: 'Số dòng', value: `= ${danhSach.length}` },
           ]}
           maxHeight={280}
           compact
         />
-
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
           <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Chi tiết</div>
-          <DataGrid<DonMuaHangChiTiet>
-            columns={columnsChiTiet}
+          <DataGrid<DeXuatMuaHangChiTiet>
+            columns={columnsChiTietDeXuat}
             data={chiTiet}
             keyField="id"
             summary={[
@@ -508,13 +445,7 @@ function DonMuaHangContent() {
         size="sm"
         footer={
           <>
-            <button
-              type="button"
-              style={{ ...toolbarBtn, marginRight: 8 }}
-              onClick={() => setDeleteTarget(null)}
-            >
-              Hủy
-            </button>
+            <button type="button" style={{ ...toolbarBtn, marginRight: 8 }} onClick={() => setDeleteTarget(null)}>Hủy</button>
             <button
               type="button"
               style={{ ...toolbarBtn, background: 'var(--accent)', color: 'var(--accent-text)', borderColor: 'var(--accent)' }}
@@ -534,7 +465,7 @@ function DonMuaHangContent() {
       >
         {deleteTarget ? (
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>
-            Bạn có chắc chắn muốn xóa đơn <strong>{deleteTarget.so_don_hang}</strong> – {deleteTarget.nha_cung_cap}?
+            Bạn có chắc chắn muốn xóa đề xuất <strong>{deleteTarget.so_don_hang}</strong> – {deleteTarget.nha_cung_cap}?
           </p>
         ) : null}
       </Modal>
@@ -551,7 +482,7 @@ function DonMuaHangContent() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <DonMuaHangForm
+            <DeXuatMuaHangForm
               key={viewDon ? viewDon.id : `add-${addFormKey}`}
               onClose={() => { setViewDon(null); dongModal() }}
               onSaved={() => { setViewDon(null); dongModal(); loadData(); }}
@@ -561,7 +492,8 @@ function DonMuaHangContent() {
               readOnly={viewDon != null}
               initialDon={viewDon ?? undefined}
               initialChiTiet={viewDon ? api.getChiTiet(viewDon.id) : undefined}
-              formTitle="Đơn mua hàng"
+              formTitle="Đề xuất mua hàng"
+              soDonLabel="Số đề xuất"
               onMinimize={() => setFormMinimized((v) => !v)}
               onMaximize={() => setFormMaximized((v) => !v)}
             />
@@ -572,10 +504,10 @@ function DonMuaHangContent() {
   )
 }
 
-export function DonMuaHang() {
+export function DeXuatMuaHang() {
   return (
-    <MuaHangApiProvider api={apiDon}>
-      <DonMuaHangContent />
-    </MuaHangApiProvider>
+    <DeXuatMuaHangApiProvider api={apiDeXuat}>
+      <DeXuatMuaHangContent />
+    </DeXuatMuaHangApiProvider>
   )
 }

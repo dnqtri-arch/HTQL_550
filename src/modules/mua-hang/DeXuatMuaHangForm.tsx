@@ -36,8 +36,8 @@ import { vatTuHangHoaGetAll } from '../kho/vatTuHangHoaApi'
 import { donViTinhGetAll } from '../kho/donViTinhApi'
 import { matchSearchKeyword } from '../../utils/stringUtils'
 import { formatSoNguyenInput, formatNumberDisplay, formatSoTien, formatSoTienHienThi, formatSoTuNhienInput, parseFloatVN } from '../../utils/numberFormat'
-import type { DonMuaHangCreatePayload, DonMuaHangRecord, DonMuaHangChiTiet } from './donMuaHangApi'
-import { useMuaHangApi } from './MuaHangApiContext'
+import type { DeXuatMuaHangCreatePayload, DeXuatMuaHangRecord, DeXuatMuaHangChiTiet } from './deXuatMuaHangApi'
+import { useDeXuatMuaHangApi } from './DeXuatMuaHangApiContext'
 import { setUnsavedChanges } from '../../context/unsavedChanges'
 import { Modal } from '../../components/Modal'
 
@@ -181,26 +181,18 @@ const hintBar: React.CSSProperties = {
   borderTop: '1px solid var(--border)',
 }
 
-export interface DonMuaHangFormProps {
+export interface DeXuatMuaHangFormProps {
   onClose: () => void
   onSaved?: () => void
-  /** Kéo form (giống form Vật tư hàng hóa) */
   onHeaderPointerDown?: (e: React.MouseEvent) => void
   dragging?: boolean
-  /** Thu nhỏ form (chỉ còn thanh tiêu đề) */
   onMinimize?: () => void
-  /** Phóng to / khôi phục kích thước form */
   onMaximize?: () => void
-  /** Chế độ xem: chỉ hiển thị, không sửa */
   readOnly?: boolean
-  /** Dữ liệu đơn khi mở chế độ xem */
-  initialDon?: DonMuaHangRecord | null
-  initialChiTiet?: DonMuaHangChiTiet[] | null
-  /** Sau khi bấm Lưu (chỉ lưu): chuyển form sang chế độ xem đơn vừa lưu, không đóng form */
-  onSavedAndView?: (don: DonMuaHangRecord) => void
-  /** Tiêu đề form (vd. "Đề xuất mua hàng") */
+  initialDon?: DeXuatMuaHangRecord | null
+  initialChiTiet?: DeXuatMuaHangChiTiet[] | null
+  onSavedAndView?: (don: DeXuatMuaHangRecord) => void
   formTitle?: string
-  /** Nhãn trường số đơn (vd. "Số đề xuất") */
   soDonLabel?: string
 }
 
@@ -332,7 +324,7 @@ function parseIsoToDate(iso: string | null): Date | null {
 /** Kiểu một dòng grid: cột là string, thêm _dvtOptions và _vthh cho ĐVT quy đổi và ĐG mua */
 type GridLineRow = Record<string, string> & { _dvtOptions?: string[]; _vthh?: VatTuHangHoaRecord }
 
-function chiTietToLines(ct: DonMuaHangChiTiet[]): GridLineRow[] {
+function chiTietToLines(ct: DeXuatMuaHangChiTiet[]): GridLineRow[] {
   return ct.map((c) => {
     const thanhTien = c.thanh_tien
     const tienThue = c.tien_thue_gtgt ?? 0
@@ -350,10 +342,10 @@ function chiTietToLines(ct: DonMuaHangChiTiet[]): GridLineRow[] {
   })
 }
 
-export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp }: DonMuaHangFormProps) {
-  const api = useMuaHangApi()
-  const formTitle = formTitleProp ?? 'Đơn mua hàng'
-  const soDonLabel = soDonLabelProp ?? 'Số đơn hàng'
+export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp }: DeXuatMuaHangFormProps) {
+  const api = useDeXuatMuaHangApi()
+  const formTitle = formTitleProp ?? 'Đề xuất mua hàng'
+  const soDonLabel = soDonLabelProp ?? 'Số đề xuất'
   const isViewMode = readOnly && initialDon != null
   const [editingFromView, setEditingFromView] = useState(false)
   const effectiveReadOnly = readOnly && !editingFromView
@@ -645,7 +637,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     setVthhDropdownRect(null)
   }
 
-  const buildPayload = (): DonMuaHangCreatePayload => {
+  const buildPayload = (): DeXuatMuaHangCreatePayload => {
     let giaTriDonHang = 0
     const chiTiet = lines
       .filter((line) => (line['Mã'] ?? '').trim() !== '')
@@ -669,7 +661,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     return {
       tinh_trang: tinhTrang,
       ngay_don_hang: toIsoDate(ngayDonHang) || toIsoDate(new Date()),
-      so_don_hang: soDonHang.trim() || 'DMH',
+      so_don_hang: soDonHang.trim() || 'DXMH',
       ngay_giao_hang: ngayGiaoHang ? toIsoDate(ngayGiaoHang) : null,
       nha_cung_cap: nhaCungCapDisplay.trim(),
       dia_chi: diaChi.trim(),
@@ -711,7 +703,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     setDangLuu(true)
     try {
       const payload = buildPayload()
-      let savedDon: DonMuaHangRecord
+      let savedDon: DeXuatMuaHangRecord
       if (initialDon) {
         api.put(initialDon.id, payload)
         const { chiTiet: _ct, ...header } = payload
