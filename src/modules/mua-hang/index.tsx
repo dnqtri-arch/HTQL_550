@@ -89,6 +89,7 @@ function DieuKhoanThanhToanView({ onQuayLai }: { onQuayLai: () => void }) {
 }
 
 const TABS_MUA_HANG = [
+  { id: 'de-xuat-mua-hang', label: 'Đề xuất mua hàng' },
   { id: 'don-mua-hang', label: 'Đơn mua hàng' },
   { id: 'nhan-hang', label: 'Nhận hàng hóa dịch vụ' },
   { id: 'tra-lai-hang', label: 'Trả lại hàng mua' },
@@ -103,7 +104,7 @@ const TABS_MUA_HANG = [
 type ViewDanhMuc = 'nha-cung-cap' | 'hang-hoa-dich-vu' | 'dieu-khoan-thanh-toan' | 'tien-ich' | null
 
 export function MuaHang() {
-  const [tabHienTai, setTabHienTai] = useState('quy-trinh')
+  const [tabHienTai, setTabHienTai] = useState('don-mua-hang')
   const [viewDanhMuc, setViewDanhMuc] = useState<ViewDanhMuc>(null)
 
   const noiDungTab = () => {
@@ -135,6 +136,13 @@ export function MuaHang() {
       )
     }
 
+    if (tabHienTai === 'de-xuat-mua-hang') {
+      return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <DonMuaHang variant="de-xuat" />
+        </div>
+      )
+    }
     if (tabHienTai === 'don-mua-hang') {
       return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>

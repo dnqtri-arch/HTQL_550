@@ -7,9 +7,7 @@ import {
   Pencil,
   Save,
   Trash2,
-  RotateCcw,
-  RefreshCw,
-  Wrench,
+  Paperclip,
   FileText,
   Printer,
   Mail,
@@ -17,6 +15,9 @@ import {
   Power,
   ChevronDown,
   Search,
+  Minus,
+  Square,
+  X,
 } from 'lucide-react'
 import DatePicker, { registerLocale } from 'react-datepicker'
 import { vi } from 'date-fns/locale'
@@ -35,7 +36,9 @@ import { vatTuHangHoaGetAll } from '../kho/vatTuHangHoaApi'
 import { donViTinhGetAll } from '../kho/donViTinhApi'
 import { matchSearchKeyword } from '../../utils/stringUtils'
 import { formatSoNguyenInput, formatNumberDisplay, formatSoTien, formatSoTienHienThi, formatSoTuNhienInput, parseFloatVN } from '../../utils/numberFormat'
-import { donMuaHangPost, donMuaHangPut, getDonMuaHangDraft, setDonMuaHangDraft, clearDonMuaHangDraft, type DonMuaHangCreatePayload, type DonMuaHangRecord, type DonMuaHangChiTiet } from './donMuaHangApi'
+import type { DonMuaHangCreatePayload, DonMuaHangRecord, DonMuaHangChiTiet } from './donMuaHangApi'
+import { useMuaHangApi } from './MuaHangApiContext'
+import { setUnsavedChanges } from '../../context/unsavedChanges'
 import { Modal } from '../../components/Modal'
 
 registerLocale('vi', vi)
@@ -47,35 +50,41 @@ const FIELD_ROW_GAP = 6
 const toolbarWrap: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 2,
-  padding: '6px 8px',
+  gap: 6,
+  padding: '8px 10px',
   background: 'var(--bg-tab)',
   borderBottom: '1px solid var(--border-strong)',
   flexWrap: 'wrap',
 }
 
+/** Nút thường: nền trắng, viền rõ, nổi bật so với nền toolbar xám */
 const toolbarBtn: React.CSSProperties = {
   display: 'inline-flex',
+  flexDirection: 'column',
   alignItems: 'center',
-  gap: 4,
-  padding: '4px 10px',
+  justifyContent: 'center',
+  gap: 2,
+  padding: '5px 10px',
   fontSize: 11,
   fontFamily: 'var(--font-misa), Tahoma, Arial, sans-serif',
-  background: 'var(--bg-tab)',
-  border: '1px solid var(--border)',
+  background: '#FFFFFF',
+  border: '1px solid var(--border-strong)',
   color: 'var(--text-primary)',
   cursor: 'pointer',
   borderRadius: 4,
+  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
 }
 
+/** Nút nhấn mạnh (Lưu, Sửa, Đóng): màu accent cam, nổi bật */
 const toolbarBtnAccent: React.CSSProperties = {
   ...toolbarBtn,
   background: 'var(--accent)',
   color: 'var(--accent-text)',
   borderColor: 'var(--accent)',
+  boxShadow: '0 1px 3px rgba(230, 126, 34, 0.4)',
 }
 
-const formTitle: React.CSSProperties = {
+const formTitleBoxStyle: React.CSSProperties = {
   fontSize: 14,
   fontWeight: 700,
   color: 'var(--text-primary)',
@@ -198,11 +207,21 @@ export interface DonMuaHangFormProps {
   /** Kéo form (giống form Vật tư hàng hóa) */
   onHeaderPointerDown?: (e: React.MouseEvent) => void
   dragging?: boolean
+  /** Thu nhỏ form (chỉ còn thanh tiêu đề) */
+  onMinimize?: () => void
+  /** Phóng to / khôi phục kích thước form */
+  onMaximize?: () => void
   /** Chế độ xem: chỉ hiển thị, không sửa */
   readOnly?: boolean
   /** Dữ liệu đơn khi mở chế độ xem */
   initialDon?: DonMuaHangRecord | null
   initialChiTiet?: DonMuaHangChiTiet[] | null
+  /** Sau khi bấm Lưu (chỉ lưu): chuyển form sang chế độ xem đơn vừa lưu, không đóng form */
+  onSavedAndView?: (don: DonMuaHangRecord) => void
+  /** Tiêu đề form (vd. "Đề xuất mua hàng") */
+  formTitle?: string
+  /** Nhãn trường số đơn (vd. "Số đề xuất") */
+  soDonLabel?: string
 }
 
 const TINH_TRANG_OPTIONS = [
@@ -288,16 +307,40 @@ const gridTdStyle: React.CSSProperties = {
   verticalAlign: 'middle',
 }
 
-const titleBarStyle: React.CSSProperties = {
-  padding: '6px 12px',
+const titleBarWrap: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '0 4px 0 12px',
   borderBottom: '1px solid var(--border)',
+  background: 'var(--bg-tab)',
+  flexShrink: 0,
+  minHeight: 36,
+}
+
+const titleBarDrag: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  padding: '6px 0',
   fontSize: 12,
   fontWeight: 600,
   color: 'var(--text-primary)',
-  background: 'var(--bg-tab)',
   cursor: 'grab',
   userSelect: 'none',
-  flexShrink: 0,
+}
+
+const titleBarBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 32,
+  height: 28,
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--text-primary)',
+  cursor: 'pointer',
+  borderRadius: 2,
 }
 
 function parseIsoToDate(iso: string | null): Date | null {
@@ -327,7 +370,10 @@ function chiTietToLines(ct: DonMuaHangChiTiet[]): GridLineRow[] {
   })
 }
 
-export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet }: DonMuaHangFormProps) {
+export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp }: DonMuaHangFormProps) {
+  const api = useMuaHangApi()
+  const formTitle = formTitleProp ?? 'Đơn mua hàng'
+  const soDonLabel = soDonLabelProp ?? 'Số đơn hàng'
   const isViewMode = readOnly && initialDon != null
   const [editingFromView, setEditingFromView] = useState(false)
   const effectiveReadOnly = readOnly && !editingFromView
@@ -343,7 +389,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   const [dieuKhoanKhac, setDieuKhoanKhac] = useState(() => (isViewMode && initialDon ? (initialDon.dieu_khoan_khac ?? '') : ''))
   const [thamChieu, setThamChieu] = useState(() => (isViewMode && initialDon ? (initialDon.so_chung_tu_cukcuk ?? '') : ''))
   const [ngayDonHang, setNgayDonHang] = useState<Date | null>(() => (isViewMode && initialDon ? parseIsoToDate(initialDon.ngay_don_hang) : new Date()))
-  const [soDonHang, setSoDonHang] = useState(() => (isViewMode && initialDon ? initialDon.so_don_hang : 'ĐMH00002'))
+  const [soDonHang, setSoDonHang] = useState(() => (isViewMode && initialDon ? initialDon.so_don_hang : api.soDonHangTiepTheo()))
   const [tinhTrang, setTinhTrang] = useState(() => (isViewMode && initialDon ? initialDon.tinh_trang : 'Chưa thực hiện'))
   const [ngayGiaoHang, setNgayGiaoHang] = useState<Date | null>(() => (isViewMode && initialDon ? parseIsoToDate(initialDon.ngay_giao_hang) : null))
   const [tabActive, setTabActive] = useState<'hang-tien' | 'khac'>('hang-tien')
@@ -364,10 +410,14 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   const [dangLuu, setDangLuu] = useState(false)
   const [loi, setLoi] = useState('')
   const [deleteRowIndex, setDeleteRowIndex] = useState<number | null>(null)
+  const [diaDiemGiaoHangDropdownOpen, setDiaDiemGiaoHangDropdownOpen] = useState(false)
+  const [diaDiemGiaoHangDropdownRect, setDiaDiemGiaoHangDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const refDiaDiemGiaoHangWrap = useRef<HTMLDivElement>(null)
   const refEmail = useRef<HTMLDivElement>(null)
   const refNccWrap = useRef<HTMLDivElement>(null)
   const draftLoadedRef = useRef(false)
   const editingEnrichedRef = useRef(false)
+  const didSetSoDonRef = useRef(false)
 
   const toIsoDate = (d: Date | null): string => {
     if (!d) return ''
@@ -380,6 +430,19 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   useEffect(() => {
     setDanhSachDKTT(loadDieuKhoanThanhToan())
   }, [])
+
+  /** Đánh dấu form đang nhập dở để cảnh báo khi refresh (F5). Clean khi đóng hoặc lưu. */
+  useEffect(() => {
+    if (!effectiveReadOnly) setUnsavedChanges(true)
+    return () => setUnsavedChanges(false)
+  }, [effectiveReadOnly])
+
+  /** Khi mở form thêm mới: gán số đơn hàng tiếp theo (chỉ một lần). */
+  useEffect(() => {
+    if (initialDon != null || didSetSoDonRef.current) return
+    didSetSoDonRef.current = true
+    setSoDonHang(api.soDonHangTiepTheo())
+  }, [initialDon, api])
 
   useEffect(() => {
     let cancelled = false
@@ -407,6 +470,25 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     window.addEventListener('mousedown', onMouseDown)
     return () => window.removeEventListener('mousedown', onMouseDown)
   }, [nccDropdownOpen])
+
+  useEffect(() => {
+    if (diaDiemGiaoHangDropdownOpen && refDiaDiemGiaoHangWrap.current) {
+      const r = refDiaDiemGiaoHangWrap.current.getBoundingClientRect()
+      setDiaDiemGiaoHangDropdownRect({ top: r.bottom, left: r.left, width: Math.max(r.width, 280) })
+    } else {
+      setDiaDiemGiaoHangDropdownRect(null)
+    }
+  }, [diaDiemGiaoHangDropdownOpen])
+
+  useEffect(() => {
+    if (!diaDiemGiaoHangDropdownOpen) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (refDiaDiemGiaoHangWrap.current?.contains(e.target as Node)) return
+      setDiaDiemGiaoHangDropdownOpen(false)
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    return () => window.removeEventListener('mousedown', onMouseDown)
+  }, [diaDiemGiaoHangDropdownOpen])
 
   useEffect(() => {
     let cancelled = false
@@ -452,6 +534,8 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     setDieuKhoanTT(ncc.dieu_khoan_tt || '')
     const dktt = danhSachDKTT.find((d) => d.ma === ncc.dieu_khoan_tt || d.ten === ncc.dieu_khoan_tt)
     if (dktt) setSoNgayDuocNo(String(dktt.so_ngay_duoc_no))
+    const ddh = ncc.dia_diem_giao_hang
+    setDiaDiemGiaoHang(Array.isArray(ddh) && ddh.length > 0 ? ddh[0] : (typeof ddh === 'string' ? ddh : '') || '')
   }
 
   /** ĐG mua theo ĐVT (tab ngầm định hoặc đơn vị quy đổi):
@@ -501,7 +585,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   /** Nạp draft chỉ khi form thêm mới (không có initialDon), không ở chế độ xem. */
   useEffect(() => {
     if (initialDon != null || effectiveReadOnly || draftLoadedRef.current || vatTuList.length === 0) return
-    const d = getDonMuaHangDraft()
+    const d = api.getDraft()
     if (!d || d.length === 0) return
     draftLoadedRef.current = true
     const enriched = d.map((l) => {
@@ -518,7 +602,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   /** Lưu draft chỉ khi form thêm mới (không sửa đơn có sẵn), mỗi khi các dòng thay đổi. */
   useEffect(() => {
     if (initialDon != null || effectiveReadOnly || lines.length === 0) return
-    setDonMuaHangDraft(lines)
+    api.setDraft(lines)
   }, [lines, effectiveReadOnly, initialDon])
 
   /** Khi bấm Sửa từ chế độ xem: gán _vthh và _dvtOptions cho từng dòng một lần (để đổi ĐVT cập nhật ĐG mua). */
@@ -593,22 +677,68 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     }
   }
 
-  /** Lưu toàn bộ dữ liệu đang hiển thị tại các trường. Đóng form sau khi lưu. */
+  /** Kiểm tra trước khi lưu: Nhà cung cấp bắt buộc, ít nhất một dòng chi tiết có Mã VTHH. */
+  const validateBeforeSave = (): boolean => {
+    if (!nhaCungCapDisplay.trim()) {
+      setLoi('Vui lòng chọn Nhà cung cấp.')
+      return false
+    }
+    if (!soDonHang.trim()) {
+      setLoi(`${soDonLabel} không được để trống.`)
+      return false
+    }
+    const hasDetail = lines.some((line) => (line['Mã'] ?? '').trim() !== '')
+    if (!hasDetail) {
+      setLoi('Đơn hàng phải có ít nhất một dòng vật tư hàng hóa.')
+      return false
+    }
+    return true
+  }
+
+  /** Lưu toàn bộ dữ liệu đang hiển thị, không đóng form; chuyển sang chế độ xem đơn vừa lưu. */
   const handleLuu = async () => {
     setLoi('')
-    if (!soDonHang.trim()) {
-      setLoi('Số đơn hàng không được để trống.')
-      return
+    if (!validateBeforeSave()) return
+    setDangLuu(true)
+    try {
+      const payload = buildPayload()
+      let savedDon: DonMuaHangRecord
+      if (initialDon) {
+        api.put(initialDon.id, payload)
+        const { chiTiet: _ct, ...header } = payload
+        savedDon = { ...initialDon, ...header }
+      } else {
+        savedDon = api.post(payload)
+      }
+      api.clearDraft()
+      setUnsavedChanges(false)
+      if (onSavedAndView) {
+        onSavedAndView(savedDon)
+        setEditingFromView(false)
+      } else {
+        onSaved?.()
+      }
+    } catch (e) {
+      setLoi(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
+    } finally {
+      setDangLuu(false)
     }
+  }
+
+  /** Lưu toàn bộ dữ liệu đang hiển thị và đóng form. */
+  const handleLuuVaDong = async () => {
+    setLoi('')
+    if (!validateBeforeSave()) return
     setDangLuu(true)
     try {
       const payload = buildPayload()
       if (initialDon) {
-        donMuaHangPut(initialDon.id, payload)
+        api.put(initialDon.id, payload)
       } else {
-        donMuaHangPost(payload)
+        api.post(payload)
       }
-      clearDonMuaHangDraft()
+      api.clearDraft()
+      setUnsavedChanges(false)
       onSaved?.()
       onClose()
     } catch (e) {
@@ -618,69 +748,68 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     }
   }
 
-  /** Lưu toàn bộ dữ liệu đang hiển thị, không đóng form (tiếp tục nhập). */
-  const handleLuuVaCat = async () => {
-    setLoi('')
-    if (!soDonHang.trim()) {
-      setLoi('Số đơn hàng không được để trống.')
-      return
+  /** Tổng tiền tính từ các dòng chi tiết (giống buildPayload). */
+  const { tongTienHang, tienThue, tongTienThanhToan } = (() => {
+    let hang = 0
+    let thue = 0
+    for (const line of lines) {
+      if ((line['Mã'] ?? '').trim() === '') continue
+      const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
+      const ptRaw = (line['% thuế GTGT'] ?? '').trim()
+      const pt = ptRaw === '' || ptRaw === 'Chưa xác định' ? null : parseFloatVN(ptRaw)
+      const tienThueDong = pt != null ? (thanhTien * pt) / 100 : 0
+      hang += thanhTien
+      thue += tienThueDong
     }
-    setDangLuu(true)
-    try {
-      const payload = buildPayload()
-      if (initialDon) {
-        donMuaHangPut(initialDon.id, payload)
-      } else {
-        donMuaHangPost(payload)
-      }
-      clearDonMuaHangDraft()
-      onSaved?.()
-    } catch (e) {
-      setLoi(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
-    } finally {
-      setDangLuu(false)
-    }
-  }
-
-  const tongTienHang = 0
-  const tienThue = 0
+    return { tongTienHang: hang, tienThue: thue, tongTienThanhToan: hang + thue }
+  })()
   const tienChietKhau = 0
-  const tongTienThanhToan = tongTienHang + tienThue - tienChietKhau
   const soDong = lines.length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg-primary)' }}>
-      {onHeaderPointerDown && (
+      <div style={titleBarWrap}>
         <div
           onMouseDown={onHeaderPointerDown}
-          style={{ ...titleBarStyle, cursor: dragging ? 'grabbing' : 'grab' }}
+          style={{ ...titleBarDrag, cursor: onHeaderPointerDown && dragging ? 'grabbing' : onHeaderPointerDown ? 'grab' : 'default' }}
         >
-          Đơn mua hàng{effectiveReadOnly ? ' - Chế độ xem' : ''}{nhaCungCapDisplay ? ` - ${nhaCungCapDisplay}` : ''}
+          {formTitle}{effectiveReadOnly ? ' - Chế độ xem' : ''}{nhaCungCapDisplay ? ` - ${nhaCungCapDisplay}` : ''}
         </div>
-      )}
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          {onMinimize && (
+            <button type="button" style={titleBarBtn} title="Thu nhỏ" onClick={(e) => { e.stopPropagation(); onMinimize() }} aria-label="Thu nhỏ">
+              <Minus size={14} />
+            </button>
+          )}
+          {onMaximize && (
+            <button type="button" style={titleBarBtn} title="Phóng to / Khôi phục" onClick={(e) => { e.stopPropagation(); onMaximize() }} aria-label="Phóng to">
+              <Square size={12} />
+            </button>
+          )}
+          <button type="button" style={titleBarBtn} title="Đóng" onClick={(e) => { e.stopPropagation(); onClose() }} aria-label="Đóng">
+            <X size={14} />
+          </button>
+        </div>
+      </div>
       <div style={toolbarWrap}>
         <button type="button" style={toolbarBtn} title="Trước"><ChevronLeft size={14} /> Trước</button>
         <button type="button" style={toolbarBtn} title="Sau"><ChevronRight size={14} /> Sau</button>
-        <button type="button" style={toolbarBtn}><Plus size={14} /> Thêm</button>
-        <button type="button" style={toolbarBtn}><Pencil size={14} /> Sửa</button>
         {readOnly && effectiveReadOnly && (
           <button type="button" style={toolbarBtnAccent} onClick={() => setEditingFromView(true)}><Pencil size={14} /> Sửa</button>
         )}
         {!effectiveReadOnly && (
           <>
             <button type="button" style={toolbarBtnAccent} onClick={handleLuu} disabled={dangLuu}><Save size={14} /> {dangLuu ? 'Đang lưu...' : 'Lưu'}</button>
-            <button type="button" style={toolbarBtn} onClick={handleLuuVaCat} disabled={dangLuu}><Save size={14} /> Lưu và cất</button>
+            <button type="button" style={toolbarBtn} onClick={handleLuuVaDong} disabled={dangLuu}><Save size={14} /> Lưu và đóng</button>
           </>
         )}
-        <button type="button" style={toolbarBtn}><Trash2 size={14} /> Xóa</button>
-        <button type="button" style={toolbarBtn}><RotateCcw size={14} /> Hoãn</button>
-        <button type="button" style={toolbarBtn}><RefreshCw size={14} /> Nạp</button>
-        <button type="button" style={toolbarBtn}><Wrench size={14} /> Tiện ích</button>
+        <button type="button" style={toolbarBtn} title="Đính kèm"><Paperclip size={14} /> Đính kèm</button>
         <button type="button" style={toolbarBtn}><FileText size={14} /> Mẫu</button>
         <button type="button" style={toolbarBtn}><Printer size={14} /> In</button>
         <div ref={refEmail} style={{ position: 'relative' }}>
           <button type="button" style={toolbarBtn} onClick={() => setDropdownEmail((v) => !v)}>
-            <Mail size={14} /> Gửi email, Zalo <ChevronDown size={12} />
+            <Mail size={14} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>Gửi email, Zalo <ChevronDown size={10} /></span>
           </button>
           {dropdownEmail && (
             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, minWidth: 120 }}>
@@ -721,7 +850,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
       </Modal>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
-        <h2 style={formTitle}>Đơn mua hàng</h2>
+        <h2 style={formTitleBoxStyle}>{formTitle}</h2>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16, marginBottom: 12 }}>
           <div style={groupBox}>
@@ -850,7 +979,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
               </div>
             </div>
             <div style={fieldRow}>
-              <label style={{ ...labelStyle, minWidth: 82 }}>Số đơn hàng</label>
+              <label style={{ ...labelStyle, minWidth: 82 }}>{soDonLabel}</label>
               <div style={{ width: 120, minWidth: 120, flex: '0 0 auto' }}>
                 <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} value={soDonHang} onChange={(e) => setSoDonHang(e.target.value)} readOnly={effectiveReadOnly} disabled={effectiveReadOnly} />
               </div>
@@ -1109,34 +1238,40 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
               </div>
               </>
               ) : (
-              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column' }}>
                 <div style={fieldRow}>
                   <label style={labelStyle}>Địa điểm giao hàng</label>
-                  <div style={{ position: 'relative', flex: 1, display: 'flex', minWidth: 0 }}>
+                  <div
+                    ref={refDiaDiemGiaoHangWrap}
+                    style={{ position: 'relative', flex: 1, display: 'flex', minWidth: 0 }}
+                    onClick={() => !effectiveReadOnly && setDiaDiemGiaoHangDropdownOpen((v) => !v)}
+                  >
                     <input
                       className="misa-input-solo"
                       style={{ ...inputStyle, width: '100%', paddingRight: 28, boxSizing: 'border-box' }}
                       value={diaDiemGiaoHang}
                       onChange={(e) => setDiaDiemGiaoHang(e.target.value)}
+                      onFocus={() => !effectiveReadOnly && setDiaDiemGiaoHangDropdownOpen(true)}
                       readOnly={effectiveReadOnly}
                       disabled={effectiveReadOnly}
-                      placeholder="Nhập địa điểm giao hàng"
+                      placeholder="Chọn từ nhà cung cấp hoặc nhập"
                     />
-                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', color: 'var(--text-muted)' }} aria-hidden>
+                    <span style={{ ...lookupChevronOverlayStyle, pointerEvents: 'none' }} aria-hidden>
                       <ChevronDown size={12} />
                     </span>
                   </div>
                 </div>
                 <div style={fieldRow}>
                   <label style={labelStyle}>Điều khoản khác</label>
-                  <input
+                  <textarea
                     className="misa-input-solo"
-                    style={inputStyle}
+                    style={{ ...inputStyle, minHeight: FORM_FIELD_HEIGHT * 2 + FIELD_ROW_GAP, resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
                     value={dieuKhoanKhac}
                     onChange={(e) => setDieuKhoanKhac(e.target.value)}
                     readOnly={effectiveReadOnly}
                     disabled={effectiveReadOnly}
                     placeholder="Nhập điều khoản khác"
+                    rows={3}
                   />
                 </div>
               </div>
@@ -1211,6 +1346,52 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
               })()}
             </tbody>
           </table>
+        </div>,
+        document.body
+      )}
+      {tabActive === 'khac' && diaDiemGiaoHangDropdownOpen && diaDiemGiaoHangDropdownRect && ReactDOM.createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: diaDiemGiaoHangDropdownRect.top,
+            left: diaDiemGiaoHangDropdownRect.left,
+            width: Math.max(diaDiemGiaoHangDropdownRect.width, 280),
+            maxHeight: 220,
+            overflowY: 'auto',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+            zIndex: 1100,
+            fontSize: 11,
+          }}
+        >
+          {(() => {
+            const currentNcc = nccList.find((n) => n.id === _nhaCungCapId || (n.ten_ncc || '').trim() === (nhaCungCapDisplay || '').trim())
+            const options: string[] = Array.isArray(currentNcc?.dia_diem_giao_hang) ? currentNcc!.dia_diem_giao_hang! : []
+            if (options.length === 0) {
+              return (
+                <div style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>
+                  {currentNcc ? 'Nhà cung cấp chưa có địa điểm giao hàng. Nhập trực tiếp ở ô trên.' : 'Chọn nhà cung cấp để xem địa điểm giao hàng hoặc nhập tay.'}
+                </div>
+              )
+            }
+            return (
+              <ul style={{ listStyle: 'none', margin: 0, padding: '4px 0' }}>
+                {options.map((item, idx) => (
+                  <li
+                    key={idx}
+                    style={{ padding: '6px 10px', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tab)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    onMouseDown={() => { setDiaDiemGiaoHang(item); setDiaDiemGiaoHangDropdownOpen(false) }}
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )
+          })()}
         </div>,
         document.body
       )}

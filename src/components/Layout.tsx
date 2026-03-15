@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { AppContext, type AppContextValue } from '../context/AppContext'
+import { getUnsavedChanges } from '../context/unsavedChanges'
 import { Sidebar } from './Sidebar'
 import { TabBar } from './TabBar'
 import { ModuleRouter } from './ModuleRouter'
@@ -45,10 +46,13 @@ const contentStyles: React.CSSProperties = {
   borderBottom: '1px solid var(--border-strong)',
 }
 
+const STORAGE_KEY_LAYOUT = 'htql550_layout_restore'
+
 export function Layout() {
   const [tabs, setTabs] = useState<TabItem[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [activeModuleId, setActiveModuleId] = useState<ModuleId | null>(null)
+  const [hasRestored, setHasRestored] = useState(false)
 
   const openOrFocusTab = useCallback((moduleId: ModuleId) => {
     const label = getModuleLabel(moduleId)
@@ -98,11 +102,61 @@ export function Layout() {
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const displayModuleId = activeTab?.moduleId ?? activeModuleId
 
+  /** F5: Khôi phục tab và màn hình đang xem từ sessionStorage. */
   useEffect(() => {
+    if (hasRestored) return
+    setHasRestored(true)
+    try {
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(STORAGE_KEY_LAYOUT) : null
+      if (raw) {
+        const data = JSON.parse(raw) as { openModuleIds?: ModuleId[]; activeModuleId?: ModuleId | null }
+        const openModuleIds = data.openModuleIds
+        const savedActive = data.activeModuleId
+        if (Array.isArray(openModuleIds) && openModuleIds.length > 0) {
+          const newTabs: TabItem[] = openModuleIds.map((moduleId) => ({
+            id: generateTabId(),
+            moduleId,
+            label: getModuleLabel(moduleId),
+          }))
+          setTabs(newTabs)
+          const activeTab = newTabs.find((t) => t.moduleId === savedActive) ?? newTabs[0]
+          setActiveTabId(activeTab.id)
+          setActiveModuleId(activeTab.moduleId)
+          return
+        }
+      }
+    } catch {
+      // ignore
+    }
     if (tabs.length === 0) {
       handleSelectModule('ban-lam-viec')
     }
-  }, [tabs.length, handleSelectModule])
+  }, [hasRestored, tabs.length, handleSelectModule])
+
+  /** Lưu trạng thái tab + màn hình để F5 vẫn giữ màn hình hiện tại. */
+  useEffect(() => {
+    if (tabs.length === 0) return
+    try {
+      const activeTab = tabs.find((t) => t.id === activeTabId)
+      const activeModuleIdToSave = activeTab?.moduleId ?? null
+      const openModuleIds = tabs.map((t) => t.moduleId)
+      sessionStorage.setItem(STORAGE_KEY_LAYOUT, JSON.stringify({ activeModuleId: activeModuleIdToSave, openModuleIds }))
+    } catch {
+      // ignore
+    }
+  }, [tabs, activeTabId])
+
+  /** Cảnh báo khi refresh (F5) hoặc đóng tab nếu có form đang nhập dở. */
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (getUnsavedChanges()) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
 
   const appContextValue: AppContextValue = {
     activeModuleId,

@@ -423,3 +423,16 @@ export function getDefaultDonMuaHangFilter(): DonMuaHangFilter {
   const { tu, den } = getDateRangeForKy('dau-thang-hien-tai')
   return { ky: 'dau-thang-hien-tai', tu, den }
 }
+
+/** Trả về số đơn hàng tiếp theo (DMH00001, DMH00002, ...) để dùng khi thêm đơn mới. */
+export function donMuaHangSoDonHangTiepTheo(): string {
+  const prefix = 'DMH'
+  let maxNum = 0
+  for (const d of _donList) {
+    const s = (d.so_don_hang || '').trim()
+    const m = s.replace(/^DMH0*/, '')
+    const n = parseInt(m, 10)
+    if (!Number.isNaN(n) && n > maxNum) maxNum = n
+  }
+  return `${prefix}${String(maxNum + 1).padStart(5, '0')}`
+}

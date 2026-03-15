@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   FileText,
+  FileInput,
   Package,
   RotateCcw,
   CreditCard,
@@ -31,6 +32,8 @@ const DARK = {
   border: 'var(--border)',
   hover: 'var(--bg-tab-active)',
   connector: 'var(--connector)',
+  /** Đường nối màu cam từ Đề xuất mua hàng tới Đơn / Hợp đồng */
+  connectorCam: 'var(--accent)',
 }
 
 const COL_GAP = 24
@@ -38,6 +41,10 @@ const ROW_GAP = 56
 const NODE_W = 110
 const NODE_H = 90
 const AREA_PAD = 44
+const SHIFT = NODE_W + COL_GAP
+
+/* Đề xuất mua hàng canh ngang với Báo cáo phân tích (cùng BAO_CAO_Y), bên trái */
+const NODE_DE_XUAT = { id: 'de-xuat-mua-hang', label: 'Đề xuất mua hàng', Icon: FileInput, x: AREA_PAD }
 
 /* Bố cục: Đường ngang chính (backbone) ở giữa; nút trên nối xuống, nút dưới nối lên */
 const ROW1_Y = AREA_PAD
@@ -45,21 +52,23 @@ const BACKBONE_Y = AREA_PAD + NODE_H + ROW_GAP / 2
 const ROW2_Y = BACKBONE_Y + ROW_GAP / 2
 
 const NODES_ROW1 = [
-  { id: 'don-mua-hang', label: 'Đơn mua hàng', Icon: FileText, x: AREA_PAD },
-  { id: 'nhan-hang', label: 'Nhận hàng hóa', label2: 'dịch vụ', Icon: Package, x: AREA_PAD + NODE_W + COL_GAP },
-  { id: 'tra-lai-hang', label: 'Trả lại hàng mua', Icon: RotateCcw, x: AREA_PAD + 2 * (NODE_W + COL_GAP) },
-  { id: 'tra-tien-ncc', label: 'Trả tiền', label2: 'Nhà cung cấp', Icon: CreditCard, x: AREA_PAD + 3 * (NODE_W + COL_GAP) },
+  { id: 'don-mua-hang', label: 'Đơn mua hàng', Icon: FileText, x: AREA_PAD + SHIFT },
+  { id: 'nhan-hang', label: 'Nhận hàng hóa', label2: 'dịch vụ', Icon: Package, x: AREA_PAD + SHIFT + (NODE_W + COL_GAP) },
+  { id: 'tra-lai-hang', label: 'Trả lại hàng mua', Icon: RotateCcw, x: AREA_PAD + SHIFT + 2 * (NODE_W + COL_GAP) },
+  { id: 'tra-tien-ncc', label: 'Trả tiền', label2: 'Nhà cung cấp', Icon: CreditCard, x: AREA_PAD + SHIFT + 3 * (NODE_W + COL_GAP) },
 ]
 
 /* Hàng dưới: Hợp đồng (dưới nút 1), Nhận HĐ (dưới nút 2), Giảm giá (giữa nút 3-4) */
 const NODES_ROW2 = [
-  { id: 'hop-dong-mua', label: 'Hợp đồng mua hàng', Icon: FileSignature, x: AREA_PAD },
-  { id: 'nhan-hoa-don', label: 'Nhận hóa đơn', Icon: Receipt, x: AREA_PAD + NODE_W + COL_GAP },
-  { id: 'giam-gia-mua', label: 'Giảm giá hàng mua', Icon: Percent, x: AREA_PAD + 2.5 * (NODE_W + COL_GAP) - NODE_W / 2 },
+  { id: 'hop-dong-mua', label: 'Hợp đồng mua hàng', Icon: FileSignature, x: AREA_PAD + SHIFT },
+  { id: 'nhan-hoa-don', label: 'Nhận hóa đơn', Icon: Receipt, x: AREA_PAD + SHIFT + (NODE_W + COL_GAP) },
+  { id: 'giam-gia-mua', label: 'Giảm giá hàng mua', Icon: Percent, x: AREA_PAD + SHIFT + 2.5 * (NODE_W + COL_GAP) - NODE_W / 2 },
 ]
 
-const BAO_CAO_X = AREA_PAD + 4 * (NODE_W + COL_GAP)
+const BAO_CAO_X = AREA_PAD + SHIFT + 4 * (NODE_W + COL_GAP)
 const BAO_CAO_Y = BACKBONE_Y - NODE_H / 2
+/* Đề xuất mua hàng cùng hàng với Báo cáo phân tích */
+const DE_XUAT_Y = BAO_CAO_Y
 
 const DIAGRAM_W = BAO_CAO_X + NODE_W + AREA_PAD
 const DIAGRAM_H = ROW2_Y + NODE_H + AREA_PAD
@@ -90,6 +99,7 @@ export function QuyTrinhMuaHang({
 
   const handleClickNode = (nodeId: string) => {
     const tabMap: Record<string, string> = {
+      'de-xuat-mua-hang': 'de-xuat-mua-hang',
       'don-mua-hang': 'don-mua-hang',
       'nhan-hang': 'nhan-hang',
       'tra-lai-hang': 'tra-lai-hang',
@@ -183,11 +193,25 @@ export function QuyTrinhMuaHang({
                     <path d="M0,0 L8,4 L0,8 Z" fill={DARK.connector} />
                   </marker>
                 </defs>
+                {/* Đường cam góc vuông ngược: cạnh trên Đề xuất → dọc xuống, rồi ngang sang cạnh trái Đơn mua hàng */}
+                <path
+                  d={`M ${AREA_PAD + NODE_W / 2} ${DE_XUAT_Y} L ${AREA_PAD + NODE_W / 2} ${ROW1_Y + NODE_H / 2} L ${AREA_PAD + SHIFT} ${ROW1_Y + NODE_H / 2}`}
+                  fill="none"
+                  stroke={DARK.connectorCam}
+                  strokeWidth={2}
+                />
+                {/* Đường cam góc vuông ngược: cạnh dưới Đề xuất → dọc lên, rồi ngang sang cạnh trái Hợp đồng mua hàng */}
+                <path
+                  d={`M ${AREA_PAD + NODE_W / 2} ${DE_XUAT_Y + NODE_H} L ${AREA_PAD + NODE_W / 2} ${ROW2_Y + NODE_H / 2} L ${AREA_PAD + SHIFT} ${ROW2_Y + NODE_H / 2}`}
+                  fill="none"
+                  stroke={DARK.connectorCam}
+                  strokeWidth={2}
+                />
                 {/* === Đường ngang chính (backbone) - trục luồng từ trái sang phải */}
                 <line
-                  x1={AREA_PAD + NODE_W / 2}
+                  x1={AREA_PAD + SHIFT + NODE_W / 2}
                   y1={BACKBONE_Y}
-                  x2={AREA_PAD + 4 * (NODE_W + COL_GAP) - COL_GAP / 2}
+                  x2={AREA_PAD + SHIFT + 4 * (NODE_W + COL_GAP) - COL_GAP / 2}
                   y2={BACKBONE_Y}
                   stroke={DARK.connector}
                   strokeWidth={1.5}
@@ -224,7 +248,7 @@ export function QuyTrinhMuaHang({
                 })}
                 {/* Mũi tên từ backbone sang Báo cáo phân tích */}
                 <line
-                  x1={AREA_PAD + 4 * (NODE_W + COL_GAP) - COL_GAP / 2}
+                  x1={AREA_PAD + SHIFT + 4 * (NODE_W + COL_GAP) - COL_GAP / 2}
                   y1={BACKBONE_Y}
                   x2={BAO_CAO_X - 4}
                   y2={BACKBONE_Y}
@@ -233,6 +257,19 @@ export function QuyTrinhMuaHang({
                   markerEnd="url(#arrow-mh-right)"
                 />
               </svg>
+              <button
+                type="button"
+                style={{ ...nodeStyle(hoverNode === NODE_DE_XUAT.id), left: NODE_DE_XUAT.x, top: DE_XUAT_Y, height: 90 }}
+                onMouseEnter={() => setHoverNode(NODE_DE_XUAT.id)}
+                onMouseLeave={() => setHoverNode(null)}
+                onClick={() => handleClickNode(NODE_DE_XUAT.id)}
+                title={`Mở: ${NODE_DE_XUAT.label}`}
+              >
+                <NODE_DE_XUAT.Icon size={20} color={DARK.textLight} style={{ marginBottom: 4, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, color: DARK.text, textAlign: 'center', lineHeight: 1.3, width: '100%' }}>
+                  {NODE_DE_XUAT.label}
+                </span>
+              </button>
               {NODES_ROW1.map((n) => (
                 <button
                   key={n.id}

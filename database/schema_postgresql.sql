@@ -41,11 +41,15 @@ CREATE TABLE IF NOT EXISTS "DanhMuc_Kho" (
   "ngay_tao" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Đơn vị tính: cột dùng trong dự án — ma_dvt, ten_dvt, ky_hieu, dien_giai (đồng bộ donViTinhApi, server, form)
 CREATE TABLE IF NOT EXISTS "DanhMuc_DonViTinh" (
   "id" SERIAL PRIMARY KEY,
-  "ma" VARCHAR(20) UNIQUE NOT NULL,
-  "ten" VARCHAR(50) NOT NULL
+  "ma_dvt" VARCHAR(50) UNIQUE NOT NULL,
+  "ten_dvt" VARCHAR(200) NOT NULL,
+  "ky_hieu" VARCHAR(50) DEFAULT '',
+  "dien_giai" TEXT DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS "idx_DonViTinh_ma_dvt" ON "DanhMuc_DonViTinh"("ma_dvt");
 
 -- Danh mục Tài khoản: Ngân hàng, Hệ thống tài khoản
 CREATE TABLE IF NOT EXISTS "DanhMuc_NganHang" (

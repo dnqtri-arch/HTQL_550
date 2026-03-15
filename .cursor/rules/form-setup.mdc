@@ -41,9 +41,7 @@ import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAd
 - **Lưu:** lưu và đóng (hoặc kết thúc thao tác).
 - **Lưu và tiếp tục:** chỉ hiện khi chế độ thêm mới; lưu → reset form → không đóng, nhập tiếp.
 
-### Đã áp dụng
-
-VatTuHangHoaForm, NhaCungCap (modal NCC), ThemDieuKhoanThanhToanModal, DonViTinh (modal ĐVT), ThemDonViTinhModal, ThemNhomVTHHModal, ThemKhoModal, ThemNhomKhNccModal.
+(Xem thêm danh sách form đã áp dụng trong **save-buttons.mdc**.)
 
 ---
 
@@ -79,8 +77,6 @@ Import từ `lookupControlStyles.ts`, áp dụng cho ô Điều khoản TT, NV m
 - **Khi bấm ra ngoài (không chọn):** Dropdown tự đóng (xử lý click-outside).
 - **Nút +:** Mở modal Thêm Điều khoản thanh toán; sau khi Lưu / Lưu và tiếp tục, form nhận luôn Tên + Số ngày được nợ + Số nợ tối đa của điều khoản vừa thêm.
 
-Đã áp dụng trong `NhaCungCap.tsx` (Tổ chức và Cá nhân).
-
 ---
 
 ## 4. Khi tạo form/modal mới
@@ -109,6 +105,3 @@ Import từ `lookupControlStyles.ts`, áp dụng cho ô Điều khoản TT, NV m
 - **Modal custom header:** Header là một `div` flex, bên phải tiêu đề thêm ô thông báo cố định (minHeight/height), khi có `loi` thì hiển thị text, khi không thì để trống nhưng vẫn giữ kích thước.
 - **Ref và focus:** Mỗi trường bắt buộc (Mã *, Tên *, …) gắn một ref; trong logic validate, tùy lỗi mà gọi `refTen.current?.focus()` hoặc `refMa.current?.focus()` (sau `setTimeout(..., 0)`).
 
-### Đã áp dụng
-
-NhaCungCap (form Thêm/Sửa NCC), ThemDieuKhoanThanhToanModal, ThemDonViTinhModal, ThemKhoModal, DonViTinh (modal Thêm/Sửa ĐVT).

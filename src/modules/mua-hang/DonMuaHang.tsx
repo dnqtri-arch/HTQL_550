@@ -11,11 +11,33 @@ import {
   donMuaHangDelete,
   getDefaultDonMuaHangFilter,
   getDateRangeForKy,
+  donMuaHangPost,
+  donMuaHangPut,
+  getDonMuaHangDraft,
+  setDonMuaHangDraft,
+  clearDonMuaHangDraft,
+  donMuaHangSoDonHangTiepTheo,
   type KyValue,
 } from './donMuaHangApi'
+import {
+  deXuatMuaHangGetAll,
+  deXuatMuaHangGetChiTiet,
+  deXuatMuaHangDelete,
+  getDefaultFilter as getDefaultDeXuatFilter,
+  getDateRangeForKy as getDateRangeForKyDeXuat,
+  KY_OPTIONS as KY_OPTIONS_DE_XUAT,
+  deXuatMuaHangPost,
+  deXuatMuaHangPut,
+  getDeXuatDraft,
+  setDeXuatDraft,
+  clearDeXuatDraft,
+  deXuatMuaHangSoDonHangTiepTheo,
+} from './deXuatMuaHangApi'
+import { MuaHangApiProvider, useMuaHangApi, type MuaHangApi } from './MuaHangApiContext'
 import { Modal } from '../../components/Modal'
 import { DonMuaHangForm } from './DonMuaHangForm'
 import { formatNumberDisplay, formatSoThapPhan } from '../../utils/numberFormat'
+import { exportCsv } from '../../utils/exportCsv'
 
 /** ISO date (yyyy-mm-dd) -> dd/MM/yyyy */
 function formatIsoToDdMmYyyy(iso: string | null): string {
@@ -126,8 +148,39 @@ const columnsChiTiet: DataGridColumn<DonMuaHangChiTiet>[] = [
   { key: 'lenh_san_xuat', label: 'Lệnh sản xuất', width: 100 },
 ]
 
-export function DonMuaHang() {
-  const [filter, setFilter] = useState<DonMuaHangFilter>(getDefaultDonMuaHangFilter)
+const apiDon: MuaHangApi = {
+  getAll: donMuaHangGetAll,
+  getChiTiet: donMuaHangGetChiTiet,
+  delete: donMuaHangDelete,
+  getDefaultFilter: getDefaultDonMuaHangFilter,
+  getDateRangeForKy,
+  KY_OPTIONS,
+  post: donMuaHangPost,
+  put: donMuaHangPut,
+  soDonHangTiepTheo: donMuaHangSoDonHangTiepTheo,
+  getDraft: getDonMuaHangDraft,
+  setDraft: setDonMuaHangDraft,
+  clearDraft: clearDonMuaHangDraft,
+}
+
+const apiDeXuat: MuaHangApi = {
+  getAll: deXuatMuaHangGetAll,
+  getChiTiet: deXuatMuaHangGetChiTiet,
+  delete: deXuatMuaHangDelete,
+  getDefaultFilter: getDefaultDeXuatFilter,
+  getDateRangeForKy: getDateRangeForKyDeXuat,
+  KY_OPTIONS: KY_OPTIONS_DE_XUAT,
+  post: deXuatMuaHangPost,
+  put: deXuatMuaHangPut,
+  soDonHangTiepTheo: deXuatMuaHangSoDonHangTiepTheo,
+  getDraft: getDeXuatDraft,
+  setDraft: setDeXuatDraft,
+  clearDraft: clearDeXuatDraft,
+}
+
+function DonMuaHangContent({ formTitle, soDonLabel }: { formTitle?: string; soDonLabel?: string }) {
+  const api = useMuaHangApi()
+  const [filter, setFilter] = useState<DonMuaHangFilter>(api.getDefaultFilter)
   const [danhSach, setDanhSach] = useState<DonMuaHangRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [chiTiet, setChiTiet] = useState<DonMuaHangChiTiet[]>([])
@@ -141,19 +194,21 @@ export function DonMuaHang() {
   const modalBoxRef = useRef<HTMLDivElement>(null)
   const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | null>(null)
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
+  const [formMinimized, setFormMinimized] = useState(false)
+  const [formMaximized, setFormMaximized] = useState(false)
 
   const loadData = () => {
-    setDanhSach(donMuaHangGetAll(filter))
+    setDanhSach(api.getAll(filter))
   }
 
   useEffect(() => {
-    setDanhSach(donMuaHangGetAll(filter))
-  }, [filter])
+    setDanhSach(api.getAll(filter))
+  }, [filter, api])
 
   useEffect(() => {
-    if (selectedId) setChiTiet(donMuaHangGetChiTiet(selectedId))
+    if (selectedId) setChiTiet(api.getChiTiet(selectedId))
     else setChiTiet([])
-  }, [selectedId])
+  }, [selectedId, api])
 
   useEffect(() => {
     if (!refEmail.current) return
@@ -182,7 +237,11 @@ export function DonMuaHang() {
   }, [showForm])
 
   useEffect(() => {
-    if (showForm) setModalPosition(null)
+    if (showForm) {
+      setModalPosition(null)
+      setFormMinimized(false)
+      setFormMaximized(false)
+    }
   }, [showForm])
 
   useEffect(() => {
@@ -212,7 +271,7 @@ export function DonMuaHang() {
   const dongModal = () => setShowForm(false)
 
   const onKyChange = (ky: KyValue) => {
-    const { tu, den } = getDateRangeForKy(ky)
+    const { tu, den } = api.getDateRangeForKy(ky)
     setFilter((f) => ({ ...f, ky, tu, den }))
   }
 
@@ -231,7 +290,22 @@ export function DonMuaHang() {
           <Plus size={14} />
           <span>Thêm</span>
         </button>
-        <button type="button" className="htql-toolbar-btn" style={toolbarBtn} onClick={() => {}}>
+        <button
+          type="button"
+          className="htql-toolbar-btn"
+          style={toolbarBtn}
+          disabled={!selectedId}
+          title={selectedId ? 'Xem đơn đang chọn' : 'Chọn đơn cần xem'}
+          onClick={() => {
+            if (selectedId) {
+              const d = danhSach.find((r) => r.id === selectedId)
+              if (d) {
+                setViewDon(d)
+                setShowForm(true)
+              }
+            }
+          }}
+        >
           <Eye size={14} />
           <span>Xem</span>
         </button>
@@ -303,11 +377,71 @@ export function DonMuaHang() {
                 borderRadius: 4,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 zIndex: 10,
-                minWidth: 140,
+                minWidth: 160,
               }}
             >
-              <button type="button" style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}>Excel</button>
-              <button type="button" style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}>CSV</button>
+              <button
+                type="button"
+                style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}
+                onClick={() => {
+                  const header = columnsDon.map((c) => c.label)
+                  const dataRows = danhSach.map((d) =>
+                    columnsDon.map((col) => {
+                      const v = d[col.key as keyof DonMuaHangRecord]
+                      if (col.key === 'ngay_don_hang' || col.key === 'ngay_giao_hang') return formatIsoToDdMmYyyy(v as string | null)
+                      if (col.key === 'gia_tri_don_hang') return formatNumberDisplay(Number(v), 0)
+                      return String(v ?? '')
+                    })
+                  )
+                  exportCsv([header, ...dataRows], 'Don_mua_hang.csv')
+                  setDropdownXuatKhau(false)
+                }}
+              >
+                Excel (danh sách đơn)
+              </button>
+              <button
+                type="button"
+                style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}
+                onClick={() => {
+                  const header = columnsDon.map((c) => c.label)
+                  const dataRows = danhSach.map((d) =>
+                    columnsDon.map((col) => {
+                      const v = d[col.key as keyof DonMuaHangRecord]
+                      if (col.key === 'ngay_don_hang' || col.key === 'ngay_giao_hang') return formatIsoToDdMmYyyy(v as string | null)
+                      if (col.key === 'gia_tri_don_hang') return formatNumberDisplay(Number(v), 0)
+                      return String(v ?? '')
+                    })
+                  )
+                  exportCsv([header, ...dataRows], 'Don_mua_hang.csv')
+                  setDropdownXuatKhau(false)
+                }}
+              >
+                CSV (danh sách đơn)
+              </button>
+              <button
+                type="button"
+                style={{ ...toolbarBtn, width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }}
+                disabled={chiTiet.length === 0}
+                title={chiTiet.length === 0 ? 'Chọn đơn để xem chi tiết' : 'Xuất chi tiết đơn đang chọn'}
+                onClick={() => {
+                  if (chiTiet.length === 0) return
+                  const header = columnsChiTiet.map((c) => c.label)
+                  const dataRows = chiTiet.map((row) =>
+                    columnsChiTiet.map((col) => {
+                      const v = row[col.key as keyof DonMuaHangChiTiet]
+                      if (['chieu_dai', 'chieu_rong', 'chieu_cao', 'ban_kinh', 'luong', 'so_luong', 'so_luong_nhan'].includes(col.key)) return formatSoThapPhan(Number(v), 2)
+                      if (['don_gia', 'thanh_tien', 'tien_thue_gtgt'].includes(col.key)) return formatNumberDisplay(Number(v), 0)
+                      if (col.key === 'pt_thue_gtgt') return v != null ? formatSoThapPhan(Number(v), 2) : ''
+                      return String(v ?? '')
+                    })
+                  )
+                  const soDon = selectedId ? danhSach.find((d) => d.id === selectedId)?.so_don_hang ?? 'chi-tiet' : 'chi-tiet'
+                  exportCsv([header, ...dataRows], `Don_mua_hang_${soDon}_chi_tiet.csv`)
+                  setDropdownXuatKhau(false)
+                }}
+              >
+                CSV (chi tiết đơn chọn)
+              </button>
             </div>
           )}
         </div>
@@ -328,7 +462,7 @@ export function DonMuaHang() {
           value={filter.ky}
           onChange={(e) => onKyChange(e.target.value as KyValue)}
         >
-          {KY_OPTIONS.map((o) => (
+          {api.KY_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
@@ -413,7 +547,7 @@ export function DonMuaHang() {
               style={{ ...toolbarBtn, background: 'var(--accent)', color: 'var(--accent-text)', borderColor: 'var(--accent)' }}
               onClick={() => {
                 if (deleteTarget) {
-                  donMuaHangDelete(deleteTarget.id)
+                  api.delete(deleteTarget.id)
                   loadData()
                   setSelectedId(null)
                   setDeleteTarget(null)
@@ -438,6 +572,8 @@ export function DonMuaHang() {
             ref={modalBoxRef}
             style={{
               ...modalBox,
+              ...(formMaximized ? { width: '100vw', maxWidth: '100vw', height: '100vh', maxHeight: '100vh', borderRadius: 0 } : {}),
+              ...(formMinimized ? { height: 'auto', maxHeight: 40, minHeight: 40 } : {}),
               ...(modalPosition != null ? { position: 'fixed' as const, left: modalPosition.x, top: modalPosition.y } : {}),
             }}
             onClick={(e) => e.stopPropagation()}
@@ -445,15 +581,32 @@ export function DonMuaHang() {
             <DonMuaHangForm
               onClose={() => { setViewDon(null); dongModal() }}
               onSaved={() => { setViewDon(null); dongModal(); loadData(); }}
+              onSavedAndView={(don) => { setViewDon(don); loadData(); }}
               onHeaderPointerDown={handleHeaderPointerDown}
               dragging={dragStart != null}
               readOnly={viewDon != null}
               initialDon={viewDon ?? undefined}
-              initialChiTiet={viewDon ? donMuaHangGetChiTiet(viewDon.id) : undefined}
+              initialChiTiet={viewDon ? api.getChiTiet(viewDon.id) : undefined}
+              formTitle={formTitle}
+              soDonLabel={soDonLabel}
+              onMinimize={() => setFormMinimized((v) => !v)}
+              onMaximize={() => setFormMaximized((v) => !v)}
             />
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+export function DonMuaHang({ variant = 'don' }: { variant?: 'don' | 'de-xuat' }) {
+  const api = variant === 'de-xuat' ? apiDeXuat : apiDon
+  return (
+    <MuaHangApiProvider api={api}>
+      <DonMuaHangContent
+        formTitle={variant === 'de-xuat' ? 'Đề xuất mua hàng' : undefined}
+        soDonLabel={variant === 'de-xuat' ? 'Số đề xuất' : undefined}
+      />
+    </MuaHangApiProvider>
   )
 }
