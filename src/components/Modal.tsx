@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useDraggable } from '../hooks/useDraggable'
 
 export interface ModalProps {
   open: boolean
@@ -19,23 +20,26 @@ const sizeStyles: Record<'sm' | 'md' | 'lg' | 'full', React.CSSProperties> = {
   full: { width: '90vw', maxWidth: 820, height: '85vh', maxHeight: '85vh' },
 }
 
+/** Overlay trong suốt — chỉ để bắt click ngoài, không làm tối màn hình */
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.6)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 1000,
+  pointerEvents: 'none',
 }
 
 const boxBase: React.CSSProperties = {
   background: 'var(--bg-secondary)',
   border: '1px solid var(--border-strong)',
   borderRadius: '6px',
-  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
   display: 'flex',
   flexDirection: 'column',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -44,6 +48,8 @@ const headerStyle: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: 600,
   color: 'var(--accent)',
+  cursor: 'move',
+  userSelect: 'none',
 }
 
 const bodyStyle: React.CSSProperties = {
@@ -70,6 +76,8 @@ export function Modal({
   size = 'md',
   closeOnOverlayClick = false,
 }: ModalProps) {
+  const { containerRef, containerStyle, dragHandleProps } = useDraggable()
+
   if (!open) return null
 
   const handleOverlayClick = () => {
@@ -79,10 +87,15 @@ export function Modal({
   return (
     <div style={overlayStyle} onClick={handleOverlayClick} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div
-        style={{ ...boxBase, ...sizeStyles[size] }}
+        ref={containerRef}
+        style={{ ...boxBase, ...sizeStyles[size], ...containerStyle }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div id="modal-title" style={headerStyle}>
+        <div
+          id="modal-title"
+          style={headerStyle}
+          onMouseDown={dragHandleProps.onMouseDown}
+        >
           {title}
         </div>
         <div style={bodyStyle}>

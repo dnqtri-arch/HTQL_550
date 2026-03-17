@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { X, HelpCircle, Plus, Check, Ban, Search } from 'lucide-react'
 import { ThemNhomVTHHModal } from './ThemNhomVTHHModal'
+import { useDraggable } from '../../hooks/useDraggable'
 
 export interface NhomVTHHItem {
   id: string
@@ -22,11 +23,12 @@ interface NhomVTHHLookupModalProps {
 const modalOverlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 2000,
+  pointerEvents: 'none',
 }
 
 const modalBox: React.CSSProperties = {
@@ -37,8 +39,9 @@ const modalBox: React.CSSProperties = {
   height: 480,
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
   overflow: 'hidden',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -172,6 +175,7 @@ export function NhomVTHHLookupModal({
   const [filterMa, setFilterMa] = useState('')
   const [filterTen, setFilterTen] = useState('')
   const overlayMouseDownRef = useRef(false)
+  const { containerRef, containerStyle, dragHandleProps } = useDraggable()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     const ids = value.split(';').map((s) => s.trim()).filter(Boolean)
     return new Set(ids)
@@ -210,8 +214,8 @@ export function NhomVTHHLookupModal({
       onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
       onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
     >
-      <div style={modalBox} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
+      <div ref={containerRef} style={{ ...modalBox, ...containerStyle }} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
           <span>{title}</span>
           <button
             type="button"

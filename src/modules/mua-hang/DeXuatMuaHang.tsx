@@ -113,11 +113,12 @@ const filterInput: React.CSSProperties = {
 const modalOverlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 1000,
+  pointerEvents: 'none',
 }
 
 const modalBox: React.CSSProperties = {
@@ -130,8 +131,9 @@ const modalBox: React.CSSProperties = {
   maxHeight: '85vh',
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
   overflow: 'hidden',
+  pointerEvents: 'auto',
 }
 
 const columnsDeXuat: DataGridColumn<DeXuatMuaHangRecord>[] = [
@@ -203,6 +205,9 @@ function DeXuatMuaHangContent() {
   const [donFormKey, setDonFormKey] = useState(0)
   const [prefillDon, setPrefillDon] = useState<Partial<DonMuaHangRecord> | null>(null)
   const [prefillChiTiet, setPrefillChiTiet] = useState<DonMuaHangChiTiet[] | null>(null)
+  const donBoxRef = useRef<HTMLDivElement>(null)
+  const [donModalPosition, setDonModalPosition] = useState<{ x: number; y: number } | null>(null)
+  const [donDragStart, setDonDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
 
   const loadData = () => setDanhSach(api.getAll(filter))
 
@@ -290,6 +295,28 @@ function DeXuatMuaHangContent() {
     const rect = modalBoxRef.current.getBoundingClientRect()
     setModalPosition({ x: rect.left, y: rect.top })
     setDragStart({ clientX: e.clientX, clientY: e.clientY, startX: rect.left, startY: rect.top })
+  }
+
+  useEffect(() => {
+    if (!donDragStart) return
+    const onMove = (e: MouseEvent) => {
+      if (!donDragStart) return
+      setDonModalPosition({ x: donDragStart.startX + e.clientX - donDragStart.clientX, y: donDragStart.startY + e.clientY - donDragStart.clientY })
+    }
+    const onUp = () => setDonDragStart(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [donDragStart])
+
+  const handleDonHeaderPointerDown = (e: React.MouseEvent) => {
+    if (!donBoxRef.current) return
+    const rect = donBoxRef.current.getBoundingClientRect()
+    setDonModalPosition({ x: rect.left, y: rect.top })
+    setDonDragStart({ clientX: e.clientX, clientY: e.clientY, startX: rect.left, startY: rect.top })
   }
 
   const dongModal = () => setShowForm(false)
@@ -726,19 +753,25 @@ function DeXuatMuaHangContent() {
       {showDonForm && (
         <div style={modalOverlay}>
           <div
-            style={modalBox}
+            ref={donBoxRef}
+            style={{
+              ...modalBox,
+              ...(donModalPosition != null ? { position: 'fixed' as const, left: donModalPosition.x, top: donModalPosition.y } : {}),
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <MuaHangApiProvider api={apiDon}>
               <DonMuaHangForm
                 key={`don-form-${donFormKey}`}
-                onClose={() => { setShowDonForm(false); setPrefillDon(null); setPrefillChiTiet(null) }}
-                onSaved={() => { setShowDonForm(false); setPrefillDon(null); setPrefillChiTiet(null) }}
-                onSavedAndView={() => { setShowDonForm(false); setPrefillDon(null); setPrefillChiTiet(null) }}
+                onClose={() => { setShowDonForm(false); setPrefillDon(null); setPrefillChiTiet(null); setDonModalPosition(null) }}
+                onSaved={() => { setShowDonForm(false); setPrefillDon(null); setPrefillChiTiet(null); setDonModalPosition(null) }}
+                onSavedAndView={() => { setShowDonForm(false); setPrefillDon(null); setPrefillChiTiet(null); setDonModalPosition(null) }}
                 readOnly={false}
                 prefillDon={prefillDon}
                 prefillChiTiet={prefillChiTiet}
                 fromDeXuat={true}
+                onHeaderPointerDown={handleDonHeaderPointerDown}
+                dragging={donDragStart != null}
                 formTitle="Đơn mua hàng"
               />
             </MuaHangApiProvider>

@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { NhomVTHHItem } from './NhomVTHHLookupModal'
+import { useDraggable } from '../../hooks/useDraggable'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 
 /** Lấy ký tự đầu mỗi từ trong tên, viết hoa, nối lại (vd: "Công cụ dụng cụ" → "CCDC") */
@@ -33,11 +34,12 @@ interface ThemNhomVTHHModalProps {
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 2100,
+  pointerEvents: 'none',
 }
 
 const box: React.CSSProperties = {
@@ -50,8 +52,9 @@ const box: React.CSSProperties = {
   maxHeight: 560,
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
   overflow: 'hidden',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -115,6 +118,7 @@ export function ThemNhomVTHHModal({
   parentOptions = [],
 }: ThemNhomVTHHModalProps) {
   const overlayMouseDownRef = useRef(false)
+  const { containerRef, containerStyle, dragHandleProps } = useDraggable()
   const [ten, setTen] = useState('')
   const [thuoc, setThuoc] = useState('')
 
@@ -146,8 +150,8 @@ export function ThemNhomVTHHModal({
       onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
       onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
     >
-      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
+      <div ref={containerRef} style={{ ...box, ...containerStyle }} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
           <span>Thêm Nhóm vật tư, hàng hóa, dịch vụ</span>
           <button
             type="button"

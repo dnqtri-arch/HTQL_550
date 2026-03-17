@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Search } from 'lucide-react'
+import { useDraggable } from '../../hooks/useDraggable'
 import type { NhaCungCapRecord } from './nhaCungCapApi'
 import { nhaCungCapGetAll } from './nhaCungCapApi'
 
@@ -11,11 +12,12 @@ export interface ChonNhaCungCapDonMuaHangModalProps {
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.6)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 2100,
+  pointerEvents: 'none',
 }
 
 const box: React.CSSProperties = {
@@ -27,8 +29,9 @@ const box: React.CSSProperties = {
   maxHeight: '80vh',
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
   overflow: 'hidden',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -67,6 +70,7 @@ const filterInputStyle: React.CSSProperties = {
 }
 
 export function ChonNhaCungCapDonMuaHangModal({ onSelect, onClose }: ChonNhaCungCapDonMuaHangModalProps) {
+  const { containerRef, containerStyle, dragHandleProps } = useDraggable()
   const [list, setList] = useState<NhaCungCapRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
@@ -91,8 +95,8 @@ export function ChonNhaCungCapDonMuaHangModal({ onSelect, onClose }: ChonNhaCung
 
   return (
     <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={box} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
+      <div ref={containerRef} style={{ ...box, ...containerStyle }} onMouseDown={(e) => e.stopPropagation()}>
+        <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
           <span>Chọn nhà cung cấp</span>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
             <X size={18} />

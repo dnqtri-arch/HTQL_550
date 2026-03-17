@@ -95,11 +95,12 @@ const filterInput: React.CSSProperties = {
 const modalOverlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 1000,
+  pointerEvents: 'none',
 }
 
 const modalBox: React.CSSProperties = {
@@ -112,8 +113,9 @@ const modalBox: React.CSSProperties = {
   maxHeight: '85vh',
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
   overflow: 'hidden',
+  pointerEvents: 'auto',
 }
 
 const columnsDon: DataGridColumn<DonMuaHangRecord>[] = [

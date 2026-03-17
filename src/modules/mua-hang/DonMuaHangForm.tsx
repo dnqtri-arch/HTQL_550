@@ -382,6 +382,30 @@ function chiTietToLines(ct: DonMuaHangChiTiet[]): GridLineRow[] {
   })
 }
 
+/** ĐG mua theo ĐVT — module-level để dùng trong cả component và useEffect prefill. */
+function getDonGiaMuaTheoDvt(vthh: VatTuHangHoaRecord, dvtMa: string): string {
+  const dvtChinh = (vthh.dvt_chinh ?? '').trim()
+  if (dvtMa === dvtChinh) {
+    const latest = Number(vthh.gia_mua_gan_nhat) || 0
+    const fixed = Number(vthh.don_gia_mua_co_dinh) || 0
+    if (latest === 0) return fixed > 0 ? formatSoTienHienThi(fixed) : ''
+    return formatSoTienHienThi(latest)
+  }
+  const quyDoi = vthh.don_vi_quy_doi ?? []
+  const row = quyDoi.find((r) => (r.dvt ?? '').trim() === dvtMa)
+  if (!row) return ''
+  const giaMuaInput = (row.gia_mua ?? '').toString().trim()
+  if (giaMuaInput) return formatSoTienHienThi(parseFloatVN(giaMuaInput))
+  const base = Number(vthh.gia_mua_gan_nhat) || Number(vthh.don_gia_mua_co_dinh) || 0
+  const tiLe = parseFloatVN(row.ti_le_quy_doi ?? '1')
+  const phep = row.phep_tinh
+  if (tiLe <= 0) return base > 0 ? formatSoTienHienThi(base) : ''
+  let calculated = base
+  if (phep === 'nhan') calculated = base * tiLe
+  else if (phep === 'chia') calculated = base / tiLe
+  return calculated > 0 ? formatSoTienHienThi(calculated) : ''
+}
+
 export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, prefillDon, prefillChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp, fromDeXuat = false }: DonMuaHangFormProps) {
   const api = useMuaHangApi()
   const formTitle = formTitleProp ?? 'Đơn mua hàng'
@@ -484,6 +508,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   const refNccWrap = useRef<HTMLDivElement>(null)
   const draftLoadedRef = useRef(false)
   const editingEnrichedRef = useRef(false)
+  const prefillEnrichedRef = useRef(false)
   const didSetSoDonRef = useRef(false)
   const didPrefillRef = useRef(false)
 
@@ -491,6 +516,9 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   const [showDeXuatPopup, setShowDeXuatPopup] = useState(false)
   const [viewDeXuatRecord, setViewDeXuatRecord] = useState<DeXuatMuaHangRecord | null>(null)
   const [viewDeXuatCt, setViewDeXuatCt] = useState<DeXuatMuaHangChiTiet[]>([])
+  const dxPopupBoxRef = useRef<HTMLDivElement>(null)
+  const [dxPopupPosition, setDxPopupPosition] = useState<{ x: number; y: number } | null>(null)
+  const [dxPopupDragStart, setDxPopupDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
 
   const toIsoDate = (d: Date | null): string => {
     if (!d) return ''
@@ -552,6 +580,28 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!dxPopupDragStart) return
+    const onMove = (e: MouseEvent) => {
+      if (!dxPopupDragStart) return
+      setDxPopupPosition({ x: dxPopupDragStart.startX + e.clientX - dxPopupDragStart.clientX, y: dxPopupDragStart.startY + e.clientY - dxPopupDragStart.clientY })
+    }
+    const onUp = () => setDxPopupDragStart(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [dxPopupDragStart])
+
+  const handleDxPopupHeaderPointerDown = (e: React.MouseEvent) => {
+    if (!dxPopupBoxRef.current) return
+    const rect = dxPopupBoxRef.current.getBoundingClientRect()
+    setDxPopupPosition({ x: rect.left, y: rect.top })
+    setDxPopupDragStart({ clientX: e.clientX, clientY: e.clientY, startX: rect.left, startY: rect.top })
+  }
 
   /** Khi mở đơn xem/sửa: đồng bộ _nhaCungCapId từ nccList theo tên NCC trong initialDon để dropdown địa điểm giao hàng tìm đúng. */
   useEffect(() => {
@@ -669,33 +719,6 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     setDiaDiemGiaoHang(Array.isArray(ddh) && ddh.length > 0 ? ddh[0] : (typeof ddh === 'string' ? ddh : '') || '')
   }
 
-  /** ĐG mua theo ĐVT (tab ngầm định hoặc đơn vị quy đổi):
-   * - Nếu ĐVT trùng ĐVT chính: lấy ở tab ngầm định — ĐG mua gần nhất = 0 thì lấy ĐG mua cố định, ngược lại > 0 thì lấy ĐG mua gần nhất.
-   * - Nếu ĐVT trùng ĐV quy đổi: lấy ĐG mua trong dòng đơn vị quy đổi tương ứng (hoặc tính từ tỉ lệ nếu chưa nhập).
-   */
-  const getDonGiaMuaTheoDvt = (vthh: VatTuHangHoaRecord, dvtMa: string): string => {
-    const dvtChinh = (vthh.dvt_chinh ?? '').trim()
-    if (dvtMa === dvtChinh) {
-      const latest = Number(vthh.gia_mua_gan_nhat) || 0
-      const fixed = Number(vthh.don_gia_mua_co_dinh) || 0
-      if (latest === 0) return fixed > 0 ? formatSoTienHienThi(fixed) : ''
-      return formatSoTienHienThi(latest)
-    }
-    const quyDoi = vthh.don_vi_quy_doi ?? []
-    const row = quyDoi.find((r) => (r.dvt ?? '').trim() === dvtMa)
-    if (!row) return ''
-    const giaMuaInput = (row.gia_mua ?? '').toString().trim()
-    if (giaMuaInput) return formatSoTienHienThi(parseFloatVN(giaMuaInput))
-    const base = Number(vthh.gia_mua_gan_nhat) || Number(vthh.don_gia_mua_co_dinh) || 0
-    const tiLe = parseFloatVN(row.ti_le_quy_doi ?? '1')
-    const phep = row.phep_tinh
-    if (tiLe <= 0) return base > 0 ? formatSoTienHienThi(base) : ''
-    let calculated = base
-    if (phep === 'nhan') calculated = base * tiLe
-    else if (phep === 'chia') calculated = base / tiLe
-    return calculated > 0 ? formatSoTienHienThi(calculated) : ''
-  }
-
   /** ĐG mua khi ĐVT là ĐVT chính (gọi từ handleChonVthh lúc mới chọn). */
   const getDonGiaHienThiWhenDvtChinh = (vthh: VatTuHangHoaRecord): string => {
     return getDonGiaMuaTheoDvt(vthh, vthh.dvt_chinh ?? '')
@@ -747,6 +770,39 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
       })
     )
   }, [editingFromView, vatTuList])
+
+  /** Khi chuyển từ Đề xuất mua hàng sang: tra cứu VTHH để điền ĐG mua, % thuế GTGT và tính Thành tiền / Tiền thuế / Tổng tiền. */
+  useEffect(() => {
+    if (!fromDeXuat || !prefillChiTiet || prefillChiTiet.length === 0) return
+    if (prefillEnrichedRef.current || vatTuList.length === 0) return
+    prefillEnrichedRef.current = true
+    setLines((prev) =>
+      prev.map((line) => {
+        const ma = (line['Mã'] ?? '').trim()
+        if (!ma) return line
+        const vthh = vatTuList.find((v) => v.ma === ma)
+        if (!vthh) return line
+        const dvt = (line['ĐVT'] ?? '').trim() || (vthh.dvt_chinh ?? '')
+        const donGiaStr = getDonGiaMuaTheoDvt(vthh, dvt)
+        const donGia = parseFloatVN(donGiaStr)
+        const soLuong = parseFloatVN(line['Số lượng'] ?? '')
+        const thanhTien = donGia * soLuong
+        const ptRaw = (vthh.thue_suat_gtgt ?? '').trim()
+        const pt = ptRaw === '' ? null : parseFloatVN(ptRaw)
+        const tienThue = pt != null ? (thanhTien * pt) / 100 : 0
+        return {
+          ...line,
+          _vthh: vthh,
+          _dvtOptions: buildDvtOptions(vthh),
+          'ĐG mua': donGia > 0 ? formatSoTienHienThi(donGia) : '',
+          '% thuế GTGT': ptRaw,
+          'Thành tiền': formatSoTienHienThi(thanhTien),
+          'Tiền thuế GTGT': formatSoTienHienThi(tienThue),
+          'Tổng tiền': formatSoTienHienThi(thanhTien + tienThue),
+        } as unknown as typeof prev[0]
+      })
+    )
+  }, [fromDeXuat, vatTuList, prefillChiTiet])
 
   const handleChonVthh = (vthh: VatTuHangHoaRecord, rowIndex: number) => {
     const next = [...lines]
@@ -1581,8 +1637,15 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
       )}
 
       {showDeXuatPopup && viewDeXuatRecord && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 8, width: '94vw', maxWidth: 1100, height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,.35)' }}
+        <div style={{ position: 'fixed', inset: 0, background: 'transparent', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div
+            ref={dxPopupBoxRef}
+            style={{
+              background: 'var(--bg-primary)', borderRadius: 8, width: '94vw', maxWidth: 1100,
+              height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.4)', pointerEvents: 'auto',
+              ...(dxPopupPosition != null ? { position: 'fixed' as const, left: dxPopupPosition.x, top: dxPopupPosition.y } : {}),
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <DeXuatMuaHangApiProvider api={apiDx}>
@@ -1591,7 +1654,9 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
                 readOnly={true}
                 initialDon={viewDeXuatRecord}
                 initialChiTiet={viewDeXuatCt}
-                onClose={() => setShowDeXuatPopup(false)}
+                onHeaderPointerDown={handleDxPopupHeaderPointerDown}
+                dragging={dxPopupDragStart != null}
+                onClose={() => { setShowDeXuatPopup(false); setDxPopupPosition(null) }}
                 onSaved={() => {
                   const updated = deXuatMuaHangGetById(viewDeXuatRecord.id)
                   if (updated) {
@@ -1625,6 +1690,7 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
                     }
                   }
                   setShowDeXuatPopup(false)
+                  setDxPopupPosition(null)
                 }}
               />
             </DeXuatMuaHangApiProvider>
