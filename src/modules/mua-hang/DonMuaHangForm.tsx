@@ -40,6 +40,41 @@ import type { DonMuaHangCreatePayload, DonMuaHangRecord, DonMuaHangChiTiet } fro
 import { useMuaHangApi } from './MuaHangApiContext'
 import { setUnsavedChanges } from '../../context/unsavedChanges'
 import { Modal } from '../../components/Modal'
+import type { DeXuatMuaHangRecord, DeXuatMuaHangChiTiet } from './deXuatMuaHangApi'
+import {
+  deXuatMuaHangGetById,
+  deXuatMuaHangGetChiTiet,
+  deXuatMuaHangGetAll,
+  deXuatMuaHangDelete,
+  deXuatMuaHangPost,
+  deXuatMuaHangPut,
+  deXuatMuaHangSoDonHangTiepTheo,
+  deXuatMuaHangSoDonHangExists,
+  getDeXuatDraft,
+  setDeXuatDraft,
+  clearDeXuatDraft,
+  getDefaultFilter as deXuatGetDefaultFilter,
+  getDateRangeForKy as deXuatGetDateRangeForKy,
+  KY_OPTIONS as DEXUAT_KY_OPTIONS,
+} from './deXuatMuaHangApi'
+import { DeXuatMuaHangApiProvider, type DeXuatMuaHangApi } from './DeXuatMuaHangApiContext'
+import { DeXuatMuaHangForm } from './DeXuatMuaHangForm'
+
+const apiDx: DeXuatMuaHangApi = {
+  getAll: deXuatMuaHangGetAll,
+  getChiTiet: deXuatMuaHangGetChiTiet,
+  delete: deXuatMuaHangDelete,
+  getDefaultFilter: deXuatGetDefaultFilter,
+  getDateRangeForKy: deXuatGetDateRangeForKy,
+  KY_OPTIONS: DEXUAT_KY_OPTIONS,
+  post: deXuatMuaHangPost,
+  put: deXuatMuaHangPut,
+  soDonHangTiepTheo: deXuatMuaHangSoDonHangTiepTheo,
+  soDonHangExists: deXuatMuaHangSoDonHangExists,
+  getDraft: getDeXuatDraft,
+  setDraft: setDeXuatDraft,
+  clearDraft: clearDeXuatDraft,
+}
 
 registerLocale('vi', vi)
 
@@ -82,14 +117,6 @@ const toolbarBtnAccent: React.CSSProperties = {
   color: 'var(--accent-text)',
   borderColor: 'var(--accent)',
   boxShadow: '0 1px 3px rgba(230, 126, 34, 0.4)',
-}
-
-const formTitleBoxStyle: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 700,
-  color: 'var(--text-primary)',
-  marginBottom: 8,
-  padding: '0 4px',
 }
 
 const groupBox: React.CSSProperties = {
@@ -196,12 +223,17 @@ export interface DonMuaHangFormProps {
   /** Dữ liệu đơn khi mở chế độ xem */
   initialDon?: DonMuaHangRecord | null
   initialChiTiet?: DonMuaHangChiTiet[] | null
+  /** Dữ liệu đổ sẵn khi tạo mới (chuyển từ chứng từ khác), không phải chế độ xem */
+  prefillDon?: Partial<DonMuaHangRecord> | null
+  prefillChiTiet?: DonMuaHangChiTiet[] | null
   /** Sau khi bấm Lưu (chỉ lưu): chuyển form sang chế độ xem đơn vừa lưu, không đóng form */
   onSavedAndView?: (don: DonMuaHangRecord) => void
   /** Tiêu đề form (vd. "Đề xuất mua hàng") */
   formTitle?: string
   /** Nhãn trường số đơn (vd. "Số đề xuất") */
   soDonLabel?: string
+  /** true khi form được mở từ màn hình Đề xuất mua hàng (chuột phải → chuyển đơn) — Đối chiếu chỉ hiển thị, không có link */
+  fromDeXuat?: boolean
 }
 
 const TINH_TRANG_OPTIONS = [
@@ -350,30 +382,86 @@ function chiTietToLines(ct: DonMuaHangChiTiet[]): GridLineRow[] {
   })
 }
 
-export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp }: DonMuaHangFormProps) {
+export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, prefillDon, prefillChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp, fromDeXuat = false }: DonMuaHangFormProps) {
   const api = useMuaHangApi()
   const formTitle = formTitleProp ?? 'Đơn mua hàng'
   const soDonLabel = soDonLabelProp ?? 'Số đơn hàng'
   const isViewMode = readOnly && initialDon != null
   const [editingFromView, setEditingFromView] = useState(false)
   const effectiveReadOnly = readOnly && !editingFromView
-  const [nhaCungCapDisplay, setNhaCungCapDisplay] = useState(() => (isViewMode && initialDon ? initialDon.nha_cung_cap : ''))
+  const [nhaCungCapDisplay, setNhaCungCapDisplay] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.nha_cung_cap
+    if (prefillDon?.nha_cung_cap) return prefillDon.nha_cung_cap
+    return ''
+  })
   const [_nhaCungCapId, setNhaCungCapId] = useState<number | null>(null)
-  const [diaChi, setDiaChi] = useState(() => (isViewMode && initialDon ? (initialDon.dia_chi ?? '') : ''))
-  const [maSoThue, setMaSoThue] = useState(() => (isViewMode && initialDon ? (initialDon.ma_so_thue ?? '') : ''))
-  const [dienGiai, setDienGiai] = useState(() => (isViewMode && initialDon ? (initialDon.dien_giai ?? '') : ''))
-  const [nvMuaHang, setNvMuaHang] = useState(() => (isViewMode && initialDon ? (initialDon.nv_mua_hang ?? '') : ''))
-  const [dieuKhoanTT, setDieuKhoanTT] = useState(() => (isViewMode && initialDon ? (initialDon.dieu_khoan_tt ?? '') : ''))
-  const [soNgayDuocNo, setSoNgayDuocNo] = useState(() => (isViewMode && initialDon ? (initialDon.so_ngay_duoc_no ?? '0') : '0'))
-  const [diaDiemGiaoHang, setDiaDiemGiaoHang] = useState(() => (isViewMode && initialDon ? (initialDon.dia_diem_giao_hang ?? '') : ''))
-  const [dieuKhoanKhac, setDieuKhoanKhac] = useState(() => (isViewMode && initialDon ? (initialDon.dieu_khoan_khac ?? '') : ''))
-  const [thamChieu, setThamChieu] = useState(() => (isViewMode && initialDon ? (initialDon.so_chung_tu_cukcuk ?? '') : ''))
-  const [ngayDonHang, setNgayDonHang] = useState<Date | null>(() => (isViewMode && initialDon ? parseIsoToDate(initialDon.ngay_don_hang) : new Date()))
+  const [diaChi, setDiaChi] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.dia_chi ?? ''
+    if (prefillDon?.dia_chi != null) return prefillDon.dia_chi
+    return ''
+  })
+  const [maSoThue, setMaSoThue] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.ma_so_thue ?? ''
+    if (prefillDon?.ma_so_thue != null) return prefillDon.ma_so_thue
+    return ''
+  })
+  const [dienGiai, setDienGiai] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.dien_giai ?? ''
+    if (prefillDon?.dien_giai != null) return prefillDon.dien_giai
+    return ''
+  })
+  const [nvMuaHang, setNvMuaHang] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.nv_mua_hang ?? ''
+    if (prefillDon?.nv_mua_hang != null) return prefillDon.nv_mua_hang
+    return ''
+  })
+  const [dieuKhoanTT, setDieuKhoanTT] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.dieu_khoan_tt ?? ''
+    if (prefillDon?.dieu_khoan_tt != null) return prefillDon.dieu_khoan_tt
+    return ''
+  })
+  const [soNgayDuocNo, setSoNgayDuocNo] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.so_ngay_duoc_no ?? '0'
+    if (prefillDon?.so_ngay_duoc_no != null) return prefillDon.so_ngay_duoc_no
+    return '0'
+  })
+  const [diaDiemGiaoHang, setDiaDiemGiaoHang] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.dia_diem_giao_hang ?? ''
+    if (prefillDon?.dia_diem_giao_hang != null) return prefillDon.dia_diem_giao_hang
+    return ''
+  })
+  const [dieuKhoanKhac, setDieuKhoanKhac] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.dieu_khoan_khac ?? ''
+    if (prefillDon?.dieu_khoan_khac != null) return prefillDon.dieu_khoan_khac
+    return ''
+  })
+  const [thamChieu, setThamChieu] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.so_chung_tu_cukcuk ?? ''
+    if (prefillDon?.so_chung_tu_cukcuk != null) return prefillDon.so_chung_tu_cukcuk
+    return ''
+  })
+  const [ngayDonHang, setNgayDonHang] = useState<Date | null>(() => {
+    if (isViewMode && initialDon) return parseIsoToDate(initialDon.ngay_don_hang)
+    if (prefillDon?.ngay_don_hang) return parseIsoToDate(prefillDon.ngay_don_hang)
+    return new Date()
+  })
   const [soDonHang, setSoDonHang] = useState(() => (isViewMode && initialDon ? initialDon.so_don_hang : api.soDonHangTiepTheo()))
-  const [tinhTrang, setTinhTrang] = useState(() => (isViewMode && initialDon ? initialDon.tinh_trang : 'Chưa thực hiện'))
-  const [ngayGiaoHang, setNgayGiaoHang] = useState<Date | null>(() => (isViewMode && initialDon ? parseIsoToDate(initialDon.ngay_giao_hang) : null))
+  const [tinhTrang, setTinhTrang] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.tinh_trang
+    if (prefillDon?.tinh_trang) return prefillDon.tinh_trang
+    return 'Chưa thực hiện'
+  })
+  const [ngayGiaoHang, setNgayGiaoHang] = useState<Date | null>(() => {
+    if (isViewMode && initialDon) return parseIsoToDate(initialDon.ngay_giao_hang)
+    if (prefillDon?.ngay_giao_hang !== undefined) return parseIsoToDate(prefillDon.ngay_giao_hang ?? null)
+    return null
+  })
   /** Dòng grid: các key cột là string; _dvtOptions khi VTHH có đơn vị quy đổi; _vthh để lấy ĐG mua theo ĐVT khi đổi ĐVT */
-  const [lines, setLines] = useState<GridLineRow[]>(() => (isViewMode && initialChiTiet && initialChiTiet.length > 0 ? chiTietToLines(initialChiTiet) : []))
+  const [lines, setLines] = useState<GridLineRow[]>(() => {
+    if (isViewMode && initialChiTiet && initialChiTiet.length > 0) return chiTietToLines(initialChiTiet)
+    if (prefillChiTiet && prefillChiTiet.length > 0) return chiTietToLines(prefillChiTiet)
+    return []
+  })
   const [vatTuList, setVatTuList] = useState<VatTuHangHoaRecord[]>([])
   const [dvtList, setDvtList] = useState<{ ma_dvt: string; ten_dvt: string; ky_hieu?: string }[]>([])
   const [vthhDropdownRowIndex, setVthhDropdownRowIndex] = useState<number | null>(null)
@@ -397,6 +485,12 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
   const draftLoadedRef = useRef(false)
   const editingEnrichedRef = useRef(false)
   const didSetSoDonRef = useRef(false)
+  const didPrefillRef = useRef(false)
+
+  const deXuatId = initialDon?.de_xuat_id || prefillDon?.de_xuat_id || null
+  const [showDeXuatPopup, setShowDeXuatPopup] = useState(false)
+  const [viewDeXuatRecord, setViewDeXuatRecord] = useState<DeXuatMuaHangRecord | null>(null)
+  const [viewDeXuatCt, setViewDeXuatCt] = useState<DeXuatMuaHangChiTiet[]>([])
 
   const toIsoDate = (d: Date | null): string => {
     if (!d) return ''
@@ -422,6 +516,34 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
     didSetSoDonRef.current = true
     setSoDonHang(api.soDonHangTiepTheo())
   }, [initialDon, api])
+
+  /** Khi tạo mới từ chứng từ khác (prefill): đổ dữ liệu một lần khi mount. */
+  useEffect(() => {
+    if (isViewMode) return
+    if (didPrefillRef.current) return
+    if (!prefillDon && (!prefillChiTiet || prefillChiTiet.length === 0)) return
+    didPrefillRef.current = true
+
+    if (prefillDon) {
+      if (prefillDon.nha_cung_cap != null) setNhaCungCapDisplay(prefillDon.nha_cung_cap)
+      if (prefillDon.dia_chi != null) setDiaChi(prefillDon.dia_chi)
+      if (prefillDon.ma_so_thue != null) setMaSoThue(prefillDon.ma_so_thue)
+      if (prefillDon.dien_giai != null) setDienGiai(prefillDon.dien_giai)
+      if (prefillDon.nv_mua_hang != null) setNvMuaHang(prefillDon.nv_mua_hang)
+      if (prefillDon.dieu_khoan_tt != null) setDieuKhoanTT(prefillDon.dieu_khoan_tt)
+      if (prefillDon.so_ngay_duoc_no != null) setSoNgayDuocNo(prefillDon.so_ngay_duoc_no)
+      if (prefillDon.dia_diem_giao_hang != null) setDiaDiemGiaoHang(prefillDon.dia_diem_giao_hang)
+      if (prefillDon.dieu_khoan_khac != null) setDieuKhoanKhac(prefillDon.dieu_khoan_khac)
+      if (prefillDon.tinh_trang != null) setTinhTrang(prefillDon.tinh_trang)
+      if (prefillDon.ngay_don_hang != null) setNgayDonHang(parseIsoToDate(prefillDon.ngay_don_hang))
+      if (prefillDon.ngay_giao_hang !== undefined) setNgayGiaoHang(parseIsoToDate(prefillDon.ngay_giao_hang ?? null))
+      // so_don_hang: luôn dùng số tự sinh của đơn mua hàng
+    }
+
+    if (prefillChiTiet && prefillChiTiet.length > 0) {
+      setLines(chiTietToLines(prefillChiTiet))
+    }
+  }, [isViewMode, prefillDon, prefillChiTiet])
 
   useEffect(() => {
     let cancelled = false
@@ -682,6 +804,7 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
       dieu_khoan_khac: dieuKhoanKhac.trim(),
       gia_tri_don_hang: giaTriDonHang,
       so_chung_tu_cukcuk: thamChieu.trim(),
+      de_xuat_id: deXuatId ?? undefined,
       chiTiet,
     }
   }
@@ -863,11 +986,64 @@ export function DonMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging
           <div style={{ ...groupBox, flex: 1, minWidth: 560 }}>
             <div style={groupBoxTitle}>Thông tin chung</div>
             <div style={fieldRow}>
-              <label style={labelStyle}>Tham chiếu</label>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 2, alignItems: 'center' }}>
-                <input style={inputStyle} value={thamChieu} onChange={(e) => setThamChieu(e.target.value)} readOnly={effectiveReadOnly} disabled={effectiveReadOnly} />
-                <button type="button" style={lookupActionButtonStyle} title="Tìm"><Search size={12} /></button>
-                <button type="button" style={lookupActionButtonStyle}><Plus size={12} /></button>
+              <label style={labelStyle}>Đối chiếu</label>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 8, alignItems: 'center' }}>
+                {fromDeXuat ? (
+                  /* Chỉ hiển thị khi mở từ màn hình Đề xuất (chuột phải → chuyển đơn) */
+                  <div
+                    style={{
+                      flex: 1, minWidth: 0, fontSize: 11,
+                      color: thamChieu ? 'var(--text-primary)' : 'var(--text-muted)',
+                      padding: '2px 6px', height: FORM_FIELD_HEIGHT, minHeight: FORM_FIELD_HEIGHT,
+                      display: 'flex', alignItems: 'center', borderRadius: 4,
+                      background: 'var(--bg-primary)', border: '1px solid transparent',
+                      overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                    }}
+                    title={thamChieu || undefined}
+                  >
+                    {thamChieu || ''}
+                  </div>
+                ) : (
+                  /* Hiển thị dạng link khi xem/sửa đơn bình thường */
+                  <div
+                    style={{
+                      flex: 1, minWidth: 0, fontSize: 11,
+                      padding: '2px 6px', height: FORM_FIELD_HEIGHT, minHeight: FORM_FIELD_HEIGHT,
+                      display: 'flex', alignItems: 'center', borderRadius: 4,
+                      background: 'var(--bg-primary)', border: '1px solid transparent',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {thamChieu && deXuatId ? (
+                      <button
+                        type="button"
+                        title="Xem đề xuất mua hàng liên kết"
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          cursor: 'pointer', color: 'var(--accent)', fontSize: 11,
+                          textDecoration: 'underline', textUnderlineOffset: 2,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+                        }}
+                        onClick={() => {
+                          const rec = deXuatMuaHangGetById(deXuatId)
+                          if (!rec) return
+                          setViewDeXuatRecord(rec)
+                          setViewDeXuatCt(deXuatMuaHangGetChiTiet(deXuatId))
+                          setShowDeXuatPopup(true)
+                        }}
+                      >
+                        {thamChieu}
+                      </button>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {thamChieu || ''}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <button type="button" style={lookupActionButtonStyle} title="Tìm">
+                  <Search size={12} />
+                </button>
               </div>
             </div>
             <div style={fieldRow}>
@@ -1402,6 +1578,58 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
           }}
           onClose={() => setShowThemNccForm(false)}
         />
+      )}
+
+      {showDeXuatPopup && viewDeXuatRecord && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 8, width: '94vw', maxWidth: 1100, height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,.35)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DeXuatMuaHangApiProvider api={apiDx}>
+              <DeXuatMuaHangForm
+                key={`dx-popup-${viewDeXuatRecord.id}`}
+                readOnly={true}
+                initialDon={viewDeXuatRecord}
+                initialChiTiet={viewDeXuatCt}
+                onClose={() => setShowDeXuatPopup(false)}
+                onSaved={() => {
+                  const updated = deXuatMuaHangGetById(viewDeXuatRecord.id)
+                  if (updated) {
+                    const updatedCt = deXuatMuaHangGetChiTiet(viewDeXuatRecord.id)
+                    setNhaCungCapDisplay(updated.nha_cung_cap ?? '')
+                    setDiaChi(updated.dia_chi ?? '')
+                    setMaSoThue(updated.ma_so_thue ?? '')
+                    setDienGiai((updated.ghi_chu ?? updated.dien_giai ?? '').trim())
+                    setNvMuaHang(updated.nv_mua_hang ?? '')
+                    setDieuKhoanTT(updated.dieu_khoan_tt ?? '')
+                    setSoNgayDuocNo(updated.so_ngay_duoc_no ?? '0')
+                    setDiaDiemGiaoHang(updated.dia_diem_giao_hang ?? '')
+                    setDieuKhoanKhac(updated.dieu_khoan_khac ?? '')
+                    setNgayDonHang(parseIsoToDate(updated.ngay_don_hang))
+                    setNgayGiaoHang(parseIsoToDate(updated.ngay_giao_hang ?? null))
+                    const loai = (updated.so_chung_tu_cukcuk ?? '').trim()
+                    const ten = (updated.de_xuat_tu_ten ?? '').trim()
+                    setThamChieu(loai && ten ? `${loai}: ${ten}` : loai || ten || '')
+                    if (updatedCt.length > 0) {
+                      const mapped: DonMuaHangChiTiet[] = updatedCt.map((c, i) => ({
+                        id: `dx-${viewDeXuatRecord.id}-${i}`,
+                        don_mua_hang_id: '',
+                        ma_hang: c.ma_hang, ten_hang: c.ten_hang, ma_quy_cach: '',
+                        dvt: c.dvt, chieu_dai: 0, chieu_rong: 0, chieu_cao: 0, ban_kinh: 0, luong: 0,
+                        so_luong: c.so_luong, so_luong_nhan: 0,
+                        don_gia: c.don_gia ?? 0, thanh_tien: c.thanh_tien ?? 0,
+                        pt_thue_gtgt: c.pt_thue_gtgt ?? null, tien_thue_gtgt: c.tien_thue_gtgt ?? null,
+                        lenh_san_xuat: '', ghi_chu: c.ghi_chu ?? '',
+                      }))
+                      setLines(chiTietToLines(mapped))
+                    }
+                  }
+                  setShowDeXuatPopup(false)
+                }}
+              />
+            </DeXuatMuaHangApiProvider>
+          </div>
+        </div>
       )}
     </div>
   )

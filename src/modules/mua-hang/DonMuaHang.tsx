@@ -22,8 +22,20 @@ import {
 import { MuaHangApiProvider, useMuaHangApi, type MuaHangApi } from './MuaHangApiContext'
 import { Modal } from '../../components/Modal'
 import { DonMuaHangForm } from './DonMuaHangForm'
+import { donViTinhGetAll } from '../kho/donViTinhApi'
 import { formatNumberDisplay, formatSoThapPhan } from '../../utils/numberFormat'
 import { exportCsv } from '../../utils/exportCsv'
+
+/** Hiển thị ĐVT theo nguyên tắc ĐVT chính: ky_hieu || ten_dvt, không hiển thị mã */
+function dvtHienThiLabel(
+  value: string | null | undefined,
+  dvtList: { ma_dvt: string; ten_dvt: string; ky_hieu?: string }[]
+): string {
+  if (value == null || value === '') return ''
+  const v = String(value).trim()
+  const d = dvtList.find((x) => x.ma_dvt === v || x.ten_dvt === v || (x.ky_hieu != null && x.ky_hieu === v))
+  return d ? (d.ky_hieu || d.ten_dvt || d.ma_dvt) : v
+}
 
 /** ISO date (yyyy-mm-dd) -> dd/MM/yyyy */
 function formatIsoToDdMmYyyy(iso: string | null): string {
@@ -115,25 +127,6 @@ const columnsDon: DataGridColumn<DonMuaHangRecord>[] = [
   { key: 'so_chung_tu_cukcuk', label: 'Số chứng từ CUKCUK', width: '14%' },
 ]
 
-const columnsChiTiet: DataGridColumn<DonMuaHangChiTiet>[] = [
-  { key: 'ma_hang', label: 'Mã hàng', width: 90 },
-  { key: 'ten_hang', label: 'Tên hàng', width: 140 },
-  { key: 'ma_quy_cach', label: 'Mã quy cách', width: 90 },
-  { key: 'dvt', label: 'ĐVT', width: 60 },
-  { key: 'chieu_dai', label: 'Chiều dài', width: 80, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'chieu_rong', label: 'Chiều rộng', width: 80, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'chieu_cao', label: 'Chiều cao', width: 80, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'ban_kinh', label: 'Bán kính', width: 80, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'luong', label: 'Lượng', width: 70, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'so_luong', label: 'Số lượng', width: 75, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'so_luong_nhan', label: 'Số lượng nhận', width: 95, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-  { key: 'thanh_tien', label: 'Thành tiền', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-  { key: 'pt_thue_gtgt', label: '% thuế GTGT', width: 90, align: 'right', renderCell: (v) => (v != null ? formatSoThapPhan(Number(v), 2) : '') },
-  { key: 'tien_thue_gtgt', label: 'Tiền thuế GTGT', width: 100, align: 'right', renderCell: (v) => (v != null ? formatNumberDisplay(Number(v), 0) : '') },
-  { key: 'lenh_san_xuat', label: 'Lệnh sản xuất', width: 100 },
-]
-
 const apiDon: MuaHangApi = {
   getAll: donMuaHangGetAll,
   getChiTiet: donMuaHangGetChiTiet,
@@ -169,10 +162,22 @@ function DonMuaHangContent() {
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
   const [formMinimized, setFormMinimized] = useState(false)
   const [formMaximized, setFormMaximized] = useState(false)
+  const [dvtList, setDvtList] = useState<{ ma_dvt: string; ten_dvt: string; ky_hieu?: string }[]>([])
 
-  const loadData = () => {
-    setDanhSach(api.getAll(filter))
-  }
+  const loadData = () => setDanhSach(api.getAll(filter))
+
+  /** Cột bảng chi tiết — giống màn đề xuất: Mã, Tên VTHH, ĐVT (theo nguyên tắc), Số lượng, Ghi chú */
+  const columnsChiTiet: DataGridColumn<DonMuaHangChiTiet>[] = [
+    { key: 'ma_hang', label: 'Mã', width: 64 },
+    { key: 'ten_hang', label: 'Tên VTHH', width: 220 },
+    { key: 'dvt', label: 'ĐVT', width: 64, renderCell: (v) => dvtHienThiLabel(v as string, dvtList) },
+    { key: 'so_luong', label: 'Số lượng', width: 68, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
+    { key: 'ghi_chu', label: 'Ghi chú', width: 260 },
+  ]
+
+  useEffect(() => {
+    donViTinhGetAll().then(setDvtList)
+  }, [])
 
   useEffect(() => {
     setDanhSach(api.getAll(filter))
@@ -249,12 +254,7 @@ function DonMuaHangContent() {
   }
 
   const tongGiaTri = danhSach.reduce((s, d) => s + d.gia_tri_don_hang, 0)
-  const tongChiTiet = {
-    luong: chiTiet.reduce((s, c) => s + c.luong, 0),
-    so_luong: chiTiet.reduce((s, c) => s + c.so_luong, 0),
-    so_luong_nhan: chiTiet.reduce((s, c) => s + c.so_luong_nhan, 0),
-    thanh_tien: chiTiet.reduce((s, c) => s + c.thanh_tien, 0),
-  }
+  const tongChiTiet = { so_luong: chiTiet.reduce((s, c) => s + c.so_luong, 0) }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -402,9 +402,8 @@ function DonMuaHangContent() {
                   const dataRows = chiTiet.map((row) =>
                     columnsChiTiet.map((col) => {
                       const v = row[col.key as keyof DonMuaHangChiTiet]
-                      if (['chieu_dai', 'chieu_rong', 'chieu_cao', 'ban_kinh', 'luong', 'so_luong', 'so_luong_nhan'].includes(col.key)) return formatSoThapPhan(Number(v), 2)
-                      if (['don_gia', 'thanh_tien', 'tien_thue_gtgt'].includes(col.key)) return formatNumberDisplay(Number(v), 0)
-                      if (col.key === 'pt_thue_gtgt') return v != null ? formatSoThapPhan(Number(v), 2) : ''
+                      if (col.key === 'dvt') return dvtHienThiLabel(v as string, dvtList)
+                      if (col.key === 'so_luong') return formatSoThapPhan(Number(v), 2)
                       return String(v ?? '')
                     })
                   )
@@ -463,41 +462,41 @@ function DonMuaHangContent() {
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <DataGrid<DonMuaHangRecord>
-          columns={columnsDon}
-          data={danhSach}
-          keyField="id"
-          selectedRowId={selectedId}
-          onRowSelect={(r) => setSelectedId(r.id)}
-          onRowDoubleClick={(r) => {
-            setViewDon(r)
-            setShowForm(true)
-          }}
-          summary={[
-            { label: 'Giá trị đơn hàng', value: formatNumberDisplay(tongGiaTri, 0) },
-            { label: 'Số dòng', value: `= ${danhSach.length}` },
-          ]}
-          maxHeight={280}
-          compact
-        />
-
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Chi tiết</div>
-          <DataGrid<DonMuaHangChiTiet>
-            columns={columnsChiTiet}
-            data={chiTiet}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <DataGrid<DonMuaHangRecord>
+            columns={columnsDon}
+            data={danhSach}
             keyField="id"
+            selectedRowId={selectedId}
+            onRowSelect={(r) => setSelectedId(r.id)}
+            onRowDoubleClick={(r) => {
+              setViewDon(r)
+              setShowForm(true)
+            }}
             summary={[
-              { label: 'Lượng', value: formatSoThapPhan(tongChiTiet.luong, 2) },
-              { label: 'Số lượng', value: formatSoThapPhan(tongChiTiet.so_luong, 2) },
-              { label: 'Số lượng nhận', value: formatSoThapPhan(tongChiTiet.so_luong_nhan, 2) },
-              { label: 'Thành tiền', value: formatNumberDisplay(tongChiTiet.thanh_tien, 0) },
-              { label: 'Số dòng', value: `= ${chiTiet.length}` },
+              { label: 'Giá trị đơn hàng', value: formatNumberDisplay(tongGiaTri, 0) },
+              { label: 'Số dòng', value: `= ${danhSach.length}` },
             ]}
-            maxHeight={220}
+            height="100%"
             compact
           />
+        </div>
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', height: 260, minHeight: 260 }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Chi tiết</div>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <DataGrid<DonMuaHangChiTiet>
+              columns={columnsChiTiet}
+              data={chiTiet}
+              keyField="id"
+              summary={[
+                { label: 'Số lượng', value: formatSoThapPhan(tongChiTiet.so_luong, 2) },
+                { label: 'Số dòng', value: `= ${chiTiet.length}` },
+              ]}
+              height="100%"
+              compact
+            />
+          </div>
         </div>
       </div>
 

@@ -20,6 +20,7 @@ export interface DonMuaHangRecord {
   dieu_khoan_khac: string
   gia_tri_don_hang: number
   so_chung_tu_cukcuk: string
+  de_xuat_id?: string
 }
 
 export interface DonMuaHangChiTiet {
@@ -41,6 +42,7 @@ export interface DonMuaHangChiTiet {
   pt_thue_gtgt: number | null
   tien_thue_gtgt: number | null
   lenh_san_xuat: string
+  ghi_chu?: string
 }
 
 /** Payload tạo đơn mua hàng (header + chi tiết), API sẽ gán id và don_mua_hang_id. Lưu toàn bộ dữ liệu đang hiển thị tại các trường. */
@@ -60,6 +62,7 @@ export interface DonMuaHangCreatePayload {
   dieu_khoan_khac: string
   gia_tri_don_hang: number
   so_chung_tu_cukcuk: string
+  de_xuat_id?: string
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string
@@ -175,6 +178,7 @@ function normalizeDon(d: Partial<DonMuaHangRecord> & { id: string }): DonMuaHang
     dieu_khoan_khac: d.dieu_khoan_khac ?? '',
     gia_tri_don_hang: typeof d.gia_tri_don_hang === 'number' ? d.gia_tri_don_hang : 0,
     so_chung_tu_cukcuk: d.so_chung_tu_cukcuk ?? '',
+    de_xuat_id: d.de_xuat_id ?? undefined,
   }
 }
 
@@ -343,6 +347,7 @@ export function donMuaHangPost(payload: DonMuaHangCreatePayload): DonMuaHangReco
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     gia_tri_don_hang: payload.gia_tri_don_hang,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
+    de_xuat_id: payload.de_xuat_id ?? undefined,
   }
   _donList.push(don)
   payload.chiTiet.forEach((c, i) => {
@@ -392,6 +397,7 @@ export function donMuaHangPut(donId: string, payload: DonMuaHangCreatePayload): 
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     gia_tri_don_hang: payload.gia_tri_don_hang,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
+    de_xuat_id: payload.de_xuat_id ?? undefined,
   }
   _chiTietList = _chiTietList.filter((c) => c.don_mua_hang_id !== donId)
   payload.chiTiet.forEach((c, i) => {

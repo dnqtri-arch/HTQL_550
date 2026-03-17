@@ -13,6 +13,8 @@ export interface DeXuatMuaHangRecord {
   dia_chi: string
   ma_so_thue: string
   dien_giai: string
+  /** Ghi chú (hiển thị trên danh sách); nếu chưa có riêng thì dùng dien_giai. */
+  ghi_chu?: string
   nv_mua_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
@@ -20,6 +22,7 @@ export interface DeXuatMuaHangRecord {
   dieu_khoan_khac: string
   gia_tri_don_hang: number
   so_chung_tu_cukcuk: string
+  de_xuat_tu_ten: string
 }
 
 export interface DeXuatMuaHangChiTiet {
@@ -41,6 +44,7 @@ export interface DeXuatMuaHangChiTiet {
   pt_thue_gtgt: number | null
   tien_thue_gtgt: number | null
   lenh_san_xuat: string
+  ghi_chu: string
 }
 
 export interface DeXuatMuaHangCreatePayload {
@@ -59,6 +63,7 @@ export interface DeXuatMuaHangCreatePayload {
   dieu_khoan_khac: string
   gia_tri_don_hang: number
   so_chung_tu_cukcuk: string
+  de_xuat_tu_ten: string
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string
@@ -68,6 +73,7 @@ export interface DeXuatMuaHangCreatePayload {
     thanh_tien: number
     pt_thue_gtgt: number | null
     tien_thue_gtgt: number | null
+    ghi_chu: string
   }>
 }
 
@@ -108,7 +114,6 @@ export function getDateRangeForKy(ky: string): { tu: string; den: string } {
 }
 
 export const KY_OPTIONS = [
-  { value: 'dau-thang-hien-tai', label: 'Đầu tháng đơn hiện tại' },
   { value: 'tuan-nay', label: 'Tuần này' },
   { value: 'thang-nay', label: 'Tháng này' },
   { value: 'quy-nay', label: 'Quý này' },
@@ -132,7 +137,7 @@ const SO_PREFIX = 'DXMH'
 function normalizeDon(d: Partial<DeXuatMuaHangRecord> & { id: string }): DeXuatMuaHangRecord {
   return {
     id: d.id,
-    tinh_trang: d.tinh_trang ?? 'Chưa thực hiện',
+    tinh_trang: d.tinh_trang ?? 'Đề xuất mới',
     ngay_don_hang: d.ngay_don_hang ?? '',
     so_don_hang: d.so_don_hang ?? '',
     ngay_giao_hang: d.ngay_giao_hang ?? null,
@@ -147,6 +152,7 @@ function normalizeDon(d: Partial<DeXuatMuaHangRecord> & { id: string }): DeXuatM
     dieu_khoan_khac: d.dieu_khoan_khac ?? '',
     gia_tri_don_hang: typeof d.gia_tri_don_hang === 'number' ? d.gia_tri_don_hang : 0,
     so_chung_tu_cukcuk: d.so_chung_tu_cukcuk ?? '',
+    de_xuat_tu_ten: d.de_xuat_tu_ten ?? '',
   }
 }
 
@@ -190,8 +196,8 @@ let _chiTietList: DeXuatMuaHangChiTiet[] = _initial.chiTiet
 export type DeXuatMuaHangDraftLine = Record<string, string> & { _dvtOptions?: string[] }
 
 export function getDefaultFilter(): DeXuatMuaHangFilter {
-  const { tu, den } = getDateRangeForKy('dau-thang-hien-tai')
-  return { ky: 'dau-thang-hien-tai', tu, den }
+  const { tu, den } = getDateRangeForKy('thang-nay')
+  return { ky: 'thang-nay', tu, den }
 }
 
 export function deXuatMuaHangGetAll(filter: DeXuatMuaHangFilter): DeXuatMuaHangRecord[] {
@@ -200,6 +206,10 @@ export function deXuatMuaHangGetAll(filter: DeXuatMuaHangFilter): DeXuatMuaHangR
     const ngay = d.ngay_don_hang
     return ngay >= tu && ngay <= den
   })
+}
+
+export function deXuatMuaHangGetById(id: string): DeXuatMuaHangRecord | null {
+  return _donList.find((d) => d.id === id) ?? null
 }
 
 export function deXuatMuaHangGetChiTiet(donId: string): DeXuatMuaHangChiTiet[] {
@@ -231,6 +241,7 @@ export function deXuatMuaHangPost(payload: DeXuatMuaHangCreatePayload): DeXuatMu
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     gia_tri_don_hang: payload.gia_tri_don_hang,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
+    de_xuat_tu_ten: payload.de_xuat_tu_ten ?? '',
   }
   _donList.push(don)
   payload.chiTiet.forEach((c, i) => {
@@ -253,6 +264,7 @@ export function deXuatMuaHangPost(payload: DeXuatMuaHangCreatePayload): DeXuatMu
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
+      ghi_chu: c.ghi_chu ?? '',
     })
   })
   saveToStorage()
@@ -279,6 +291,7 @@ export function deXuatMuaHangPut(donId: string, payload: DeXuatMuaHangCreatePayl
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     gia_tri_don_hang: payload.gia_tri_don_hang,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
+    de_xuat_tu_ten: payload.de_xuat_tu_ten ?? '',
   }
   _chiTietList = _chiTietList.filter((c) => c.de_xuat_mua_hang_id !== donId)
   payload.chiTiet.forEach((c, i) => {
@@ -301,6 +314,7 @@ export function deXuatMuaHangPut(donId: string, payload: DeXuatMuaHangCreatePayl
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
+      ghi_chu: c.ghi_chu ?? '',
     })
   })
   saveToStorage()
@@ -315,6 +329,13 @@ export function deXuatMuaHangSoDonHangTiepTheo(): string {
     if (!Number.isNaN(n) && n > maxNum) maxNum = n
   }
   return `${SO_PREFIX}${String(maxNum + 1).padStart(5, '0')}`
+}
+
+/** Kiểm tra mã ĐX đã tồn tại chưa (excludeId: bỏ qua bản ghi đang sửa). */
+export function deXuatMuaHangSoDonHangExists(soDonHang: string, excludeId?: string): boolean {
+  const ma = (soDonHang || '').trim()
+  if (!ma) return false
+  return _donList.some((d) => d.so_don_hang?.trim() === ma && d.id !== excludeId)
 }
 
 export function getDeXuatDraft(): DeXuatMuaHangDraftLine[] | null {

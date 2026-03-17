@@ -20,6 +20,7 @@ export interface DeXuatMuaHangApi {
   post: (payload: DeXuatMuaHangCreatePayload) => DeXuatMuaHangRecord
   put: (donId: string, payload: DeXuatMuaHangCreatePayload) => void
   soDonHangTiepTheo: () => string
+  soDonHangExists: (soDonHang: string, excludeId?: string) => boolean
   getDraft: () => (Record<string, string> & { _dvtOptions?: string[] })[] | null
   setDraft: (lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>) => void
   clearDraft: () => void

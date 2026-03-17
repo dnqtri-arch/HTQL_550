@@ -3,7 +3,10 @@ import { useState } from 'react'
 const pageStyles: React.CSSProperties = {
   background: 'var(--bg-primary)',
   color: 'var(--text-primary)',
-  minHeight: '100%',
+  height: '100%',
+  minHeight: 0,
+  display: 'flex',
+  flexDirection: 'column',
 }
 
 const subNavStyles: React.CSSProperties = {
@@ -75,7 +78,9 @@ export function ModulePage({ title, subNav, children, defaultSubId }: ModulePage
           ))}
         </div>
       )}
-      <div>{content}</div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {content}
+      </div>
     </div>
   )
 }

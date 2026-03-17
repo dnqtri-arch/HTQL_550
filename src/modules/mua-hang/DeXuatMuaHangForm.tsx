@@ -14,10 +14,6 @@ import {
   HelpCircle,
   Power,
   ChevronDown,
-  Search,
-  Minus,
-  Square,
-  X,
 } from 'lucide-react'
 import DatePicker, { registerLocale } from 'react-datepicker'
 import { vi } from 'date-fns/locale'
@@ -35,7 +31,7 @@ import type { VatTuHangHoaRecord } from '../kho/vatTuHangHoaApi'
 import { vatTuHangHoaGetAll } from '../kho/vatTuHangHoaApi'
 import { donViTinhGetAll } from '../kho/donViTinhApi'
 import { matchSearchKeyword } from '../../utils/stringUtils'
-import { formatSoNguyenInput, formatNumberDisplay, formatSoTien, formatSoTienHienThi, formatSoTuNhienInput, parseFloatVN } from '../../utils/numberFormat'
+import { formatSoNguyenInput, formatSoTienHienThi, formatSoTuNhienInput, parseFloatVN } from '../../utils/numberFormat'
 import type { DeXuatMuaHangCreatePayload, DeXuatMuaHangRecord, DeXuatMuaHangChiTiet } from './deXuatMuaHangApi'
 import { useDeXuatMuaHangApi } from './DeXuatMuaHangApiContext'
 import { setUnsavedChanges } from '../../context/unsavedChanges'
@@ -82,14 +78,6 @@ const toolbarBtnAccent: React.CSSProperties = {
   color: 'var(--accent-text)',
   borderColor: 'var(--accent)',
   boxShadow: '0 1px 3px rgba(230, 126, 34, 0.4)',
-}
-
-const formTitleBoxStyle: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 700,
-  color: 'var(--text-primary)',
-  marginBottom: 8,
-  padding: '0 4px',
 }
 
 const groupBox: React.CSSProperties = {
@@ -162,25 +150,6 @@ const footerWrap: React.CSSProperties = {
   gap: 8,
 }
 
-const footerSummaryItem: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: 'var(--text-primary)',
-}
-
-const footerSummaryValue: React.CSSProperties = {
-  color: 'var(--accent)',
-  fontWeight: 700,
-}
-
-const hintBar: React.CSSProperties = {
-  padding: '4px 10px',
-  fontSize: 10,
-  color: 'var(--text-muted)',
-  background: 'var(--bg-secondary)',
-  borderTop: '1px solid var(--border)',
-}
-
 export interface DeXuatMuaHangFormProps {
   onClose: () => void
   onSaved?: () => void
@@ -192,37 +161,26 @@ export interface DeXuatMuaHangFormProps {
   initialDon?: DeXuatMuaHangRecord | null
   initialChiTiet?: DeXuatMuaHangChiTiet[] | null
   onSavedAndView?: (don: DeXuatMuaHangRecord) => void
+  /** Gọi khi Lưu và tiếp tục xong — chỉ refresh danh sách, không đóng form */
+  onSavedAndContinue?: () => void
   formTitle?: string
   soDonLabel?: string
 }
 
 const TINH_TRANG_OPTIONS = [
-  { value: 'Chưa thực hiện', label: 'Chưa thực hiện' },
-  { value: 'Đang thực hiện', label: 'Đang thực hiện' },
+  { value: 'Đề xuất mới', label: 'Đề xuất mới' },
+  { value: 'Chuyển ĐMH', label: 'Chuyển ĐMH' },
   { value: 'Hoàn thành', label: 'Hoàn thành' },
   { value: 'Hủy bỏ', label: 'Hủy bỏ' },
 ]
 
-/** Các mức thuế suất GTGT thiết lập trước (dropdown % thuế GTGT) */
-const THUE_SUAT_GTGT_OPTIONS = [
-  { value: '', label: 'Chưa xác định' },
-  { value: '0', label: '0%' },
-  { value: '5', label: '5%' },
-  { value: '8', label: '8%' },
-  { value: '10', label: '10%' },
-] as const
-
-/** Các cột tab Vật tư hàng hóa (đủ theo yêu cầu) */
+/** Các cột bảng chi tiết đề xuất mua hàng */
 const GRID_COLUMNS_VTHH = [
   'Mã',
   'Tên VTHH',
   'ĐVT',
   'Số lượng',
-  'ĐG mua',
-  'Thành tiền',
-  '% thuế GTGT',
-  'Tiền thuế GTGT',
-  'Tổng tiền',
+  'Ghi chú',
 ] as const
 
 /** Hiển thị ĐVT theo nguyên tắc ĐVT chính: ky_hieu || ten_dvt, không hiển thị mã */
@@ -238,15 +196,11 @@ function dvtHienThiLabel(
 
 /** Độ rộng cột cố định: tránh dịch chuyển khi thêm dòng (dùng với tableLayout: fixed). */
 function colWidthStyle(col: string): React.CSSProperties {
-  if (col === 'Mã') return { width: 88, minWidth: 88 }
+  if (col === 'Mã') return { width: 64, minWidth: 64 }
   if (col === 'Tên VTHH') return { width: 220, minWidth: 220 }
   if (col === 'ĐVT') return { width: 64, minWidth: 64 }
   if (col === 'Số lượng') return { width: 68, minWidth: 68 }
-  if (col === 'ĐG mua') return { width: 100, minWidth: 100 }
-  if (col === 'Thành tiền') return { width: 100, minWidth: 100 }
-  if (col === '% thuế GTGT') return { width: 72, minWidth: 72 }
-  if (col === 'Tiền thuế GTGT') return { width: 80, minWidth: 80 }
-  if (col === 'Tổng tiền') return { width: 100, minWidth: 100 }
+  if (col === 'Ghi chú') return { width: 260, minWidth: 180 }
   return {}
 }
 
@@ -301,20 +255,6 @@ const titleBarDrag: React.CSSProperties = {
   userSelect: 'none',
 }
 
-const titleBarBtn: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: 32,
-  height: 28,
-  padding: 0,
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-  borderRadius: 2,
-}
-
 function parseIsoToDate(iso: string | null): Date | null {
   if (!iso || !iso.trim()) return null
   const d = new Date(iso.trim())
@@ -325,27 +265,19 @@ function parseIsoToDate(iso: string | null): Date | null {
 type GridLineRow = Record<string, string> & { _dvtOptions?: string[]; _vthh?: VatTuHangHoaRecord }
 
 function chiTietToLines(ct: DeXuatMuaHangChiTiet[]): GridLineRow[] {
-  return ct.map((c) => {
-    const thanhTien = c.thanh_tien
-    const tienThue = c.tien_thue_gtgt ?? 0
-    return {
-      'Mã': c.ma_hang,
-      'Tên VTHH': c.ten_hang,
-      'ĐVT': c.dvt,
-      'Số lượng': formatSoTienHienThi(c.so_luong),
-      'ĐG mua': formatSoTienHienThi(c.don_gia),
-      'Thành tiền': formatSoTienHienThi(thanhTien),
-      '% thuế GTGT': c.pt_thue_gtgt != null ? String(c.pt_thue_gtgt) : '',
-      'Tiền thuế GTGT': formatSoTienHienThi(tienThue),
-      'Tổng tiền': formatSoTienHienThi(thanhTien + tienThue),
-    }
-  })
+  return ct.map((c) => ({
+    'Mã': c.ma_hang,
+    'Tên VTHH': c.ten_hang,
+    'ĐVT': c.dvt,
+    'Số lượng': formatSoTienHienThi(c.so_luong),
+    'Ghi chú': c.ghi_chu ?? '',
+  }))
 }
 
-export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, onMinimize, onMaximize, onSavedAndView, formTitle: formTitleProp, soDonLabel: soDonLabelProp }: DeXuatMuaHangFormProps) {
+export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, onMinimize: _onMinimize, onMaximize: _onMaximize, onSavedAndView: _onSavedAndView, onSavedAndContinue, formTitle: formTitleProp, soDonLabel: soDonLabelProp }: DeXuatMuaHangFormProps) {
   const api = useDeXuatMuaHangApi()
   const formTitle = formTitleProp ?? 'Đề xuất mua hàng'
-  const soDonLabel = soDonLabelProp ?? 'Số đề xuất'
+  const soDonLabel = soDonLabelProp ?? 'Mã ĐX'
   const isViewMode = readOnly && initialDon != null
   const [editingFromView, setEditingFromView] = useState(false)
   const effectiveReadOnly = readOnly && !editingFromView
@@ -359,10 +291,11 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
   const [soNgayDuocNo, setSoNgayDuocNo] = useState(() => (isViewMode && initialDon ? (initialDon.so_ngay_duoc_no ?? '0') : '0'))
   const [diaDiemGiaoHang, setDiaDiemGiaoHang] = useState(() => (isViewMode && initialDon ? (initialDon.dia_diem_giao_hang ?? '') : ''))
   const [dieuKhoanKhac, setDieuKhoanKhac] = useState(() => (isViewMode && initialDon ? (initialDon.dieu_khoan_khac ?? '') : ''))
-  const [thamChieu, setThamChieu] = useState(() => (isViewMode && initialDon ? (initialDon.so_chung_tu_cukcuk ?? '') : ''))
+  const [loaiDeXuat, setLoaiDeXuat] = useState(() => (isViewMode && initialDon ? (initialDon.so_chung_tu_cukcuk || 'Bổ sung VTHH') : 'Bổ sung VTHH'))
+  const [tenDeXuatTu, setTenDeXuatTu] = useState(() => (isViewMode && initialDon ? (initialDon.de_xuat_tu_ten ?? '') : ''))
   const [ngayDonHang, setNgayDonHang] = useState<Date | null>(() => (isViewMode && initialDon ? parseIsoToDate(initialDon.ngay_don_hang) : new Date()))
   const [soDonHang, setSoDonHang] = useState(() => (isViewMode && initialDon ? initialDon.so_don_hang : api.soDonHangTiepTheo()))
-  const [tinhTrang, setTinhTrang] = useState(() => (isViewMode && initialDon ? initialDon.tinh_trang : 'Chưa thực hiện'))
+  const [tinhTrang, setTinhTrang] = useState(() => (isViewMode && initialDon ? initialDon.tinh_trang : 'Đề xuất mới'))
   const [ngayGiaoHang, setNgayGiaoHang] = useState<Date | null>(() => (isViewMode && initialDon ? parseIsoToDate(initialDon.ngay_giao_hang) : null))
   /** Dòng grid: các key cột là string; _dvtOptions khi VTHH có đơn vị quy đổi; _vthh để lấy ĐG mua theo ĐVT khi đổi ĐVT */
   const [lines, setLines] = useState<GridLineRow[]>(() => (isViewMode && initialChiTiet && initialChiTiet.length > 0 ? chiTietToLines(initialChiTiet) : []))
@@ -386,6 +319,8 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
   const refDiaDiemGiaoHangWrap = useRef<HTMLDivElement>(null)
   const refEmail = useRef<HTMLDivElement>(null)
   const refNccWrap = useRef<HTMLDivElement>(null)
+  const refNccInput = useRef<HTMLInputElement>(null)
+  const focusNccWithoutDropdownRef = useRef(false)
   const draftLoadedRef = useRef(false)
   const editingEnrichedRef = useRef(false)
   const didSetSoDonRef = useRef(false)
@@ -415,6 +350,37 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
     setSoDonHang(api.soDonHangTiepTheo())
   }, [initialDon, api])
 
+  /** Khi mở form thêm mới: đảm bảo reset toàn bộ (phòng form reuse state / key không đổi). Chạy một lần khi mount ở chế độ thêm. */
+  useEffect(() => {
+    if (initialDon != null) return
+    api.clearDraft()
+    draftLoadedRef.current = false
+    setNhaCungCapDisplay('')
+    setNhaCungCapId(null)
+    setDiaChi('')
+    setMaSoThue('')
+    setDienGiai('')
+    setNvMuaHang('')
+    setDieuKhoanTT('')
+    setSoNgayDuocNo('0')
+    setDiaDiemGiaoHang('')
+    setDieuKhoanKhac('')
+    setLoaiDeXuat('Bổ sung VTHH')
+    setTenDeXuatTu('')
+    setNgayDonHang(new Date())
+    setSoDonHang(api.soDonHangTiepTheo())
+    setTinhTrang('Đề xuất mới')
+    setNgayGiaoHang(null)
+    setLines([])
+    setLoi('')
+    setNccSearchKeyword('')
+    setNccDropdownOpen(false)
+    setVthhDropdownRowIndex(null)
+    setVthhDropdownRect(null)
+  // Chỉ chạy một lần khi mount; initialDon null = chế độ thêm mới
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     nhaCungCapGetAll().then((data) => {
@@ -443,7 +409,8 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
     setSoNgayDuocNo(initialDon.so_ngay_duoc_no ?? '0')
     setDiaDiemGiaoHang(initialDon.dia_diem_giao_hang ?? '')
     setDieuKhoanKhac(initialDon.dieu_khoan_khac ?? '')
-    setThamChieu(initialDon.so_chung_tu_cukcuk ?? '')
+    setLoaiDeXuat(initialDon.so_chung_tu_cukcuk || 'Bổ sung VTHH')
+    setTenDeXuatTu(initialDon.de_xuat_tu_ten ?? '')
     setNgayDonHang(parseIsoToDate(initialDon.ngay_don_hang))
     setSoDonHang(initialDon.so_don_hang)
     setTinhTrang(initialDon.tinh_trang)
@@ -543,34 +510,7 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
    * - Nếu ĐVT trùng ĐVT chính: lấy ở tab ngầm định — ĐG mua gần nhất = 0 thì lấy ĐG mua cố định, ngược lại > 0 thì lấy ĐG mua gần nhất.
    * - Nếu ĐVT trùng ĐV quy đổi: lấy ĐG mua trong dòng đơn vị quy đổi tương ứng (hoặc tính từ tỉ lệ nếu chưa nhập).
    */
-  const getDonGiaMuaTheoDvt = (vthh: VatTuHangHoaRecord, dvtMa: string): string => {
-    const dvtChinh = (vthh.dvt_chinh ?? '').trim()
-    if (dvtMa === dvtChinh) {
-      const latest = Number(vthh.gia_mua_gan_nhat) || 0
-      const fixed = Number(vthh.don_gia_mua_co_dinh) || 0
-      if (latest === 0) return fixed > 0 ? formatSoTienHienThi(fixed) : ''
-      return formatSoTienHienThi(latest)
-    }
-    const quyDoi = vthh.don_vi_quy_doi ?? []
-    const row = quyDoi.find((r) => (r.dvt ?? '').trim() === dvtMa)
-    if (!row) return ''
-    const giaMuaInput = (row.gia_mua ?? '').toString().trim()
-    if (giaMuaInput) return formatSoTienHienThi(parseFloatVN(giaMuaInput))
-    const base = Number(vthh.gia_mua_gan_nhat) || Number(vthh.don_gia_mua_co_dinh) || 0
-    const tiLe = parseFloatVN(row.ti_le_quy_doi ?? '1')
-    const phep = row.phep_tinh
-    if (tiLe <= 0) return base > 0 ? formatSoTienHienThi(base) : ''
-    let calculated = base
-    if (phep === 'nhan') calculated = base * tiLe
-    else if (phep === 'chia') calculated = base / tiLe
-    return calculated > 0 ? formatSoTienHienThi(calculated) : ''
-  }
-
-  /** ĐG mua khi ĐVT là ĐVT chính (gọi từ handleChonVthh lúc mới chọn). */
-  const getDonGiaHienThiWhenDvtChinh = (vthh: VatTuHangHoaRecord): string => {
-    return getDonGiaMuaTheoDvt(vthh, vthh.dvt_chinh ?? '')
-  }
-
+  // (đã bỏ) helper tính ĐG mua theo ĐVT — hiện không dùng trong form đề xuất
   /** Build danh sách mã ĐVT để chọn: ĐVT chính + các đơn vị quy đổi (unique, giữ thứ tự) */
   const buildDvtOptions = (vthh: VatTuHangHoaRecord): string[] | undefined => {
     const main = (vthh.dvt_chinh ?? '').trim()
@@ -625,8 +565,6 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
     row['Mã'] = vthh.ma
     row['Tên VTHH'] = vthh.ten ?? ''
     row['ĐVT'] = vthh.dvt_chinh ?? ''
-    row['% thuế GTGT'] = vthh.thue_suat_gtgt ?? ''
-    row['ĐG mua'] = getDonGiaHienThiWhenDvtChinh(vthh)
     row._vthh = vthh
     const opts = buildDvtOptions(vthh)
     if (opts) row._dvtOptions = opts
@@ -638,26 +576,19 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
   }
 
   const buildPayload = (): DeXuatMuaHangCreatePayload => {
-    let giaTriDonHang = 0
     const chiTiet = lines
       .filter((line) => (line['Mã'] ?? '').trim() !== '')
-      .map((line) => {
-        const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
-        const ptRaw = (line['% thuế GTGT'] ?? '').trim()
-        const pt = ptRaw === '' || ptRaw === 'Chưa xác định' ? null : parseFloatVN(ptRaw)
-        const tienThue = pt != null ? (thanhTien * pt) / 100 : 0
-        giaTriDonHang += thanhTien + tienThue
-        return {
-          ma_hang: (line['Mã'] ?? '').trim(),
-          ten_hang: (line['Tên VTHH'] ?? '').trim(),
-          dvt: (line['ĐVT'] ?? '').trim(),
-          so_luong: Math.max(0, parseFloatVN(line['Số lượng'] ?? '')),
-          don_gia: parseFloatVN(line['ĐG mua'] ?? ''),
-          thanh_tien: thanhTien,
-          pt_thue_gtgt: pt,
-          tien_thue_gtgt: pt != null ? tienThue : null,
-        }
-      })
+      .map((line) => ({
+        ma_hang: (line['Mã'] ?? '').trim(),
+        ten_hang: (line['Tên VTHH'] ?? '').trim(),
+        dvt: (line['ĐVT'] ?? '').trim(),
+        so_luong: Math.max(0, parseFloatVN(line['Số lượng'] ?? '')),
+        don_gia: 0,
+        thanh_tien: 0,
+        pt_thue_gtgt: null as number | null,
+        tien_thue_gtgt: null as number | null,
+        ghi_chu: (line['Ghi chú'] ?? '').trim(),
+      }))
     return {
       tinh_trang: tinhTrang,
       ngay_don_hang: toIsoDate(ngayDonHang) || toIsoDate(new Date()),
@@ -672,14 +603,19 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
       so_ngay_duoc_no: soNgayDuocNo.trim() || '0',
       dia_diem_giao_hang: diaDiemGiaoHang.trim(),
       dieu_khoan_khac: dieuKhoanKhac.trim(),
-      gia_tri_don_hang: giaTriDonHang,
-      so_chung_tu_cukcuk: thamChieu.trim(),
+      gia_tri_don_hang: 0,
+      so_chung_tu_cukcuk: loaiDeXuat.trim(),
+      de_xuat_tu_ten: tenDeXuatTu.trim(),
       chiTiet,
     }
   }
 
   /** Kiểm tra trước khi lưu: Nhà cung cấp bắt buộc, ít nhất một dòng chi tiết có Mã VTHH. */
   const validateBeforeSave = (): boolean => {
+    if (!loaiDeXuat.trim()) {
+      setLoi('Vui lòng chọn Loại đề xuất.')
+      return false
+    }
     if (!nhaCungCapDisplay.trim()) {
       setLoi('Vui lòng chọn Nhà cung cấp.')
       return false
@@ -688,42 +624,16 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
       setLoi(`${soDonLabel} không được để trống.`)
       return false
     }
+    if (api.soDonHangExists(soDonHang.trim(), initialDon?.id)) {
+      setLoi(`${soDonLabel} đã tồn tại trong hệ thống, không được trùng.`)
+      return false
+    }
     const hasDetail = lines.some((line) => (line['Mã'] ?? '').trim() !== '')
     if (!hasDetail) {
       setLoi('Đơn hàng phải có ít nhất một dòng vật tư hàng hóa.')
       return false
     }
     return true
-  }
-
-  /** Lưu toàn bộ dữ liệu đang hiển thị, không đóng form; chuyển sang chế độ xem đơn vừa lưu. */
-  const handleLuu = async () => {
-    setLoi('')
-    if (!validateBeforeSave()) return
-    setDangLuu(true)
-    try {
-      const payload = buildPayload()
-      let savedDon: DeXuatMuaHangRecord
-      if (initialDon) {
-        api.put(initialDon.id, payload)
-        const { chiTiet: _ct, ...header } = payload
-        savedDon = { ...initialDon, ...header }
-      } else {
-        savedDon = api.post(payload)
-      }
-      api.clearDraft()
-      setUnsavedChanges(false)
-      if (onSavedAndView) {
-        onSavedAndView(savedDon)
-        setEditingFromView(false)
-      } else {
-        onSaved?.()
-      }
-    } catch (e) {
-      setLoi(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
-    } finally {
-      setDangLuu(false)
-    }
   }
 
   /** Lưu toàn bộ dữ liệu đang hiển thị và đóng form. */
@@ -749,21 +659,55 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
     }
   }
 
-  /** Tổng tiền tính từ các dòng chi tiết (giống buildPayload). */
-  const { tongTienHang, tienThue, tongTienThanhToan } = (() => {
-    let hang = 0
-    let thue = 0
-    for (const line of lines) {
-      if ((line['Mã'] ?? '').trim() === '') continue
-      const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
-      const ptRaw = (line['% thuế GTGT'] ?? '').trim()
-      const pt = ptRaw === '' || ptRaw === 'Chưa xác định' ? null : parseFloatVN(ptRaw)
-      const tienThueDong = pt != null ? (thanhTien * pt) / 100 : 0
-      hang += thanhTien
-      thue += tienThueDong
+  /**
+   * Lưu và tiếp tục (chỉ chế độ thêm mới):
+   * 1. Lưu dữ liệu vào hệ thống
+   * 2. Reset toàn bộ form như khi bấm Thêm mới
+   * 3. Cho người dùng nhập tiếp dữ liệu đề xuất tiếp theo
+   */
+  const handleLuuVaTiepTuc = async () => {
+    if (initialDon != null) return
+    setLoi('')
+    if (!validateBeforeSave()) return
+    setDangLuu(true)
+    try {
+      const payload = buildPayload()
+      api.post(payload)
+      api.clearDraft()
+      setUnsavedChanges(false)
+      onSavedAndContinue?.()
+      draftLoadedRef.current = false
+      setNhaCungCapDisplay('')
+      setNhaCungCapId(null)
+      setDiaChi('')
+      setMaSoThue('')
+      setDienGiai('')
+      setNvMuaHang('')
+      setDieuKhoanTT('')
+      setSoNgayDuocNo('0')
+      setDiaDiemGiaoHang('')
+      setDieuKhoanKhac('')
+      setLoaiDeXuat('Bổ sung VTHH')
+      setTenDeXuatTu('')
+      setNgayDonHang(new Date())
+      setSoDonHang(api.soDonHangTiepTheo())
+      setTinhTrang('Đề xuất mới')
+      setNgayGiaoHang(null)
+      setLines([])
+      setLoi('')
+      setNccSearchKeyword('')
+      setNccDropdownOpen(false)
+      setVthhDropdownRowIndex(null)
+      setVthhDropdownRect(null)
+      focusNccWithoutDropdownRef.current = true
+      setTimeout(() => refNccInput.current?.focus(), 100)
+    } catch (e) {
+      setLoi(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
+    } finally {
+      setDangLuu(false)
     }
-    return { tongTienHang: hang, tienThue: thue, tongTienThanhToan: hang + thue }
-  })()
+  }
+
   const soDong = lines.length
 
   return (
@@ -775,21 +719,6 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
         >
           {formTitle}{effectiveReadOnly ? ' - Chế độ xem' : ''}{nhaCungCapDisplay ? ` - ${nhaCungCapDisplay}` : ''}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          {onMinimize && (
-            <button type="button" style={titleBarBtn} title="Thu nhỏ" onClick={(e) => { e.stopPropagation(); onMinimize() }} aria-label="Thu nhỏ">
-              <Minus size={14} />
-            </button>
-          )}
-          {onMaximize && (
-            <button type="button" style={titleBarBtn} title="Phóng to / Khôi phục" onClick={(e) => { e.stopPropagation(); onMaximize() }} aria-label="Phóng to">
-              <Square size={12} />
-            </button>
-          )}
-          <button type="button" style={titleBarBtn} title="Đóng" onClick={(e) => { e.stopPropagation(); onClose() }} aria-label="Đóng">
-            <X size={14} />
-          </button>
-        </div>
       </div>
       <div style={toolbarWrap}>
         <button type="button" style={toolbarBtn} title="Trước"><ChevronLeft size={14} /> Trước</button>
@@ -799,8 +728,10 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
         )}
         {!effectiveReadOnly && (
           <>
-            <button type="button" style={toolbarBtnAccent} onClick={handleLuu} disabled={dangLuu}><Save size={14} /> {dangLuu ? 'Đang lưu...' : 'Lưu'}</button>
-            <button type="button" style={toolbarBtn} onClick={handleLuuVaDong} disabled={dangLuu}><Save size={14} /> Lưu và đóng</button>
+            <button type="button" style={toolbarBtnAccent} onClick={handleLuuVaDong} disabled={dangLuu}><Save size={14} /> {dangLuu ? 'Đang lưu...' : 'Lưu'}</button>
+            {initialDon == null && (
+              <button type="button" style={toolbarBtn} onClick={handleLuuVaTiepTuc} disabled={dangLuu}><Save size={14} /> Lưu và tiếp tục</button>
+            )}
           </>
         )}
         <button type="button" style={toolbarBtn} title="Đính kèm"><Paperclip size={14} /> Đính kèm</button>
@@ -855,11 +786,28 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
           <div style={{ ...groupBox, flex: 1, minWidth: 560 }}>
             <div style={groupBoxTitle}>Thông tin chung</div>
             <div style={fieldRow}>
-              <label style={labelStyle}>Tham chiếu</label>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 2, alignItems: 'center' }}>
-                <input style={inputStyle} value={thamChieu} onChange={(e) => setThamChieu(e.target.value)} readOnly={effectiveReadOnly} disabled={effectiveReadOnly} />
-                <button type="button" style={lookupActionButtonStyle} title="Tìm"><Search size={12} /></button>
-                <button type="button" style={lookupActionButtonStyle}><Plus size={12} /></button>
+              <label style={labelStyle}>Loại đề xuất</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                <div style={{ width: 'fit-content', flexShrink: 0 }}>
+                  <select
+                    style={{ ...inputStyle, width: 'auto', minWidth: 0 }}
+                    value={loaiDeXuat}
+                    onChange={(e) => setLoaiDeXuat(e.target.value)}
+                    disabled={effectiveReadOnly}
+                  >
+                    <option value="Bổ sung VTHH">Bổ sung VTHH</option>
+                    <option value="Báo giá">Báo giá</option>
+                  </select>
+                </div>
+                <label style={{ ...labelStyle, minWidth: 80 }}>Tên đề xuất</label>
+                <input
+                  style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+                  value={tenDeXuatTu}
+                  onChange={(e) => setTenDeXuatTu(e.target.value)}
+                  readOnly={effectiveReadOnly}
+                  disabled={effectiveReadOnly}
+                  placeholder="Tên đề xuất"
+                />
               </div>
             </div>
             <div style={fieldRow}>
@@ -867,6 +815,7 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
               <div ref={refNccWrap} style={{ flex: 1, minWidth: 0, display: 'flex', gap: 2, alignItems: 'center', position: 'relative', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}>
                 <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}>
                   <input
+                    ref={refNccInput}
                     style={{ ...inputStyle, ...lookupInputWithChevronStyle, flex: 1, minWidth: 0, cursor: effectiveReadOnly ? 'default' : 'pointer', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}
                     value={nccDropdownOpen ? nccSearchKeyword : nhaCungCapDisplay}
                     onChange={(e) => {
@@ -876,6 +825,10 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
                     }}
                     onFocus={() => {
                       if (effectiveReadOnly) return
+                      if (focusNccWithoutDropdownRef.current) {
+                        focusNccWithoutDropdownRef.current = false
+                        return
+                      }
                       setNccSearchKeyword(nhaCungCapDisplay)
                       setNccDropdownOpen(true)
                     }}
@@ -1010,7 +963,7 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
             <div style={fieldRow}>
               <label style={{ ...labelStyle, minWidth: 82 }}>{soDonLabel}</label>
               <div style={{ width: 120, minWidth: 120, flex: '0 0 auto' }}>
-                <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} value={soDonHang} onChange={(e) => setSoDonHang(e.target.value)} readOnly={effectiveReadOnly} disabled={effectiveReadOnly} />
+                <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'default' }} value={soDonHang} readOnly disabled tabIndex={-1} />
               </div>
             </div>
             <div style={fieldRow}>
@@ -1045,7 +998,7 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
                   <tr>
                     <th style={{ ...gridThStyle, textAlign: 'center', width: 36 }}>STT</th>
                     {GRID_COLUMNS_VTHH.map((col) => (
-                      <th key={col} style={{ ...gridThStyle, ...colWidthStyle(col), paddingLeft: 5, ...(col === 'Tổng tiền' ? { borderRight: 'none' } : {}) }}>{col}</th>
+                      <th key={col} style={{ ...gridThStyle, ...colWidthStyle(col), paddingLeft: 5, ...(col === 'Ghi chú' ? { borderRight: 'none' } : {}) }}>{col}</th>
                     ))}
                     <th style={{ ...gridThStyle, paddingLeft: 5, width: 28, borderLeft: 'none' }} />
                   </tr>
@@ -1060,9 +1013,9 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
                       <tr key={idx}>
                         <td style={{ ...gridTdStyle, textAlign: 'center', whiteSpace: 'nowrap' }}>{idx + 1}</td>
                         {GRID_COLUMNS_VTHH.map((col) => (
-                          <td key={col} style={{ ...gridTdStyle, ...colWidthStyle(col), whiteSpace: 'nowrap', ...(col === 'Tổng tiền' ? { borderRight: 'none' } : {}) }} {...(col === 'Mã' && !effectiveReadOnly ? { 'data-vthh-cell': true } : {})}>
+                          <td key={col} style={{ ...gridTdStyle, ...colWidthStyle(col), whiteSpace: col === 'Ghi chú' ? 'normal' : 'nowrap', ...(col === 'Ghi chú' ? { borderRight: 'none' } : {}) }} {...(col === 'Mã' && !effectiveReadOnly ? { 'data-vthh-cell': true } : {})}>
                             {effectiveReadOnly ? (
-                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', border: '1px solid transparent', minHeight: 22, height: 22, cursor: 'default' }} value={line[col] ?? ''} />
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', border: '1px solid transparent', minHeight: 22, height: 22, cursor: 'default' }} value={col === 'ĐVT' ? dvtHienThiLabel(line['ĐVT'], dvtList) : (line[col] ?? '')} />
                             ) : col === 'Mã' ? (
                               <div style={{ position: 'relative', width: '100%', display: 'inline-block' }}>
                                 <input
@@ -1079,13 +1032,11 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
                                     if (cleared || !item) {
                                       delete nextRow._dvtOptions
                                       delete nextRow._vthh
-                                      if (cleared) nextRow['ĐG mua'] = ''
                                     } else {
                                       nextRow._vthh = item
                                       const opts = buildDvtOptions(item)
                                       if (opts) nextRow._dvtOptions = opts
                                       else delete nextRow._dvtOptions
-                                      nextRow['ĐG mua'] = getDonGiaHienThiWhenDvtChinh(item)
                                     }
                                     r[idx] = nextRow
                                     setLines(r)
@@ -1141,10 +1092,7 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
                                       onChange={(e) => {
                                         const r = [...lines]
                                         const row = r[idx] as GridLineRow
-                                        const newDvt = e.target.value
-                                        let newDgMua = row['ĐG mua'] ?? ''
-                                        if (row._vthh) newDgMua = getDonGiaMuaTheoDvt(row._vthh, newDvt)
-                                        r[idx] = { ...row, 'ĐVT': newDvt, 'ĐG mua': newDgMua } as unknown as GridLineRow
+                                        r[idx] = { ...row, 'ĐVT': e.target.value } as unknown as GridLineRow
                                         setLines(r)
                                       }}
                                     >
@@ -1180,62 +1128,16 @@ export function DeXuatMuaHangForm({ onClose, onSaved, onHeaderPointerDown, dragg
                                   setLines(r)
                                 }}
                               />
-                            ) : col === 'ĐG mua' ? (
+                            ) : col === 'Ghi chú' ? (
                               <input
-                                type="text"
-                                inputMode="decimal"
-                                className="misa-input-solo htql-no-spinner"
+                                className="misa-input-solo"
                                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={line['ĐG mua'] ?? ''}
-                                onChange={(e) => {
-                                  const r = [...lines]
-                                  r[idx] = { ...r[idx], 'ĐG mua': formatSoTien(e.target.value) } as unknown as GridLineRow
-                                  setLines(r)
-                                }}
+                                value={line['Ghi chú'] ?? ''}
+                                onChange={(e) => { const r = [...lines]; r[idx] = { ...r[idx], 'Ghi chú': e.target.value } as unknown as GridLineRow; setLines(r) }}
+                                readOnly={effectiveReadOnly}
+                                disabled={effectiveReadOnly}
+                                placeholder="Ghi chú"
                               />
-                            ) : col === 'Thành tiền' ? (
-                              <input
-                                readOnly
-                                tabIndex={-1}
-                                className="misa-input-solo"
-                                style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatSoTienHienThi(parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? ''))}
-                              />
-                            ) : col === 'Tiền thuế GTGT' ? (
-                              <input
-                                readOnly
-                                tabIndex={-1}
-                                className="misa-input-solo"
-                                style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatSoTienHienThi((parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '') * parseFloatVN(line['% thuế GTGT'] ?? '')) / 100)}
-                              />
-                            ) : col === 'Tổng tiền' ? (
-                              <input
-                                readOnly
-                                tabIndex={-1}
-                                className="misa-input-solo"
-                                style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatSoTienHienThi((() => {
-                                  const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
-                                  const tienThueGTGT = (thanhTien * parseFloatVN(line['% thuế GTGT'] ?? '')) / 100
-                                  return thanhTien + tienThueGTGT
-                                })())}
-                              />
-                            ) : col === '% thuế GTGT' ? (
-                              <select
-                                className="misa-input-solo"
-                                style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: 'pointer' }}
-                                value={line['% thuế GTGT'] ?? ''}
-                                onChange={(e) => {
-                                  const r = [...lines]
-r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRow
-                                setLines(r)
-                              }}
-                              >
-                                {THUE_SUAT_GTGT_OPTIONS.map((o) => (
-                                  <option key={o.value || 'empty'} value={o.value}>{o.label}</option>
-                                ))}
-                              </select>
                             ) : (
                               <input
                                 className="misa-input-solo"
@@ -1273,15 +1175,9 @@ r[idx] = { ...r[idx], '% thuế GTGT': e.target.value } as unknown as GridLineRo
 
         <div style={{ ...footerWrap, flexShrink: 0 }}>
           <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Số chủng loại vật tư: {soDong}</span>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            <span style={footerSummaryItem}>Tổng tiền: <span style={footerSummaryValue}>{formatNumberDisplay(tongTienHang, 0)}</span></span>
-            <span style={footerSummaryItem}>Tiền thuế GTGT: <span style={footerSummaryValue}>{formatNumberDisplay(tienThue, 0)}</span></span>
-            <span style={footerSummaryItem}>Tổng tiền thanh toán: <span style={footerSummaryValue}>{formatNumberDisplay(tongTienThanhToan, 0)}</span></span>
-          </div>
         </div>
       </div>
 
-      <div style={hintBar}>F9 - Thêm nhanh, F3 - Tìm nhanh</div>
 
       {vthhDropdownRowIndex !== null && vthhDropdownRect && ReactDOM.createPortal(
         <div

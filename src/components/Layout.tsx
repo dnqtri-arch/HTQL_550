@@ -39,7 +39,12 @@ const mainStyles: React.CSSProperties = {
 
 const contentStyles: React.CSSProperties = {
   flex: 1,
-  overflow: 'auto',
+  // Nguyên tắc: module không scroll; chỉ vùng DataGrid tự scroll.
+  // Khung content phải là flex container và minHeight: 0 để con có thể co/scroll đúng.
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
   padding: '8px 10px',
   borderLeft: '1px solid var(--border-strong)',
   borderRight: '1px solid var(--border-strong)',

@@ -11,20 +11,35 @@ export interface DataGridColumn<T> {
   renderCell?: (value: unknown, row: T) => ReactNode
 }
 
+export interface DataGridSortState {
+  key: string
+  direction: 'asc' | 'desc'
+}
+
 export interface DataGridProps<T extends object> {
   columns: DataGridColumn<T>[]
   data: T[]
   keyField: keyof T | string
   summary?: { label: string; value: string | number }[]
   maxHeight?: number
+  /** Chiều cao cố định hoặc '100%' để lấp đầy container (dòng cuối/footer sát mép dưới) */
+  height?: number | string
   selectedRowId?: string | number | null
   onRowSelect?: (row: T) => void
   /** Gọi khi double-click vào dòng (vd: mở form sửa) */
   onRowDoubleClick?: (row: T) => void
+  /** Gọi khi chuột phải trên dòng (menu ngữ cảnh) */
+  onRowContextMenu?: (row: T, e: React.MouseEvent<HTMLTableRowElement>) => void
   /** Chế độ bảng gọn: font nhỏ hơn, khoảng cách dòng hẹp */
   compact?: boolean
   /** Độ trễ (ms) trước khi áp dụng bộ lọc khi gõ (mặc định 200). Đặt 0 để tắt debounce. */
   filterDebounceMs?: number
+  /** Các cột cho phép sort khi click tiêu đề. */
+  sortableColumns?: string[]
+  /** Trạng thái sắp xếp hiện tại (có thể nhiều cột). */
+  sortState?: DataGridSortState[]
+  /** Gọi khi người dùng click tiêu đề cột để đổi thứ tự sắp xếp. */
+  onSortChange?: (next: DataGridSortState[]) => void
 }
 
 const tableWrap: React.CSSProperties = {
@@ -83,11 +98,16 @@ export function DataGrid<T extends object>({
   keyField,
   summary = [],
   maxHeight = 320,
+  height,
   selectedRowId = null,
   onRowSelect,
   onRowDoubleClick,
+  onRowContextMenu,
   compact = false,
   filterDebounceMs: _filterDebounceMs = 200,
+  sortableColumns = [],
+  sortState,
+  onSortChange,
 }: DataGridProps<T>) {
   const tableStyle = compact ? { ...tableStyles, fontSize: '11px' } : tableStyles
   const thStyle = compact ? { ...thStyles, padding: '2px 4px' } : thStyles
@@ -95,24 +115,63 @@ export function DataGrid<T extends object>({
 
   const filteredData = data
 
+  const wrapStyle: React.CSSProperties = height != null
+    ? { ...tableWrap, height, minHeight: 0, display: 'flex', flexDirection: 'column' }
+    : { ...tableWrap, maxHeight: maxHeight + 2, display: 'flex', flexDirection: 'column' }
+
   return (
-    <div style={{ ...tableWrap, maxHeight: maxHeight + 2, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ overflow: 'auto', flex: 1 }}>
+    <div style={wrapStyle}>
+      <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
         <table style={tableStyle}>
           <thead>
             <tr>
               {columns.map((col) => (
+                (() => {
+                  const colKey = String(col.key)
+                  const isSortable = sortableColumns.includes(colKey)
+                  const activeSort = sortState?.find((s) => s.key === colKey)
+                  const sortIcon =
+                    activeSort != null ? (activeSort.direction === 'asc' ? '▲' : '▼') : '⇅'
+                  return (
                 <th
-                  key={String(col.key)}
+                  key={colKey}
                   style={{
                     ...thStyle,
                     width: col.width ?? 'auto',
                     minWidth: typeof col.width === 'number' ? col.width : undefined,
                     textAlign: col.align ?? 'left',
+                    cursor: isSortable ? 'pointer' : thStyle.cursor,
+                  }}
+                  onClick={() => {
+                    if (!isSortable || !onSortChange) return
+                    const current = sortState ?? []
+                    const existing = current.find((s) => s.key === colKey)
+                    let next: DataGridSortState[]
+                    if (!existing) {
+                      next = [{ key: colKey, direction: 'asc' }, ...current]
+                    } else {
+                      const newDir = existing.direction === 'asc' ? 'desc' : 'asc'
+                      next = [{ key: colKey, direction: newDir }, ...current.filter((s) => s.key !== colKey)]
+                    }
+                    onSortChange(next)
                   }}
                 >
-                  {col.label}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span>{col.label}</span>
+                    {isSortable && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: activeSort ? 'var(--accent)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {sortIcon}
+                      </span>
+                    )}
+                  </span>
                 </th>
+                  )
+                })()
               ))}
             </tr>
           </thead>
@@ -131,6 +190,7 @@ export function DataGrid<T extends object>({
                   }}
                   onClick={() => onRowSelect?.(row)}
                   onDoubleClick={() => onRowDoubleClick?.(row)}
+                  onContextMenu={(e) => onRowContextMenu?.(row, e)}
                 >
                   {columns.map((col) => {
                     const cell = row[col.key as keyof T]

@@ -105,7 +105,7 @@ const TABS_MUA_HANG = [
 type ViewDanhMuc = 'nha-cung-cap' | 'hang-hoa-dich-vu' | 'dieu-khoan-thanh-toan' | 'tien-ich' | null
 
 export function MuaHang() {
-  const [tabHienTai, setTabHienTai] = useState('don-mua-hang')
+  const [tabHienTai, setTabHienTai] = useState('de-xuat-mua-hang')
   const [viewDanhMuc, setViewDanhMuc] = useState<ViewDanhMuc>(null)
 
   const noiDungTab = () => {
