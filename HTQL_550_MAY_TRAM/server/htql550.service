@@ -1,0 +1,31 @@
+[Unit]
+Description=HTQL_550 API Server (Máy trạm)
+After=network.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dnqtri
+WorkingDirectory=/ssd_2t/htql_550/server/
+
+# Đường dẫn lưu trữ — chỉnh lại nếu khác
+Environment=HTQL_PATH_DB=/ssd_2t/htql_550/db/
+Environment=HTQL_PATH_THIETKE=/ssd_2t/htql_550/thietke/
+Environment=HTQL_PATH_ANH=/ssd_2t/htql_550/anh/
+Environment=HTQL_PATH_UPDATE=/ssd_2t/htql_550/update/
+
+# Cổng — Offline: 2026, Online: 1803, UDP Discovery: 50550
+Environment=HTQL_PORT_LAN=2026
+Environment=HTQL_PORT_WAN=1803
+Environment=HTQL_PORT_UDP=50550
+
+ExecStart=/usr/bin/python3 /ssd_2t/htql_550/server/htql550_server.py
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=htql550
+
+[Install]
+WantedBy=multi-user.target

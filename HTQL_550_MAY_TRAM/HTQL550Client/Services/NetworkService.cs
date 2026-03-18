@@ -23,10 +23,10 @@ namespace HTQL550Client.Services
         // Port UDP dùng để phát hiện server trong LAN
         private const int PORT_BROADCAST = 50550;
 
-        // Danh sách cổng web phổ biến cần thử khi dò tự động (theo thứ tự ưu tiên)
-        // Dựa trên danh sách cổng thực tế của server HTQL_550
+        // Danh sách cổng thử khi dò tự động — ưu tiên cổng HTQL_550 trước, sau đó các cổng web phổ biến
+        // 2026 = cổng Offline (LAN) | 1803 = cổng Online (WAN)
         public static readonly int[] CAC_CONG_THU =
-            { 80, 443, 7080, 887, 888, 17230, 8188, 8190, 8289, 8288, 9000 };
+            { 2026, 1803, 80, 443, 7080, 887, 888, 17230, 8188, 8190, 9000 };
 
         // ── Tìm server qua UDP Broadcast (chế độ LAN) ────────────────
 

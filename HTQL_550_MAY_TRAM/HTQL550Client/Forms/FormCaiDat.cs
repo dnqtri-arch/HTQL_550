@@ -63,6 +63,9 @@ namespace HTQL550Client.Forms
         // Bước 5 — Kết quả
         private RichTextBox _rtbTomTat = null!;
 
+        // Cờ xác nhận đã kiểm tra kết nối thành công ở Bước 3
+        private bool _daKetNoiThanhCong = false;
+
         public FormCaiDat()
         {
             // Khởi tạo form
@@ -223,6 +226,16 @@ namespace HTQL550Client.Forms
         private async void OnTiepTheoClick(object? sender, EventArgs e)
         {
             if (_buocHienTai == 0 && !XacThucMatKhau()) return;
+
+            // Bước 3: bắt buộc phải kiểm tra kết nối thành công trước khi tiếp tục
+            if (_buocHienTai == 2 && !_daKetNoiThanhCong)
+            {
+                _lblKetQuaKN.Text      = "⚠ Vui lòng kiểm tra kết nối thành công trước khi tiếp tục.";
+                _lblKetQuaKN.ForeColor = Color.DarkRed;
+                _btnKiemTra.Focus();
+                return;
+            }
+
             if (_buocHienTai == 4)
             {
                 await HoanTatCaiDat();
@@ -419,11 +432,11 @@ namespace HTQL550Client.Forms
             };
             _txtIpWAN = new TextBox
             {
-                Location    = new Point(160, 11),
-                Width       = 180,
-                Text        = "",                       // Để trống — người dùng phải tự nhập
-                Font        = new Font("Courier New", 10),
-                PlaceholderText = "VD: 14.224.152.48"  // Gợi ý mờ, không điền sẵn
+                Location        = new Point(160, 11),
+                Width           = 180,
+                Text            = "",                         // Để trống — người dùng phải tự nhập
+                Font            = new Font("Courier New", 10),
+                PlaceholderText = "xxx.xxx.xxx.xxx"           // Không gợi ý IP thật
             };
 
             _lblPortTieuDe = new Label
@@ -437,10 +450,9 @@ namespace HTQL550Client.Forms
             {
                 Location  = new Point(448, 11),
                 Width     = 80,
-                // Cho phép 0 để biểu diễn \"chưa nhập\" (Online bắt nhập thủ công)
                 Minimum   = 0,
                 Maximum   = 65535,
-                Value     = 8080,                       // Offline dùng mặc định; Online sẽ reset về 0 khi chọn chế độ
+                Value     = 1803,   // Port mặc định cho chế độ Online (WAN)
                 Font      = new Font("Segoe UI", 9.5f)
             };
 
@@ -489,7 +501,8 @@ namespace HTQL550Client.Forms
                 if (!_rdLAN.Checked) return;
                 _pnlKhuVucLAN.Visible    = true;
                 _pnlKhuVucOnline.Visible = false;
-                _lblKetQuaKN.Text        = "Nhấn \"Kiểm tra kết nối\" để xác nhận server.";
+                _daKetNoiThanhCong       = false;   // Bắt kiểm tra lại khi đổi chế độ
+                _lblKetQuaKN.Text        = "Nhấn \"Tìm server LAN\" rồi \"Kiểm tra kết nối\".";
                 _lblKetQuaKN.ForeColor   = Color.Gray;
             };
             _rdWAN.CheckedChanged += (s, e) =>
@@ -497,12 +510,16 @@ namespace HTQL550Client.Forms
                 if (!_rdWAN.Checked) return;
                 _pnlKhuVucLAN.Visible    = false;
                 _pnlKhuVucOnline.Visible = true;
-                // Xóa sạch ô IP và Port để bắt người dùng tự nhập
-                _txtIpWAN.Text   = "";
-                _numPort.Value   = 0;
-                _lblKetQuaKN.Text      = "Nhập địa chỉ IP và cổng, sau đó nhấn \"Kiểm tra kết nối\".";
-                _lblKetQuaKN.ForeColor = Color.FromArgb(80, 80, 150);
+                _txtIpWAN.Text           = "";
+                _numPort.Value           = 1803;    // Port Online mặc định
+                _daKetNoiThanhCong       = false;   // Bắt kiểm tra lại
+                _lblKetQuaKN.Text        = "Nhập địa chỉ IP và cổng do quản trị viên cung cấp.";
+                _lblKetQuaKN.ForeColor   = Color.FromArgb(80, 80, 150);
             };
+
+            // Reset cờ kết nối khi người dùng tự thay đổi IP hoặc Port
+            _txtIpWAN.TextChanged  += (s, e) => _daKetNoiThanhCong = false;
+            _numPort.ValueChanged  += (s, e) => _daKetNoiThanhCong = false;
 
             pnl.Controls.AddRange(new Control[]
             {
@@ -691,48 +708,46 @@ namespace HTQL550Client.Forms
                 if (!System.Net.IPAddress.TryParse(_txtIpWAN.Text.Trim(), out _))
                 {
                     _lblKetQuaKN.ForeColor = Color.Red;
-                    _lblKetQuaKN.Text      = "✘ Vui lòng nhập địa chỉ IP hợp lệ (ví dụ: 14.224.152.48).";
+                    _lblKetQuaKN.Text      = "✘ Vui lòng nhập địa chỉ IP hợp lệ (dạng xxx.xxx.xxx.xxx).";
                     _txtIpWAN.Focus();
                     return;
                 }
                 if (_numPort.Value <= 0)
                 {
                     _lblKetQuaKN.ForeColor = Color.Red;
-                    _lblKetQuaKN.Text      = "✘ Vui lòng nhập số cổng (Port) hợp lệ (ví dụ: 8080).";
+                    _lblKetQuaKN.Text      = "✘ Vui lòng nhập số cổng (Port) hợp lệ. Cổng Online mặc định: 1803.";
                     _numPort.Focus();
                     return;
                 }
             }
 
-            // Lấy IP: Offline từ listbox, Online từ ô nhập
-            _ipServer   = _cheDo_LAN
-                ? (_lstServerLAN.SelectedItem != null && System.Net.IPAddress.TryParse(
-                      _lstServerLAN.SelectedItem.ToString(), out _)
-                      ? _lstServerLAN.SelectedItem.ToString()!
-                      : "")
-                : _txtIpWAN.Text.Trim();
+            // Lấy IP: Offline từ kết quả dò, Online từ ô nhập tay
+            _ipServer = _cheDo_LAN ? _ipServer : _txtIpWAN.Text.Trim();
             _portServer = (int)_numPort.Value;
 
             if (string.IsNullOrEmpty(_ipServer))
             {
                 _lblKetQuaKN.ForeColor = Color.Red;
-                _lblKetQuaKN.Text      = "✘ Chưa có server nào được chọn. Hãy tìm server LAN trước.";
+                _lblKetQuaKN.Text      = "✘ Chưa có server nào được chọn. Hãy nhấn \"Tìm server LAN\" trước.";
                 return;
             }
 
-            _btnKiemTra.Enabled = false;
-            _lblKetQuaKN.Text   = "Đang kiểm tra kết nối...";
+            _btnKiemTra.Enabled    = false;
+            _daKetNoiThanhCong     = false;
+            _lblKetQuaKN.Text      = $"Đang kiểm tra kết nối tới {_ipServer}:{_portServer}...";
             _lblKetQuaKN.ForeColor = Color.Gray;
 
             var (thanh_cong, thong_bao) = await NetworkService.KiemTraKetNoi(_ipServer, _portServer);
 
             _lblKetQuaKN.Text      = thong_bao;
-            _lblKetQuaKN.ForeColor = thanh_cong ? Color.Green : Color.Red;
+            _lblKetQuaKN.ForeColor = thanh_cong ? Color.FromArgb(20, 120, 20) : Color.Red;
 
             if (thanh_cong)
             {
-                // Tải luôn đường dẫn server
-                _duongDanServer = await NetworkService.LayDuongDanTuServer(_ipServer, _portServer);
+                _daKetNoiThanhCong = true;
+                // Tải luôn đường dẫn server sau khi kết nối thành công
+                _duongDanServer    = await NetworkService.LayDuongDanTuServer(_ipServer, _portServer);
+                _lblKetQuaKN.Text  = $"✔ Kết nối thành công — {_ipServer}:{_portServer}. Nhấn \"Tiếp theo\" để tiếp tục.";
             }
 
             _btnKiemTra.Enabled = true;
