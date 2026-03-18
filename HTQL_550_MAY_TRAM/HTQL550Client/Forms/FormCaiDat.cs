@@ -443,9 +443,10 @@ namespace HTQL550Client.Forms
             {
                 Location  = new Point(448, 11),
                 Width     = 80,
-                Minimum   = 1,
+                // Cho phép 0 để biểu diễn \"chưa nhập\" (Online bắt nhập thủ công)
+                Minimum   = 0,
                 Maximum   = 65535,
-                Value     = 0,                          // Để 0 — người dùng phải tự nhập
+                Value     = 8080,                       // Offline dùng mặc định; Online sẽ reset về 0 khi chọn chế độ
                 Font      = new Font("Segoe UI", 9.5f)
             };
 
