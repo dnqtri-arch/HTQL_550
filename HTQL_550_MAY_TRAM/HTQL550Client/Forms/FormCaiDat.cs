@@ -375,14 +375,8 @@ namespace HTQL550Client.Forms
                 Size     = new Size(268, 72),
                 Font     = new Font("Courier New", 9.5f)
             };
-            _lstServerLAN.SelectedIndexChanged += (s, e) =>
-            {
-                if (_lstServerLAN.SelectedItem == null) return;
-                var ip = _lstServerLAN.SelectedItem.ToString() ?? "";
-                // Ghi nhận IP được chọn từ danh sách LAN (chỉ IP hợp lệ)
-                if (System.Net.IPAddress.TryParse(ip, out _))
-                    _txtIpWAN.Text = ip;
-            };
+            // Sự kiện chọn server sẽ được đăng ký động trong OnTimServerLAN()
+            // sau khi dò xong IP + Port (tránh xử lý item lỗi).
 
             _btnTimLAN = new Button
             {
@@ -524,30 +518,167 @@ namespace HTQL550Client.Forms
             _btnTimLAN.Enabled = false;
             _btnTimLAN.Text    = "Đang quét mạng...";
             _lstServerLAN.Items.Clear();
+            _lblKetQuaKN.Text      = "Đang phát hiện server trong mạng nội bộ (UDP Broadcast)...";
+            _lblKetQuaKN.ForeColor = Color.Gray;
 
+            // Bước 1: Dò IP qua UDP Broadcast
             var ds_ip = await NetworkService.TimServerLAN(3000);
 
             _lstServerLAN.Items.Clear();
+
+            if (ds_ip.Count == 0)
+            {
+                // Nếu UDP Broadcast không tìm được, thử quét IP mạng nội bộ
+                // bằng cách dò port trực tiếp trên IP LAN của máy trạm
+                _lblKetQuaKN.Text = "UDP Broadcast không có phản hồi. Đang thử quét IP LAN thủ công...";
+                ds_ip = await QuetIpLanThuCong();
+            }
+
             if (ds_ip.Count == 0)
             {
                 _lstServerLAN.Items.Add("(Không tìm thấy server nào)");
                 _lstServerLAN.Enabled = false;
-                _lblKetQuaKN.Text      = "Không tìm thấy server. Kiểm tra server Ubuntu đã chạy và cùng mạng chưa.";
+                _lblKetQuaKN.Text      = "Không tìm thấy server. Kiểm tra server Ubuntu đã khởi động chưa.";
+                _lblKetQuaKN.ForeColor = Color.DarkOrange;
+                _btnTimLAN.Text    = "🔍 Tìm server LAN";
+                _btnTimLAN.Enabled = true;
+                return;
+            }
+
+            // Bước 2: Với từng IP tìm được, dò cổng API tự động
+            _lblKetQuaKN.Text      = $"Tìm thấy {ds_ip.Count} IP. Đang dò cổng API...";
+            _lblKetQuaKN.ForeColor = Color.FromArgb(30, 80, 160);
+
+            var ds_ket_qua = new List<NetworkService.KetQuaDoPort>();
+
+            foreach (var ip in ds_ip)
+            {
+                _lblKetQuaKN.Text = $"Đang dò cổng API tại {ip}...";
+
+                var ket_qua = await NetworkService.DoPortTuDong(ip, (port, tb) =>
+                {
+                    // Cập nhật trạng thái đang thử từng cổng
+                    _lblKetQuaKN.Text = $"  {ip} → thử cổng {port}...";
+                });
+
+                if (ket_qua != null)
+                    ds_ket_qua.Add(ket_qua);
+            }
+
+            // Bước 3: Hiển thị kết quả
+            _lstServerLAN.Items.Clear();
+
+            if (ds_ket_qua.Count == 0)
+            {
+                // Tìm được IP nhưng không có cổng nào phản hồi /api/ping
+                _lstServerLAN.Items.Add("(Tìm được IP nhưng chưa có API)");
+                _lstServerLAN.Enabled  = false;
+                _lblKetQuaKN.Text      = "Tìm được server nhưng /api/ping chưa sẵn sàng. "
+                                       + "Server HTQL_550 có thể chưa được triển khai.";
                 _lblKetQuaKN.ForeColor = Color.DarkOrange;
             }
             else
             {
                 _lstServerLAN.Enabled = true;
-                foreach (var ip in ds_ip)
-                    _lstServerLAN.Items.Add(ip);
-                // Tự động chọn server đầu tiên tìm được và ghi IP vào ô
+                foreach (var kq in ds_ket_qua)
+                    _lstServerLAN.Items.Add($"{kq.Ip}:{kq.Port}");   // Hiển thị "IP:Port"
+
+                // Tự động chọn kết quả đầu tiên
                 _lstServerLAN.SelectedIndex = 0;
-                _lblKetQuaKN.Text      = $"Tìm thấy {ds_ip.Count} server. Chọn rồi nhấn \"Kiểm tra kết nối\".";
+                ApDungKetQuaChon(ds_ket_qua[0]);
+
+                _lblKetQuaKN.Text = ds_ket_qua.Count == 1
+                    ? $"✔ Đã tìm và dò cổng thành công: {ds_ket_qua[0].Ip}:{ds_ket_qua[0].Port}"
+                    : $"✔ Tìm thấy {ds_ket_qua.Count} server. Chọn một rồi nhấn \"Kiểm tra kết nối\".";
                 _lblKetQuaKN.ForeColor = Color.FromArgb(30, 100, 30);
             }
 
+            // Cập nhật sự kiện chọn item để tự điền IP + Port
+            _lstServerLAN.SelectedIndexChanged -= OnChonServerLAN;
+            _lstServerLAN.SelectedIndexChanged += OnChonServerLAN;
+            _lstServerLAN.Tag = ds_ket_qua; // Lưu kết quả đầy đủ vào Tag
+
             _btnTimLAN.Text    = "🔍 Tìm server LAN";
             _btnTimLAN.Enabled = true;
+        }
+
+        /// <summary>
+        /// Quét thủ công dải IP LAN của máy trạm (dùng khi UDP Broadcast không hoạt động).
+        /// Lấy IP máy trạm, thay octet cuối thành .1 → .254 và thử dò port.
+        /// </summary>
+        private static async Task<List<string>> QuetIpLanThuCong()
+        {
+            var danh_sach = new List<string>();
+            try
+            {
+                // Lấy IP LAN của máy trạm
+                var ten_may = System.Net.Dns.GetHostName();
+                var cac_ip  = System.Net.Dns.GetHostAddresses(ten_may);
+                string? prefix = null;
+
+                foreach (var addr in cac_ip)
+                {
+                    // Chỉ lấy IPv4 dải 192.168.x.x hoặc 10.x.x.x
+                    var s = addr.ToString();
+                    if (s.StartsWith("192.168.") || s.StartsWith("10."))
+                    {
+                        prefix = s.Substring(0, s.LastIndexOf('.') + 1); // "192.168.1."
+                        break;
+                    }
+                }
+
+                if (prefix == null) return danh_sach;
+
+                // Thử tất cả cổng ưu tiên trên .1 → .254 với timeout 1 giây
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(1) };
+                var cac_nhiem_vu = new List<Task<string?>>();
+
+                for (int i = 1; i <= 254; i++)
+                {
+                    var ip = $"{prefix}{i}";
+                    cac_nhiem_vu.Add(KiemTraNhanhMot(http, ip));
+                }
+
+                var cac_ket_qua = await Task.WhenAll(cac_nhiem_vu);
+                foreach (var ip in cac_ket_qua)
+                    if (ip != null) danh_sach.Add(ip);
+            }
+            catch { }
+            return danh_sach;
+        }
+
+        private static async Task<string?> KiemTraNhanhMot(System.Net.Http.HttpClient http, string ip)
+        {
+            foreach (var port in NetworkService.CAC_CONG_THU)
+            {
+                try
+                {
+                    var ok = await http.GetAsync($"http://{ip}:{port}/api/ping");
+                    if (ok.IsSuccessStatusCode) return ip;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        /// <summary>Áp dụng IP + Port từ kết quả dò vào biến nội bộ và ô Port.</summary>
+        private void ApDungKetQuaChon(NetworkService.KetQuaDoPort kq)
+        {
+            _txtIpWAN.Text = kq.Ip;
+            _numPort.Value = kq.Port;
+            _ipServer      = kq.Ip;
+            _portServer    = kq.Port;
+        }
+
+        /// <summary>Sự kiện khi người dùng chọn dòng trong ListBox kết quả LAN.</summary>
+        private void OnChonServerLAN(object? sender, EventArgs e)
+        {
+            if (_lstServerLAN.SelectedItem == null) return;
+            if (_lstServerLAN.Tag is not List<NetworkService.KetQuaDoPort> ds) return;
+
+            var idx = _lstServerLAN.SelectedIndex;
+            if (idx >= 0 && idx < ds.Count)
+                ApDungKetQuaChon(ds[idx]);
         }
 
         private async void OnKiemTraKetNoi(object? sender, EventArgs e)

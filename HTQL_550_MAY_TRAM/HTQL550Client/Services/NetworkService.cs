@@ -23,6 +23,11 @@ namespace HTQL550Client.Services
         // Port UDP dùng để phát hiện server trong LAN
         private const int PORT_BROADCAST = 50550;
 
+        // Danh sách cổng web phổ biến cần thử khi dò tự động (theo thứ tự ưu tiên)
+        // Dựa trên danh sách cổng thực tế của server HTQL_550
+        public static readonly int[] CAC_CONG_THU =
+            { 80, 443, 7080, 887, 888, 17230, 8188, 8190, 8289, 8288, 9000 };
+
         // ── Tìm server qua UDP Broadcast (chế độ LAN) ────────────────
 
         /// <summary>
@@ -64,6 +69,48 @@ namespace HTQL550Client.Services
             catch { /* Bỏ qua lỗi mạng khác */ }
 
             return danh_sach_ip;
+        }
+
+        // ── Dò port tự động (chế độ Offline) ─────────────────────────
+
+        /// <summary>
+        /// Kết quả dò port cho một cặp IP + Port tìm được.
+        /// </summary>
+        public record KetQuaDoPort(string Ip, int Port, bool ThanhCong, string ThongBao);
+
+        /// <summary>
+        /// Với một IP server đã biết (từ UDP Broadcast), thử tuần tự các cổng web phổ biến.
+        /// Mỗi cổng gọi GET /api/ping với timeout ngắn (3 giây).
+        /// Trả về ngay khi tìm được cổng đầu tiên phản hồi thành công.
+        /// </summary>
+        /// <param name="ip">Địa chỉ IP của server.</param>
+        /// <param name="tiepTheo">Callback báo cáo tiến độ: (cổng đang thử, thông báo).</param>
+        public static async Task<KetQuaDoPort?> DoPortTuDong(
+            string ip, Action<int, string>? tiepTheo = null)
+        {
+            // HTTP client riêng với timeout ngắn để dò nhanh
+            using var http_do = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+
+            foreach (var port in CAC_CONG_THU)
+            {
+                tiepTheo?.Invoke(port, $"Đang thử cổng {port}...");
+                try
+                {
+                    var url     = $"http://{ip}:{port}/api/ping";
+                    var phan_hoi = await http_do.GetAsync(url);
+
+                    if (phan_hoi.IsSuccessStatusCode)
+                        return new KetQuaDoPort(ip, port, true,
+                            $"✔ Tìm thấy API tại cổng {port} (HTTP {(int)phan_hoi.StatusCode})");
+                }
+                catch
+                {
+                    // Cổng này không có API — thử cổng tiếp theo
+                }
+            }
+
+            // Không tìm thấy cổng nào có /api/ping
+            return null;
         }
 
         // ── Kiểm tra kết nối tới server ──────────────────────────────
