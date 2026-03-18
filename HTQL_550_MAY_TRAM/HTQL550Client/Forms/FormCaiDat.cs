@@ -347,8 +347,18 @@ namespace HTQL550Client.Forms
                 Width    = 300,
                 Checked  = true
             };
-            _rdLAN.CheckedChanged += (s, e) => { _lstServerLAN.Enabled = _rdLAN.Checked; _txtIpWAN.Enabled = !_rdLAN.Checked; };
-            _rdWAN.CheckedChanged += (s, e) => { _txtIpWAN.Enabled = _rdWAN.Checked; };
+            _rdLAN.CheckedChanged += (s, e) =>
+            {
+                _lstServerLAN.Enabled = _rdLAN.Checked;
+                _txtIpWAN.Enabled     = !_rdLAN.Checked;
+            };
+            _rdWAN.CheckedChanged += (s, e) =>
+            {
+                _txtIpWAN.Enabled = _rdWAN.Checked;
+                // Khôi phục IP mặc định nếu ô đang chứa thông báo lỗi từ LAN
+                if (_rdWAN.Checked && !System.Net.IPAddress.TryParse(_txtIpWAN.Text.Trim(), out _))
+                    _txtIpWAN.Text = "14.224.152.48";
+            };
 
             // Danh sách server tìm được (LAN)
             _lstServerLAN = new ListBox
@@ -359,8 +369,11 @@ namespace HTQL550Client.Forms
             };
             _lstServerLAN.SelectedIndexChanged += (s, e) =>
             {
-                if (_lstServerLAN.SelectedItem != null)
-                    _txtIpWAN.Text = _lstServerLAN.SelectedItem.ToString();
+                if (_lstServerLAN.SelectedItem == null) return;
+                var ip = _lstServerLAN.SelectedItem.ToString() ?? "";
+                // Chỉ copy khi là địa chỉ IP hợp lệ, bỏ qua thông báo lỗi
+                if (System.Net.IPAddress.TryParse(ip, out _))
+                    _txtIpWAN.Text = ip;
             };
 
             _btnTimLAN = new Button
@@ -420,10 +433,21 @@ namespace HTQL550Client.Forms
                 Text      = "Nhấn nút \"Kiểm tra kết nối\" để xác nhận server."
             };
 
+            // Ghi chú hướng dẫn khi không tìm thấy server
+            var lblHuongDan = new Label
+            {
+                Location  = new Point(24, 306),
+                Size      = new Size(560, 34),
+                Font      = new Font("Segoe UI", 8f, FontStyle.Italic),
+                ForeColor = Color.FromArgb(130, 100, 40),
+                Text      = "💡 Nếu không tìm thấy server: Kiểm tra server Ubuntu đã khởi động chưa, "
+                          + "firewall đã mở port 8080 chưa, và máy trạm có cùng mạng với server không."
+            };
+
             pnl.Controls.AddRange(new Control[]
             {
                 lbl, _rdLAN, _rdWAN, _lstServerLAN, _btnTimLAN,
-                _txtIpWAN, _numPort, _btnKiemTra, _lblKetQuaKN
+                _txtIpWAN, _numPort, _btnKiemTra, _lblKetQuaKN, lblHuongDan
             });
             return pnl;
         }
@@ -438,10 +462,19 @@ namespace HTQL550Client.Forms
 
             _lstServerLAN.Items.Clear();
             if (ds_ip.Count == 0)
+            {
+                // Dùng item disabled để hiển thị thông báo, không cho chọn
                 _lstServerLAN.Items.Add("(Không tìm thấy server nào)");
+                _lstServerLAN.Enabled = false;
+            }
             else
+            {
+                _lstServerLAN.Enabled = true;
                 foreach (var ip in ds_ip)
                     _lstServerLAN.Items.Add(ip);
+                // Tự động chọn server đầu tiên tìm được
+                _lstServerLAN.SelectedIndex = 0;
+            }
 
             _btnTimLAN.Text    = "🔍 Tìm server LAN";
             _btnTimLAN.Enabled = true;
