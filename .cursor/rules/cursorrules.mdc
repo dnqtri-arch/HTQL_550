@@ -1,0 +1,13 @@
+# HTQL_550 Project Rules
+
+- **Ngôn ngữ:** Luôn trả lời và viết chú thích code (comments) bằng tiếng Việt.
+- **Phong cách Code:** - Tối ưu, ngắn gọn, không viết các đoạn mã thừa thãi hoặc giải thích quá dài dòng.
+  - Sử dụng Tailwind CSS cho giao diện.
+  - Luôn ưu tiên xử lý dấu phẩy `,` là dấu thập phân cho giao diện người dùng và tự động convert sang dấu chấm `.` khi tính toán.
+- **Tiết kiệm Token:** - Chỉ trả lời đúng phần code được yêu cầu hoặc phần code bị thay đổi. 
+  - Không liệt kê lại toàn bộ file nếu không cần thiết.
+- **Cấu trúc Hệ thống:** - Logic và database nằm tại ổ hệ điều hành Ubuntu.
+  - File đính kèm, ảnh thiết kế lưu tại `/ssd_2t`.
+  - Backup lưu tại `/hdd_4t`.
+- **An toàn dữ liệu:** - Tuyệt đối không viết trực tiếp (hardcode) API Key, mật khẩu ngân hàng hay Viettel vào code. 
+  - Nhắc nhở tôi dùng lệnh `git commit` sau mỗi thay đổi quan trọng.

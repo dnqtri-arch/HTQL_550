@@ -5,7 +5,7 @@
  * - Mua hàng → Hàng hóa, dịch vụ
  * (Cùng localStorage key + cache; khi có backend thì cùng REST API.)
  * Khi có backend REST: GET/POST /api/vat-tu-hang-hoa, PUT/DELETE /api/vat-tu-hang-hoa/:id
- * Hình ảnh lưu tại: /ssd_2tb/HTQL_550/thietke/vattu/ (DB chỉ lưu tên file hoặc path tương đối).
+ * Hình ảnh lưu tại: /ssd_2t/htql_550/thietke/vattu/ (DB chỉ lưu tên file hoặc path tương đối).
  */
 
 /** Một dòng chiết khấu theo số lượng (Tab Bậc giá) */
@@ -255,4 +255,4 @@ export function vatTuHangHoaMaTuDong(tinhChat: string): string {
 }
 
 /** Base path lưu ảnh (server) */
-export const VATTU_IMAGE_BASE = '/ssd_2tb/HTQL_550/thietke/vattu/'
+export const VATTU_IMAGE_BASE = '/ssd_2t/htql_550/thietke/vattu/'

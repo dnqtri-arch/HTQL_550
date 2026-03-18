@@ -31,7 +31,7 @@ export function BanHang() {
         activeSubId === 'hoa-don' ? (
           <>
             <p style={{ color: 'var(--text-muted)', marginBottom: '6px', fontSize: '11px' }}>
-              Danh sách hóa đơn bán. File thiết kế lưu tại /ssd_2tb/HTQL_550/thietke/
+              Danh sách hóa đơn bán. File thiết kế lưu tại /ssd_2t/htql_550/thietke/
             </p>
             <DataGrid
               columns={columns}

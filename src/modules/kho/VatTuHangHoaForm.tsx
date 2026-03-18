@@ -2397,7 +2397,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10, color: 'var(--text-muted)', minWidth: 0, flex: 1 }}>
                       <div><span style={{ color: 'var(--text-primary)' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Ảnh nhúng (Base64)' : (watch('ten_file_hinh_anh') || imagePreview.split(/[/\\]/).pop() || '—')) : '—'}</span></div>
                       <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta ? `${imageMeta.width}×${imageMeta.height}` : '—'}</span></div>
-                      <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta && imageMeta.sizeMB > 0 ? `${imageMeta.sizeMB.toFixed(2)} MB` : '—'}</span></div>
+                      <div>
+                        <span style={{ color: 'var(--text-primary)' }}>
+                          {imageMeta && imageMeta.sizeMB > 0 ? `${formatSoThapPhan(imageMeta.sizeMB, 2)} MB` : '—'}
+                        </span>
+                      </div>
                       <div style={{ minWidth: 0 }}>
                         <span style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Base64' : (imagePreview.split(/[/\\]/).pop() ?? '—')) : '—'}</span>
                       </div>

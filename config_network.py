@@ -4,16 +4,20 @@ Cấu hình kết nối mạng HTQL_550.
 Tự động nhận diện: nếu ping thấy 192.168.1.68 thì dùng IP LAN, không thì dùng IP Public 14.224.152.48.
 """
 
+import os
 import subprocess
 import sys
 
-IP_LAN = "192.168.1.68"
-IP_PUBLIC = "14.224.152.48"
+# IP LAN và Public đọc từ biến môi trường, có giá trị mặc định an toàn cho môi trường demo.
+IP_LAN = os.getenv("HTQL_IP_LAN", "192.168.1.68")
+IP_PUBLIC = os.getenv("HTQL_IP_PUBLIC", "14.224.152.48")
 BASE_URL_LAN = f"http://{IP_LAN}:8888"
 BASE_URL_PUBLIC = f"http://{IP_PUBLIC}:8888"
 
 # Đường dẫn lưu file thiết kế cho phân hệ Bán hàng và Kho (Ubuntu server)
-PATH_THIETKE = "/ssd_2tb/HTQL_550/thietke/"
+# Lưu chính tại SSD, backup tại HDD theo chuẩn /ssd_2t/htql_550 và /hdd_4t/htql_550.
+PATH_THIETKE = "/ssd_2t/htql_550/thietke/"
+PATH_THIETKE_BACKUP = "/hdd_4t/htql_550/thietke/"
 
 
 def _ping(host: str, timeout_seconds: int = 2) -> bool:
@@ -45,8 +49,13 @@ def get_base_url() -> str:
 
 
 def get_path_thietke() -> str:
-    """Đường dẫn thư mục lưu file thiết kế (Bán hàng, Kho) trên server Ubuntu."""
+    """Đường dẫn thư mục lưu file thiết kế (Bán hàng, Kho) trên server Ubuntu (ổ chính)."""
     return PATH_THIETKE
+
+
+def get_path_thietke_backup() -> str:
+    """Đường dẫn thư mục backup file thiết kế (Bán hàng, Kho) trên server Ubuntu (ổ backup)."""
+    return PATH_THIETKE_BACKUP
 
 
 # Cho phép import và dùng ngay
@@ -58,4 +67,5 @@ if __name__ == "__main__":
     url = get_base_url()
     print(f"IP đang dùng: {ip}")
     print(f"Base URL: {url}")
-    print(f"Đường dẫn thiết kế: {get_path_thietke()}")
+    print(f"Đường dẫn thiết kế (chính): {get_path_thietke()}")
+    print(f"Đường dẫn thiết kế (backup): {get_path_thietke_backup()}")
