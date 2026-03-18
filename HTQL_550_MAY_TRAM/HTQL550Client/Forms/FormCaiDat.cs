@@ -325,53 +325,61 @@ namespace HTQL550Client.Forms
 
         // ── Bước 3: Cấu hình mạng ────────────────────────────────────
 
+        // Panel chứa khu vực tìm LAN (ẩn/hiện theo chế độ)
+        private Panel _pnlKhuVucLAN  = null!;
+        // Panel chứa khu vực nhập Online (ẩn/hiện theo chế độ)
+        private Panel _pnlKhuVucOnline = null!;
+        // Nhãn tên hai ô nhập (để đặt lại placeholder)
+        private Label _lblIpTieuDe = null!, _lblPortTieuDe = null!;
+
         private Panel _pnlBuoc3_CauHinhMang()
         {
             var pnl = TaoPanelNoi();
 
-            var lbl = TaoLabel("🌐  Cấu hình kết nối mạng tới máy chủ", 24, 16);
+            var lbl = TaoLabel("🌐  Chọn chế độ kết nối tới máy chủ", 24, 16);
             lbl.Font = new Font("Segoe UI", 11, FontStyle.Bold);
 
-            // Chọn chế độ LAN / WAN
+            // ── Hai lựa chọn chế độ ──────────────────────────────────
             _rdLAN = new RadioButton
             {
-                Text     = "Chế độ LAN  (Tự động tìm server trong mạng nội bộ)",
-                Location = new Point(24, 50),
-                Width    = 400,
-                Checked  = false
+                Text     = "🔒  Offline  (Tìm server tự động trong mạng nội bộ)",
+                Location = new Point(24, 52),
+                Width    = 430,
+                Height   = 24,
+                Checked  = true,    // Offline là mặc định
+                Font     = new Font("Segoe UI", 10, FontStyle.Bold),
+                ForeColor = Color.FromArgb(30, 100, 30)
             };
             _rdWAN = new RadioButton
             {
-                Text     = "Chế độ WAN  (Nhập IP tĩnh trực tiếp)",
-                Location = new Point(24, 74),
-                Width    = 300,
-                Checked  = true
-            };
-            _rdLAN.CheckedChanged += (s, e) =>
-            {
-                _lstServerLAN.Enabled = _rdLAN.Checked;
-                _txtIpWAN.Enabled     = !_rdLAN.Checked;
-            };
-            _rdWAN.CheckedChanged += (s, e) =>
-            {
-                _txtIpWAN.Enabled = _rdWAN.Checked;
-                // Khôi phục IP mặc định nếu ô đang chứa thông báo lỗi từ LAN
-                if (_rdWAN.Checked && !System.Net.IPAddress.TryParse(_txtIpWAN.Text.Trim(), out _))
-                    _txtIpWAN.Text = "14.224.152.48";
+                Text     = "🌍  Online   (Nhập địa chỉ server từ xa)",
+                Location = new Point(24, 80),
+                Width    = 430,
+                Height   = 24,
+                Checked  = false,
+                Font     = new Font("Segoe UI", 10, FontStyle.Bold),
+                ForeColor = Color.FromArgb(30, 60, 140)
             };
 
-            // Danh sách server tìm được (LAN)
+            // ── Khu vực Offline: Tìm kiếm LAN ───────────────────────
+            _pnlKhuVucLAN = new Panel
+            {
+                Location  = new Point(0, 112),
+                Size      = new Size(600, 100),
+                BackColor = Color.FromArgb(245, 252, 245)
+            };
+
             _lstServerLAN = new ListBox
             {
-                Location = new Point(24, 102),
-                Size     = new Size(240, 68),
-                Enabled  = false
+                Location = new Point(24, 8),
+                Size     = new Size(268, 72),
+                Font     = new Font("Courier New", 9.5f)
             };
             _lstServerLAN.SelectedIndexChanged += (s, e) =>
             {
                 if (_lstServerLAN.SelectedItem == null) return;
                 var ip = _lstServerLAN.SelectedItem.ToString() ?? "";
-                // Chỉ copy khi là địa chỉ IP hợp lệ, bỏ qua thông báo lỗi
+                // Ghi nhận IP được chọn từ danh sách LAN (chỉ IP hợp lệ)
                 if (System.Net.IPAddress.TryParse(ip, out _))
                     _txtIpWAN.Text = ip;
             };
@@ -379,41 +387,88 @@ namespace HTQL550Client.Forms
             _btnTimLAN = new Button
             {
                 Text      = "🔍 Tìm server LAN",
-                Location  = new Point(272, 102),
-                Size      = new Size(148, 34),
-                BackColor = Color.FromArgb(230, 240, 255),
+                Location  = new Point(300, 8),
+                Size      = new Size(172, 36),
+                BackColor = Color.FromArgb(30, 100, 30),
+                ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Enabled   = false
+                Font      = new Font("Segoe UI", 9.5f, FontStyle.Bold)
             };
+            _btnTimLAN.FlatAppearance.BorderSize = 0;
             _btnTimLAN.Click += OnTimServerLAN;
-            _rdLAN.CheckedChanged += (s, e) => _btnTimLAN.Enabled = _rdLAN.Checked;
 
-            // IP và Port (WAN)
-            TaoLabel("Địa chỉ IP:", 24, 182, pnl);
+            var lblGhiChuLAN = new Label
+            {
+                Location  = new Point(24, 84),
+                Width     = 448,
+                Font      = new Font("Segoe UI", 7.5f, FontStyle.Italic),
+                ForeColor = Color.FromArgb(100, 120, 100),
+                Text      = "💡 Máy trạm và server phải cùng mạng nội bộ. Port UDP 50550 cần được mở."
+            };
+            _pnlKhuVucLAN.Controls.AddRange(new Control[] { _lstServerLAN, _btnTimLAN, lblGhiChuLAN });
+
+            // ── Khu vực Online: Nhập IP và Port thủ công ────────────
+            _pnlKhuVucOnline = new Panel
+            {
+                Location  = new Point(0, 112),
+                Size      = new Size(600, 100),
+                BackColor = Color.FromArgb(245, 248, 255),
+                Visible   = false   // Ẩn mặc định
+            };
+
+            _lblIpTieuDe = new Label
+            {
+                Text      = "Địa chỉ IP server:",
+                Location  = new Point(24, 14),
+                AutoSize  = true,
+                Font      = new Font("Segoe UI", 9.5f)
+            };
             _txtIpWAN = new TextBox
             {
-                Location = new Point(120, 180),
-                Width    = 175,
-                Text     = "14.224.152.48",
-                Font     = new Font("Courier New", 10)
+                Location    = new Point(160, 11),
+                Width       = 180,
+                Text        = "",                       // Để trống — người dùng phải tự nhập
+                Font        = new Font("Courier New", 10),
+                PlaceholderText = "VD: 14.224.152.48"  // Gợi ý mờ, không điền sẵn
             };
 
-            TaoLabel("Cổng (Port):", 308, 182, pnl);
+            _lblPortTieuDe = new Label
+            {
+                Text      = "Cổng (Port):",
+                Location  = new Point(358, 14),
+                AutoSize  = true,
+                Font      = new Font("Segoe UI", 9.5f)
+            };
             _numPort = new NumericUpDown
             {
-                Location  = new Point(400, 180),
+                Location  = new Point(448, 11),
                 Width     = 80,
                 Minimum   = 1,
                 Maximum   = 65535,
-                Value     = 8080,
+                Value     = 0,                          // Để 0 — người dùng phải tự nhập
                 Font      = new Font("Segoe UI", 9.5f)
             };
 
-            // Nút kiểm tra kết nối
+            var lblBaoMatOnline = new Label
+            {
+                Location  = new Point(24, 44),
+                Width     = 504,
+                Height    = 40,
+                Font      = new Font("Segoe UI", 8f, FontStyle.Italic),
+                ForeColor = Color.FromArgb(130, 80, 30),
+                Text      = "🔐 Bảo mật: Không lưu địa chỉ IP mặc định. Vui lòng nhập thủ công địa chỉ và cổng "
+                          + "do quản trị viên cung cấp."
+            };
+            _pnlKhuVucOnline.Controls.AddRange(new Control[]
+            {
+                _lblIpTieuDe, _txtIpWAN, _lblPortTieuDe, _numPort, lblBaoMatOnline
+            });
+
+            // ── Nút kiểm tra kết nối (dùng chung 2 chế độ) ──────────
             _btnKiemTra = new Button
             {
                 Text      = "🔌 Kiểm tra kết nối",
-                Location  = new Point(24, 218),
+                Location  = new Point(24, 220),
                 Size      = new Size(170, 34),
                 BackColor = Color.FromArgb(220, 80, 20),
                 ForeColor = Color.White,
@@ -425,29 +480,40 @@ namespace HTQL550Client.Forms
 
             _lblKetQuaKN = new Label
             {
-                Location  = new Point(24, 260),
-                Width     = 560,
-                Height    = 40,
-                Font      = new Font("Segoe UI", 9.5f),
-                ForeColor = Color.Gray,
-                Text      = "Nhấn nút \"Kiểm tra kết nối\" để xác nhận server."
+                Location   = new Point(24, 262),
+                Width      = 560,
+                Height     = 40,
+                Font       = new Font("Segoe UI", 9.5f),
+                ForeColor  = Color.Gray,
+                Text       = "Nhấn \"Kiểm tra kết nối\" để xác nhận server."
             };
 
-            // Ghi chú hướng dẫn khi không tìm thấy server
-            var lblHuongDan = new Label
+            // ── Xử lý chuyển chế độ ──────────────────────────────────
+            _rdLAN.CheckedChanged += (s, e) =>
             {
-                Location  = new Point(24, 306),
-                Size      = new Size(560, 34),
-                Font      = new Font("Segoe UI", 8f, FontStyle.Italic),
-                ForeColor = Color.FromArgb(130, 100, 40),
-                Text      = "💡 Nếu không tìm thấy server: Kiểm tra server Ubuntu đã khởi động chưa, "
-                          + "firewall đã mở port 8080 chưa, và máy trạm có cùng mạng với server không."
+                if (!_rdLAN.Checked) return;
+                _pnlKhuVucLAN.Visible    = true;
+                _pnlKhuVucOnline.Visible = false;
+                _lblKetQuaKN.Text        = "Nhấn \"Kiểm tra kết nối\" để xác nhận server.";
+                _lblKetQuaKN.ForeColor   = Color.Gray;
+            };
+            _rdWAN.CheckedChanged += (s, e) =>
+            {
+                if (!_rdWAN.Checked) return;
+                _pnlKhuVucLAN.Visible    = false;
+                _pnlKhuVucOnline.Visible = true;
+                // Xóa sạch ô IP và Port để bắt người dùng tự nhập
+                _txtIpWAN.Text   = "";
+                _numPort.Value   = 0;
+                _lblKetQuaKN.Text      = "Nhập địa chỉ IP và cổng, sau đó nhấn \"Kiểm tra kết nối\".";
+                _lblKetQuaKN.ForeColor = Color.FromArgb(80, 80, 150);
             };
 
             pnl.Controls.AddRange(new Control[]
             {
-                lbl, _rdLAN, _rdWAN, _lstServerLAN, _btnTimLAN,
-                _txtIpWAN, _numPort, _btnKiemTra, _lblKetQuaKN, lblHuongDan
+                lbl, _rdLAN, _rdWAN,
+                _pnlKhuVucLAN, _pnlKhuVucOnline,
+                _btnKiemTra, _lblKetQuaKN
             });
             return pnl;
         }
@@ -455,7 +521,7 @@ namespace HTQL550Client.Forms
         private async void OnTimServerLAN(object? sender, EventArgs e)
         {
             _btnTimLAN.Enabled = false;
-            _btnTimLAN.Text    = "Đang tìm...";
+            _btnTimLAN.Text    = "Đang quét mạng...";
             _lstServerLAN.Items.Clear();
 
             var ds_ip = await NetworkService.TimServerLAN(3000);
@@ -463,17 +529,20 @@ namespace HTQL550Client.Forms
             _lstServerLAN.Items.Clear();
             if (ds_ip.Count == 0)
             {
-                // Dùng item disabled để hiển thị thông báo, không cho chọn
                 _lstServerLAN.Items.Add("(Không tìm thấy server nào)");
                 _lstServerLAN.Enabled = false;
+                _lblKetQuaKN.Text      = "Không tìm thấy server. Kiểm tra server Ubuntu đã chạy và cùng mạng chưa.";
+                _lblKetQuaKN.ForeColor = Color.DarkOrange;
             }
             else
             {
                 _lstServerLAN.Enabled = true;
                 foreach (var ip in ds_ip)
                     _lstServerLAN.Items.Add(ip);
-                // Tự động chọn server đầu tiên tìm được
+                // Tự động chọn server đầu tiên tìm được và ghi IP vào ô
                 _lstServerLAN.SelectedIndex = 0;
+                _lblKetQuaKN.Text      = $"Tìm thấy {ds_ip.Count} server. Chọn rồi nhấn \"Kiểm tra kết nối\".";
+                _lblKetQuaKN.ForeColor = Color.FromArgb(30, 100, 30);
             }
 
             _btnTimLAN.Text    = "🔍 Tìm server LAN";
@@ -482,9 +551,42 @@ namespace HTQL550Client.Forms
 
         private async void OnKiemTraKetNoi(object? sender, EventArgs e)
         {
-            _ipServer   = _txtIpWAN.Text.Trim();
+            _cheDo_LAN = _rdLAN.Checked;
+
+            // Chế độ Online: bắt buộc người dùng phải tự nhập IP và Port
+            if (!_cheDo_LAN)
+            {
+                if (!System.Net.IPAddress.TryParse(_txtIpWAN.Text.Trim(), out _))
+                {
+                    _lblKetQuaKN.ForeColor = Color.Red;
+                    _lblKetQuaKN.Text      = "✘ Vui lòng nhập địa chỉ IP hợp lệ (ví dụ: 14.224.152.48).";
+                    _txtIpWAN.Focus();
+                    return;
+                }
+                if (_numPort.Value <= 0)
+                {
+                    _lblKetQuaKN.ForeColor = Color.Red;
+                    _lblKetQuaKN.Text      = "✘ Vui lòng nhập số cổng (Port) hợp lệ (ví dụ: 8080).";
+                    _numPort.Focus();
+                    return;
+                }
+            }
+
+            // Lấy IP: Offline từ listbox, Online từ ô nhập
+            _ipServer   = _cheDo_LAN
+                ? (_lstServerLAN.SelectedItem != null && System.Net.IPAddress.TryParse(
+                      _lstServerLAN.SelectedItem.ToString(), out _)
+                      ? _lstServerLAN.SelectedItem.ToString()!
+                      : "")
+                : _txtIpWAN.Text.Trim();
             _portServer = (int)_numPort.Value;
-            _cheDo_LAN  = _rdLAN.Checked;
+
+            if (string.IsNullOrEmpty(_ipServer))
+            {
+                _lblKetQuaKN.ForeColor = Color.Red;
+                _lblKetQuaKN.Text      = "✘ Chưa có server nào được chọn. Hãy tìm server LAN trước.";
+                return;
+            }
 
             _btnKiemTra.Enabled = false;
             _lblKetQuaKN.Text   = "Đang kiểm tra kết nối...";
