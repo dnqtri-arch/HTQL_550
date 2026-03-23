@@ -1,0 +1,20 @@
+---
+description: Nhận vật tư hàng hóa (NVTHH) — tách form giống pattern Đơn hàng mua
+globs: src/modules/inventory/nhan-vat-tu-hang-hoa/NhanVatTuHangHoa*.tsx, src/modules/inventory/nhan-vat-tu-hang-hoa/nhanVatTuHangHoa*.ts
+alwaysApply: false
+---
+
+# Nhận vật tư hàng hóa (NVTHH)
+
+- **Danh sách / toolbar / lọc kỳ:** `src/modules/inventory/nhan-vat-tu-hang-hoa/NhanVatTuHangHoa.tsx` — không nhúng trực tiếp `DonHangMuaForm` trong file này.
+- **Vỏ modal + kéo / thu nhỏ / phóng to + `DonHangMuaForm`:** `NhanVatTuHangHoaFormModal.tsx` — tab NVTHH thường: `formTitle="Nhận vật tư hàng hóa"`, `soDonLabel="Mã phiếu"`, `doiChieuSource="don_mua_hang"`.
+- **Luồng từ Đơn hàng mua (menu ngữ cảnh → tab Nhận vật tư hàng hóa, id `nhan-vat-tu-hang-hoa`):** chỉ áp cho form mở với prefill từ ĐHM (`phieuNhanTuDonHangMua` trên `DonHangMuaForm` trong `src/modules/purchase/don-hang-mua/DonHangMuaForm.tsx`), **không** áp cho Thêm/Sửa/Xem trong tab NVTHH.
+  - **Thanh tiêu đề (kéo):** chỉ hiển thị tiêu đề nguồn đơn mua (`_tieu_de_nguon_dhm` từ prefill: `so_chung_tu_cukcuk` hoặc fallback `ĐHM {so_don_hang}`), **không** prefix «Nhận vật tư hàng hóa» và **không** ghép hậu tố tên NCC.
+  - **Hình thức, kho nhập, tên công trình, Địa điểm GH:** prefill từ ĐHM; **cho phép** chỉnh lại trên form phiếu nhận. Trên `DonHangMuaForm`, thứ tự hiển thị **Kho nhập** luôn **trước** **Tên công trình** (cùng hàng).
+  - **Ô địa chỉ / gợi ý VN:** xem rule `goi-y-dia-chi-vn.mdc` — không `.trim()` khi đồng bộ state → ô nhập (tránh mất dấu cách khi gõ).
+  - **Lưới chi tiết VTHH (phiếu / ĐHM):** cột rộng — bọc vùng bảng trong container `flex: 1`, `minHeight: 0`, `minWidth: 0`, `overflow: auto` (cuộn **ngang và dọc** khi tràn modal).
+  - **Lưới chi tiết (phiếu nhận):** không **Thêm dòng** / **Xóa dòng**; **chỉ** cột **Số lượng** được sửa.
+  - **Khối Đơn hàng — TG tạo:** **thời điểm hiện tại** khi mở form (không prefill `ngay_don_hang` từ ĐHM cho luồng này).
+- **Đơn hàng mua — màn danh sách:** tab **Liên quan** (trước **File đính kèm**) hiển thị phiếu NVTHH khi đơn «Đã nhận hàng»; lưới đơn **không** có cột Liên quan; xuất CSV/Excel vẫn có cột tóm tắt phiếu nhận.
+- **Prefill từ ĐHM:** `nhanVatTuHangHoaPrefill.ts` — `buildPrefillDonHeaderTuDhm` (có `_tieu_de_nguon_dhm`; **không** đổ `ngay_don_hang` từ ĐHM cho phiếu nhận), type `NhanVatTuHangHoaPrefillPayload`.
+- **API / mock:** `nhanVatTuHangHoaApi.ts`; bản ghi / chi tiết tương thích kiểu `DonHangMuaRecord` / `DonHangMuaChiTiet` — định nghĩa type tại **`src/types/donHangMua.ts`** (import qua API đơn hàng mua khi cần). Mã hệ thống: `{Năm}/NVTHH/{Số}`; localStorage key mới `htql_nhan_vat_tu_hang_hoa_*` (đọc fallback key cũ `htql_nhan_hang_*`).

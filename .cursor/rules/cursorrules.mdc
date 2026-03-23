@@ -1,5 +1,8 @@
 # HTQL_550 Project Rules
 
+- **Trước khi viết hoặc sửa code:** Bắt buộc đọc và áp dụng các rule trong `.cursor/rules/*.mdc` phù hợp tác vụ; không bắt đầu chỉnh mã khi chưa rà soát rule.
+- **Rules bắt buộc:** Mọi chỉnh sửa, thêm mới, cập nhật, xóa code đều tuân theo toàn bộ rule trong `.cursor/rules/*.mdc` (ví dụ: `imports-cau-truc.mdc`, `goong-dia-chi.mdc`, `form.mdc`, `nut.mdc`, `o-nhap.mdc`, `mau_gia.mdc`, `canh-le.mdc`, `menu-ngu-canh.mdc`, `project-cleanup.mdc`, …). Đây là bước mặc định trước mỗi yêu cầu.
+- **Cấu trúc `src` (React):** Types dùng chung → **`src/types/`**; hàm format / tính toán dùng chung → **`src/utils/`**; Mua hàng & Đơn hàng mua → **`src/modules/purchase/`**; Kho & Nhận vật tư hàng hóa (NVTHH) → **`src/modules/inventory/`**; `DataGrid` / `Modal` dùng chung → **`src/components/common/`**. Chi tiết: **imports-cau-truc.mdc**.
 - **Ngôn ngữ:** Luôn trả lời và viết chú thích code (comments) bằng tiếng Việt.
 - **Phong cách Code:** - Tối ưu, ngắn gọn, không viết các đoạn mã thừa thãi hoặc giải thích quá dài dòng.
   - Sử dụng Tailwind CSS cho giao diện.
@@ -7,7 +10,7 @@
 - **Tiết kiệm Token:** - Chỉ trả lời đúng phần code được yêu cầu hoặc phần code bị thay đổi. 
   - Không liệt kê lại toàn bộ file nếu không cần thiết.
 - **Cấu trúc Hệ thống:** - Logic và database nằm tại ổ hệ điều hành Ubuntu.
-  - File đính kèm, ảnh thiết kế lưu tại `/ssd_2t`.
-  - Backup lưu tại `/hdd_4t`.
+  - File đính kèm, ảnh thiết kế lưu tại `/ssd_2t/htql_550/`.
+  - Backup lưu tại `/hdd_4t/backup_htql_550/`.
 - **An toàn dữ liệu:** - Tuyệt đối không viết trực tiếp (hardcode) API Key, mật khẩu ngân hàng hay Viettel vào code. 
   - Nhắc nhở tôi dùng lệnh `git commit` sau mỗi thay đổi quan trọng.
