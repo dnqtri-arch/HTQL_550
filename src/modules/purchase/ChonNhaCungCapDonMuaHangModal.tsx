@@ -1,12 +1,11 @@
 ﻿import { useState, useEffect } from 'react'
 import { X, Search } from 'lucide-react'
-import type { VatTuHangHoaRecord } from '../../inventory/kho/vatTuHangHoaApi'
-import { vatTuHangHoaGetAll } from '../../inventory/kho/vatTuHangHoaApi'
-import { formatNumberDisplay } from '../../../utils/numberFormat'
-import { useDraggable } from '../../../hooks/useDraggable'
+import { useDraggable } from '../../hooks/useDraggable'
+import type { NhaCungCapRecord } from './nhaCungCapApi'
+import { nhaCungCapGetAll } from './nhaCungCapApi'
 
-export interface ChonVatTuHangHoaDonMuaHangModalProps {
-  onSelect: (vthh: VatTuHangHoaRecord) => void
+export interface ChonNhaCungCapDonMuaHangModalProps {
+  onSelect: (ncc: NhaCungCapRecord) => void
   onClose: () => void
 }
 
@@ -26,7 +25,7 @@ const box: React.CSSProperties = {
   border: '1px solid var(--border-strong)',
   borderRadius: 6,
   width: '90vw',
-  maxWidth: 720,
+  maxWidth: 640,
   maxHeight: '80vh',
   display: 'flex',
   flexDirection: 'column',
@@ -70,15 +69,15 @@ const filterInputStyle: React.CSSProperties = {
   height: 24,
 }
 
-export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTuHangHoaDonMuaHangModalProps) {
+export function ChonNhaCungCapDonMuaHangModal({ onSelect, onClose }: ChonNhaCungCapDonMuaHangModalProps) {
   const { containerRef, containerStyle, dragHandleProps } = useDraggable()
-  const [list, setList] = useState<VatTuHangHoaRecord[]>([])
+  const [list, setList] = useState<NhaCungCapRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    vatTuHangHoaGetAll().then((data) => {
+    nhaCungCapGetAll().then((data) => {
       if (!cancelled && Array.isArray(data)) setList(data)
       if (!cancelled) setLoading(false)
     })
@@ -88,9 +87,9 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
   const filtered = keyword.trim()
     ? list.filter(
         (r) =>
-          (r.ma || '').toLowerCase().includes(keyword.toLowerCase()) ||
-          (r.ten || '').toLowerCase().includes(keyword.toLowerCase()) ||
-          (r.dvt_chinh || '').toLowerCase().includes(keyword.toLowerCase())
+          (r.ma_ncc || '').toLowerCase().includes(keyword.toLowerCase()) ||
+          (r.ten_ncc || '').toLowerCase().includes(keyword.toLowerCase()) ||
+          (r.ma_so_thue || '').includes(keyword)
       )
     : list
 
@@ -98,14 +97,14 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
     <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={containerRef} style={{ ...box, ...containerStyle }} onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
-          <span>Chọn vật tư hàng hóa (Hàng hóa, dịch vụ)</span>
+          <span>Chọn nhà cung cấp</span>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
             <X size={18} />
           </button>
         </div>
         <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Search size={14} style={{ color: 'var(--text-muted)' }} />
-          <input style={{ ...filterInputStyle, flex: 1 }} placeholder="Tìm theo mã, tên, ĐVT..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+          <input style={{ ...filterInputStyle, flex: 1 }} placeholder="Tìm theo mã, tên, MST..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
         </div>
         <div style={{ overflow: 'auto', flex: 1, minHeight: 200 }}>
           {loading ? (
@@ -114,12 +113,9 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr>
-                  <th style={{ ...thStyle, width: 100 }}>Mã</th>
-                  <th style={thStyle}>Tên VTHH</th>
-                  <th style={{ ...thStyle, width: 80 }}>ĐVT</th>
-                  <th style={{ ...thStyle, width: 90 }}>Tính chất</th>
-                  <th style={{ ...thStyle, width: 100 }}>Đơn giá mua</th>
-                  <th style={{ ...thStyle, width: 80 }}>% Thuế GTGT</th>
+                  <th style={{ ...thStyle, width: 100 }}>Mã NCC</th>
+                  <th style={thStyle}>Tên nhà cung cấp</th>
+                  <th style={{ ...thStyle, width: 120 }}>Mã số thuế</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,12 +127,9 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
                     onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--row-selected-bg)' }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-primary)' }}
                   >
-                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.ma}</td>
-                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.ten}</td>
-                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.dvt_chinh ?? ''}</td>
-                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.tinh_chat ?? ''}</td>
-                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.don_gia_mua != null ? formatNumberDisplay(r.don_gia_mua, 0) : ''}</td>
-                    <td style={{ padding: '6px 8px' }}>{r.thue_suat_gtgt ?? ''}</td>
+                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.ma_ncc}</td>
+                    <td style={{ padding: '6px 8px', borderRight: '1px solid var(--border)' }}>{r.ten_ncc}</td>
+                    <td style={{ padding: '6px 8px' }}>{r.ma_so_thue ?? ''}</td>
                   </tr>
                 ))}
               </tbody>

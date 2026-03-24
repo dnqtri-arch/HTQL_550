@@ -1,7 +1,7 @@
 ﻿import { useState, useRef, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { hinhThucPost, hinhThucPut, hinhThucMaLienSau, type HinhThucRecord } from './hinhThucApi'
-import { formFooterButtonCancel, formFooterButtonSave } from '../../../constants/formFooterButtons'
+import { formFooterButtonCancel, formFooterButtonSave } from '../../constants/formFooterButtons'
 
 const overlay: React.CSSProperties = {
   position: 'fixed',

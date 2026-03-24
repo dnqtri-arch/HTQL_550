@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { X, ChevronDown, Info, Plus, Trash2, CheckCircle, XCircle, FileCheck, AlertTriangle } from 'lucide-react'
@@ -59,6 +59,7 @@ export type FormValues = {
   don_vi_quy_doi: { dvt_chinh: string; dvt_quy_doi: string; ti_le_quy_doi: string; phep_tinh: 'nhan' | 'chia' | ''; mo_ta: string; gia_mua_gan_nhat: string; gia_ban: string; gia_ban_1: string; gia_ban_2: string; gia_ban_3: string }[]
   dien_giai: string
   la_bo_phan_lap_rap: boolean
+  la_vthh_ban: boolean
   la_mat_hang_khuyen_mai: boolean
   chiet_khau: boolean
   loai_chiet_khau: string
@@ -418,6 +419,7 @@ function getEmptyFormValues(dvtList: { id: number; ma_dvt: string; ten_dvt: stri
     don_vi_quy_doi: [],
     dien_giai: '',
     la_bo_phan_lap_rap: false,
+    la_vthh_ban: true,
     la_mat_hang_khuyen_mai: false,
     chiet_khau: false,
     loai_chiet_khau: 'Theo %',
@@ -822,6 +824,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
         : [],
       dien_giai: initialData?.dien_giai ?? '',
       la_bo_phan_lap_rap: initialData?.la_bo_phan_lap_rap ?? false,
+      la_vthh_ban: initialData?.la_vthh_ban ?? true,
       la_mat_hang_khuyen_mai: initialData?.la_hang_khuyen_mai ?? false,
       chiet_khau: (initialData as { chiet_khau?: boolean })?.chiet_khau ?? false,
       loai_chiet_khau: (initialData as { loai_chiet_khau?: string })?.loai_chiet_khau ?? 'Theo %',
@@ -1176,6 +1179,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       don_vi_quy_doi: dvd.length > 0 ? dvd : undefined,
       dien_giai: data.dien_giai.trim() || undefined,
       la_bo_phan_lap_rap: data.la_bo_phan_lap_rap,
+      la_vthh_ban: data.la_vthh_ban,
       la_hang_khuyen_mai: data.la_mat_hang_khuyen_mai,
       chiet_khau: data.chiet_khau,
       loai_chiet_khau: data.loai_chiet_khau.trim() || undefined,

@@ -1,4 +1,4 @@
-﻿import type { DonHangMuaChiTiet, DonHangMuaRecord } from '../donhangmua/donHangMuaApi'
+﻿import type { DonHangMuaChiTiet, DonHangMuaRecord } from './donhangmua/donHangMuaApi'
 
 /** Phiếu nhận vật tư hàng hóa (NVTHH) lưu xong — shell Mua hàng lắng nghe để cập nhật tình trạng ĐHM. */
 export const HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT = 'htql-nvthh-sync-dhm-tinh-trang'

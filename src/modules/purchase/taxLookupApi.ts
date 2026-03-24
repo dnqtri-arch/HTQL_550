@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Tra cứu thông tin doanh nghiệp theo mã số thuế (VietQR API).
  * Dùng để điền Tên, Địa chỉ, Tỉnh/TP, Xã/Phường, Địa chỉ liên hệ khi bấm "Lấy thông tin".
  * API hiện chỉ trả name, address — điện thoại/email/website/người đại diện không có; tỉnh/xã parse từ địa chỉ.
  */
 
-import { DANH_SACH_TINH_THANH_VIET_NAM } from '../../../constants/provincesVietnam'
+import { DANH_SACH_TINH_THANH_VIET_NAM } from '../../constants/provincesVietnam'
 
 const VIETQR_BUSINESS_URL = 'https://api.vietqr.io/v2/business'
 

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ListPageToolbar } from '../../../components/ListPageToolbar'
+﻿import { useState } from 'react'
+import { ListPageToolbar } from '../../components/ListPageToolbar'
 import { hinhThucGetAll, type HinhThucRecord } from './hinhThucApi'
 import { ThemHinhThucModal } from './ThemHinhThucModal'
 import { Plus, Pencil } from 'lucide-react'

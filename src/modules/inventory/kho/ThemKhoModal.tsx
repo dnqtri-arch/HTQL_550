@@ -1,6 +1,6 @@
 ﻿import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { suggestAddressVietnam } from '../../purchase/muahang/addressAutocompleteApi'
+import { suggestAddressVietnam } from '../../purchase/addressAutocompleteApi'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
 
 /** Giữ export để tương thích — không còn dùng Google Places */

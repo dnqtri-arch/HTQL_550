@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react'
 import { X } from 'lucide-react'
-import { formFooterButtonCancel, formFooterButtonSave } from '../../../constants/formFooterButtons'
+import { formFooterButtonCancel, formFooterButtonSave } from '../../constants/formFooterButtons'
 import type { MauHoaDonItem } from './mauHoaDonApi'
 import { mauHoaDonThemLuu } from './mauHoaDonApi'
 

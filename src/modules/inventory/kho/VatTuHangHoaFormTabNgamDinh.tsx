@@ -246,6 +246,13 @@ export function VatTuHangHoaFormTabNgamDinh({
       <div className="misa-grid-item" />
       <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" {...register('la_vthh_ban')} style={{ width: 14, height: 14, flexShrink: 0 }} />
+          <span style={{ color: 'var(--text-primary)' }}>Là vật tư, hàng hóa bán</span>
+        </label>
+      </div>
+      <div className="misa-grid-item" />
+      <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <input type="checkbox" {...register('la_mat_hang_khuyen_mai')} style={{ width: 14, height: 14, flexShrink: 0 }} />
           <span style={{ color: 'var(--text-primary)' }}>Là hàng khuyến mại</span>
         </label>

@@ -3,7 +3,7 @@ import { X, Info, Trash2, Search } from 'lucide-react'
 import type { NhomKhNccItem } from './nhaCungCapApi'
 import type { NhaCungCapRecord } from './nhaCungCapApi'
 import { nhaCungCapGetAll } from './nhaCungCapApi'
-import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 import { ChonKhachHangNccModal } from './ChonKhachHangNccModal'
 
 /** Chuẩn hóa một từ sang không dấu (dùng cho sinh mã). */

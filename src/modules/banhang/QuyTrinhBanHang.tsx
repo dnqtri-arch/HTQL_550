@@ -52,6 +52,10 @@ const COLSTART = BGX + BGWID + 48
 const COLSTEP = NWID + COLG
 const COLX = [0, 1, 2, 3].map((i) => COLSTART + i * COLSTEP)
 
+// Giảm giá hàng bán: trung điểm cột 2–3 (không trùng với Trả lại hàng bán)
+const GGXC = Math.round((COLX[2] + COLX[3]) / 2)  // left edge của node Giảm giá
+const GGcx = GGXC + NWID / 2                        // center x của Giảm giá
+
 // Báo cáo phân tích: cuối backbone, căn giữa
 const BCPX = COLX[3] + NWID + 48
 const BCPY = BKBY - NHID / 2
@@ -219,7 +223,7 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
                 }}
               >
                 <defs>
-                  {/* Mũi tên DUY NHẤT — chỉ dùng cho nét đứt → Báo cáo phân tích */}
+                  {/* Mũi tên DUY NHẤT — chốt cuối trục backbone vào Báo cáo phân tích */}
                   <marker
                     id="arrowBHEnd"
                     markerWidth="8" markerHeight="8"
@@ -227,18 +231,19 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
                     orient="auto"
                     markerUnits="userSpaceOnUse"
                   >
-                    <path d="M0,0 L8,4 L0,8 Z" fill={CLR.gray} />
+                    <path d="M0,0 L8,4 L0,8 Z" fill={CLR.amber} />
                   </marker>
                 </defs>
 
-                {/* ── Trục backbone ngang (từ Báo giá đến hết Col 3) ──────── */}
+                {/* ── Trục backbone ngang: từ Báo giá → đâm thẳng vào Báo cáo phân tích ── */}
                 <line
                   x1={BGX + BGWID}
                   y1={BKBY}
-                  x2={COLX[3] + NWID}
+                  x2={BCPX}
                   y2={BKBY}
                   stroke={T.conn}
                   strokeWidth={1.5}
+                  markerEnd="url(#arrowBHEnd)"
                 />
 
                 {/* ── Đường kẻ dọc: Báo giá lên/xuống backbone ───────────── */}
@@ -259,8 +264,8 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
                   />
                 ))}
 
-                {/* ── 3 đường kẻ dọc: node ROW2 lên backbone (không mũi tên) */}
-                {[0, 1, 2].map((i) => (
+                {/* ── Đường kẻ dọc: Col 0, 1 xuống backbone → ROW2 ────────── */}
+                {[0, 1].map((i) => (
                   <line
                     key={`vbot${i}`}
                     x1={cx(i)} y1={BKBY}
@@ -269,16 +274,11 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
                   />
                 ))}
 
-                {/* ── NÉT ĐỨT + MŨI TÊN DUY NHẤT → Báo cáo phân tích ────── */}
+                {/* ── Giảm giá hàng bán: vertical tại trung điểm col 2–3 ───── */}
                 <line
-                  x1={COLX[3] + NWID + 4}
-                  y1={BKBY}
-                  x2={BCPX - 4}
-                  y2={BKBY}
-                  stroke={CLR.gray}
-                  strokeWidth={1.5}
-                  strokeDasharray="6,4"
-                  markerEnd="url(#arrowBHEnd)"
+                  x1={GGcx} y1={BKBY}
+                  x2={GGcx} y2={ROW2Y}
+                  stroke={T.conn} strokeWidth={1.5}
                 />
               </svg>
 
@@ -317,7 +317,7 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
 
               {renderNode('giamgiahangban', 'Giảm giá hàng bán', undefined,
                 Percent, CLR.gray,
-                COLX[2], ROW2Y, () => {})}
+                GGXC, ROW2Y, () => {})}
 
               {/* Báo cáo phân tích — cuối trục ngang */}
               {renderNode('baocaophanich', 'Báo cáo phân tích', undefined,

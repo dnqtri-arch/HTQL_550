@@ -1,24 +1,24 @@
 ﻿import React, { useState, useEffect } from 'react'
-import { KhoTabs } from '../../inventory/kho/KhoTabs'
-import { VatTuHangHoa } from '../../inventory/kho/VatTuHangHoa'
+import { KhoTabs } from '../inventory/kho/KhoTabs'
+import { VatTuHangHoa } from '../inventory/kho/VatTuHangHoa'
 import { QuyTrinhMuaHang } from './QuyTrinhMuaHang'
 import { NhaCungCap } from './NhaCungCap'
-import { DonHangMua } from '../donhangmua/DonHangMua'
-import { NhanVatTuHangHoa } from '../../inventory/nhanvattuhanghoa/NhanVatTuHangHoa'
+import { DonHangMua } from './donhangmua/DonHangMua'
+import { NhanVatTuHangHoa } from '../inventory/nhanvattuhanghoa/NhanVatTuHangHoa'
 import {
   type DonHangMuaChiTiet,
   type DonHangMuaRecord,
   donHangMuaSetTinhTrang,
   TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG,
-} from '../donhangmua/donHangMuaApi'
+} from './donhangmua/donHangMuaApi'
 import {
   HTQL_MUA_HANG_TAB_EVENT,
   HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT,
   type MuaHangTabEventDetail,
 } from './muaHangTabEvent'
-import { ListPageToolbar } from '../../../components/ListPageToolbar'
+import { ListPageToolbar } from '../../components/ListPageToolbar'
 import { loadDieuKhoanThanhToan, saveDieuKhoanThanhToan, type DieuKhoanThanhToanItem } from './nhaCungCapApi'
-import { formatNumberDisplay } from '../../../utils/numberFormat'
+import { formatNumberDisplay } from '../../utils/numberFormat'
 import { ThemDieuKhoanThanhToanModal } from './ThemDieuKhoanThanhToanModal'
 import { HinhThucView } from './HinhThucView'
 import { Plus } from 'lucide-react'

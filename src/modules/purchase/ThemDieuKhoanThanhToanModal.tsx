@@ -1,8 +1,8 @@
 ﻿import { useState, useRef } from 'react'
 import { X, HelpCircle } from 'lucide-react'
 import type { DieuKhoanThanhToanItem } from './nhaCungCapApi'
-import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
-import { formatSoNguyenInput, formatSoTien, isZeroDisplay, parseFloatVN } from '../../../utils/numberFormat'
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
+import { formatSoNguyenInput, formatSoTien, isZeroDisplay, parseFloatVN } from '../../utils/numberFormat'
 
 interface ThemDieuKhoanThanhToanModalProps {
   onClose: () => void

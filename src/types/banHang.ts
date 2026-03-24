@@ -18,6 +18,8 @@ export interface KhachHangRecord {
   so_ngay_duoc_no?: string
   so_no_toi_da?: string
   ghi_chu?: string
+  /** Khách hàng đồng thời là Nhà cung cấp */
+  isNhaCungCap: boolean
 }
 
 // ─── Báo giá ──────────────────────────────────────────────────────────────

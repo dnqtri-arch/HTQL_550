@@ -2,7 +2,7 @@
 import { X, HelpCircle, Plus, Check, Ban, Search } from 'lucide-react'
 import type { NhomKhNccItem } from './nhaCungCapApi'
 import { ThemNhomKhNccModal } from './ThemNhomKhNccModal'
-import { useDraggable } from '../../../hooks/useDraggable'
+import { useDraggable } from '../../hooks/useDraggable'
 
 interface NhomKhNccLookupModalProps {
   title?: string

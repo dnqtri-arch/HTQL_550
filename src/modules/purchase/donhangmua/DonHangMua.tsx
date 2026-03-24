@@ -35,7 +35,7 @@ import {
   MUA_HANG_MODAL_FOOTER_DONG_Y,
   MUA_HANG_MODAL_TITLE_XOA,
 } from '../../../components/MuaHangXoaModalBody'
-import { HTQL_MUA_HANG_TAB_EVENT } from '../muahang/muaHangTabEvent'
+import { HTQL_MUA_HANG_TAB_EVENT } from '../muaHangTabEvent'
 import { DonHangMuaApiProvider, useDonHangMuaApi, type DonHangMuaApi } from './DonHangMuaApiContext'
 import { Modal } from '../../../components/common/Modal'
 import {
@@ -60,7 +60,7 @@ import { DonHangMuaForm } from './DonHangMuaForm'
 import type { DonHangMuaAttachmentItem } from './donHangMuaAttachmentTypes'
 import { duongDanHienThi, formatDungLuongHienThi, partMccForPath, rebuildDhmAttachmentStoredFileName, uocLuongByteTuDataUrl } from './DonHangMuaDinhKemModal'
 import { donViTinhGetAll } from '../../inventory/kho/donViTinhApi'
-import { nhaCungCapGetAll } from '../muahang/nhaCungCapApi'
+import { nhaCungCapGetAll } from '../nhaCungCapApi'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../utils/numberFormat'
 import { exportCsv } from '../../../utils/exportCsv'
 import styles from './DonHangMua.module.css'

@@ -12,7 +12,7 @@ function LoadingFallback() {
 const BanLamViec = lazy(() => import('../modules/banlamviec').then((m) => ({ default: m.BanLamViec })))
 const CongViec = lazy(() => import('../modules/congviec').then((m) => ({ default: m.CongViec })))
 const BanHang = lazy(() => import('../modules/banhang').then((m) => ({ default: m.BanHang })))
-const MuaHang = lazy(() => import('../modules/purchase/muahang').then((m) => ({ default: m.MuaHang })))
+const MuaHang = lazy(() => import('../modules/purchase').then((m) => ({ default: m.MuaHang })))
 const HopDong = lazy(() => import('../modules/hopdong').then((m) => ({ default: m.HopDong })))
 const Quy = lazy(() => import('../modules/quy').then((m) => ({ default: m.Quy })))
 const NganHang = lazy(() => import('../modules/nganhang').then((m) => ({ default: m.NganHang })))
