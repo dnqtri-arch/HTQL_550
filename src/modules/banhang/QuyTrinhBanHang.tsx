@@ -383,7 +383,7 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
       }}>
         {[
           { id: 'dmkhachhang',    label: 'Khách hàng',           Icon: Users,      color: CLR.blue },
-          { id: 'dmvathh',        label: 'Vật tư, hàng hóa',     Icon: Package,    color: CLR.orange },
+          { id: 'dmvathh',        label: 'Sản phẩm, hàng hóa',   Icon: Package,    color: CLR.orange },
           { id: 'dmdieukhoanntt', label: 'Điều khoản thanh toán', Icon: CreditCard, color: CLR.green },
           { id: 'dmtienich',      label: 'Tiện ích',              Icon: Wrench,     color: CLR.gray },
         ].map(({ id, label, Icon, color }) => (

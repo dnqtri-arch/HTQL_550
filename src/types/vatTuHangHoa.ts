@@ -62,6 +62,10 @@ export interface VatTuHangHoaRecord {
   thue_suat_nk?: string
   thue_suat_xk?: string
   nhom_hhdv_ttdb?: string
+  /** Là vật tư (phân loại nghiệp vụ) */
+  la_vat_tu?: boolean
+  /** Là hàng hóa (phân loại nghiệp vụ) */
+  la_hang_hoa?: boolean
   la_vthh_ban?: boolean
   la_hang_khuyen_mai?: boolean
   la_bo_phan_lap_rap?: boolean

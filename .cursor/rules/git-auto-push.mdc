@@ -1,0 +1,34 @@
+---
+description: Gợi ý Git push sau khi code không có lỗi TypeScript
+globs: ["src/**/*.tsx", "src/**/*.ts"]
+alwaysApply: false
+---
+
+# Git Auto-Push Workflow
+
+Sau mỗi khi hoàn thành một tính năng và **không còn lỗi TypeScript** (`npx tsc --noEmit` exit code 0), hãy:
+
+1. **Nhắc người dùng commit & push** với gợi ý lệnh:
+
+```bash
+git add .
+git commit -m "Auto Update"
+git push origin master
+```
+
+2. **Không tự động chạy** lệnh push mà không có xác nhận từ người dùng.
+
+3. **Chỉ gợi ý** sau khi:
+   - TypeScript 0 lỗi đã được xác nhận
+   - Ít nhất 1 file mới/sửa đổi trong `src/`
+   - Người dùng không yêu cầu tiếp tục sửa code
+
+## Gợi ý commit message theo tính năng
+
+| Tính năng | Commit message gợi ý |
+|-----------|---------------------|
+| Thêm module mới | `Thêm module [tên module]` |
+| Sửa bug | `Sửa lỗi [mô tả ngắn]` |
+| Refactor | `Refactor [tên component]` |
+| Cập nhật type | `Cập nhật kiểu dữ liệu [tên type]` |
+| Tổng hợp | `Hoàn thiện [tên tính năng]` |
