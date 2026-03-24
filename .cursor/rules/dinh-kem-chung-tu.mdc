@@ -1,0 +1,60 @@
+---
+description: Đính kèm chứng từ — Đơn hàng mua (đường dẫn, UI, xác nhận)
+globs: src/modules/purchase/don-hang-mua/DonHangMua*.tsx
+alwaysApply: false
+---
+
+# Đính kèm chứng từ (Đơn hàng mua)
+
+## Phạm vi
+
+- **Tên gọi:** **Đính kèm chứng từ** (toolbar + popover đính kèm trên form Đơn hàng mua).
+- **Code (module `purchase/don-hang-mua`):** `DonHangMuaDinhKemModal.tsx`, `DonHangMuaForm.tsx`, `donHangMuaAttachmentTypes.ts` (re-export type từ `src/types/donHangMua.ts`), payload `attachments` trong `donHangMuaApi.ts`.
+- **Type đính kèm:** `DonHangMuaAttachmentItem` — định nghĩa tại **`src/types/donHangMua.ts`**.
+
+## Quy tắc đường dẫn lưu trữ (virtual_path)
+
+- Cấu trúc thư mục logic: `don_hang_mua/{phần_ncc}/{mã_đhm}/{tên_file}`.
+- **Phần NCC trên path và trong tên file:** `partMccForPath(ma_ncc)` — **chỉ** dùng **mã NCC** (`ma_ncc`, chữ thường, bỏ khoảng trắng). **Không** dùng tên NCC / slug từ tên. Chưa có mã → `ncc_unknown`. (Tham số tên NCC nếu còn trong chữ ký hàm thì bỏ qua.)
+- `mã_đhm` suy từ `so_don_hang` (vd. `2026/DHM/3` → `2026_dhm_3`).
+- **Tên file (base):** `buildDhmAttachmentBaseName` — phần thời gian: **TG nhận hàng** (`ngayGiaoHang`) nếu có; không thì **TG tạo đơn** (`ngayDonHang`); không thì **thời điểm hiện tại** — **không** để rơi về epoch / `01/01/1970`.
+- **Bắt buộc:** Trước khi ghi payload lưu đơn, **chuẩn hóa lại** `name` + `virtual_path` (`chuanHoaDuongDanDinhKemDonHangMua`): nếu tên file đúng pattern hệ thống (hậu tố `_HH_mm_dd_MM_yyyy_index`), **đổi lại** phần `{mã_đhm}_{phần_ncc}` theo Mã ĐHM và `nccPartDinhKem` hiện tại (`rebuildDhmAttachmentStoredFileName`) — tránh tên file vẫn là `…_ncc_unknown_…` sau khi đính kèm trước rồi mới nhập/chọn NCC hoặc đổi số đơn; không tin `virtual_path` cũ trong JSON.
+- **Đồng bộ state (form):** Khi `soDonHang` hoặc `nccPartDinhKem` thay đổi, gọi `chuanHoaDuongDanDinhKemDonHangMua` và **cập nhật state nếu đổi `name` hoặc `virtual_path`** (so sánh cả hai — trước đây chỉ so `virtual_path` có thể bỏ qua khi tên file đổi mà chuỗi path trùng cục bộ).
+- **Mở đơn sửa/xem:** Khi nạp `attachments` từ `initialDon`, chuẩn hóa theo `so_don_hang` + `partMccForPath(ma_ncc)` — trên bản ghi mock hiện chỉ có tên NCC thì bước đầu có thể là `ncc_unknown` cho đến khi form đồng bộ `ma_ncc` từ danh bạ và effect chuẩn hóa chạy lại.
+- **Tab File đính kèm (danh sách ĐHM):** Hiển thị đường dẫn / tên file chuẩn với `partMccForPath(ma_ncc)` — `ma_ncc` lấy từ **danh bạ NCC** khi khớp `ten_ncc` với `nha_cung_cap` trên đơn (vẫn là mã NCC, không slug từ tên); không khớp thì `ncc_unknown`.
+- **Modal đính kèm:** props `maNccPathPart`, `ngayDonHang`, `ngayGiaoHang` — đồng bộ với form (TG tạo + TG nhận để đặt tên file đúng).
+- **Popover không còn** hiển thị chi tiết từng file (tên, dung lượng, ngày, đường dẫn). Các hàm `duongDanHienThi`, `formatDungLuongHienThi`, `formatNgayGioLuu` vẫn export từ `DonHangMuaDinhKemModal.tsx` nếu cần dùng nơi khác; dữ liệu đầy đủ vẫn nằm trong JSON `attachments`.
+
+## Giới hạn nghiệp vụ (`DonHangMuaDinhKemModal.tsx`)
+
+- **Tối đa 10 file** trên một đơn (`DHM_DINH_KEM_TOI_DA_TEP`). Khi đủ 10: nút **Thêm file…** `disabled`, chọn file không xử lý (có `alert` nếu cố thêm).
+- **Mỗi lần chọn trong hộp thoại:** nếu người dùng chọn **nhiều hơn 10 file** (`list.length > 10`) → **một** `alert` cảnh báo, **không** xử lý / không loading **bất kỳ** file nào, reset `input` file.
+- **`onChange` `<input type="file">`:** lấy `Array.from(input.files)`, **gán `input.value = ''` ngay** trong handler, rồi **defer** gọi xử lý và thông báo: **`requestAnimationFrame` lồng 2 lần + `setTimeout` (~80 ms)** (hàm `deferUserDialog` trong `DonHangMuaDinhKemModal.tsx`) — tránh trình duyệt chặn / không hiện `alert` ngay sau khi đóng hộp thoại chọn file. **Đồng thời** hiển thị **banner cảnh báo** (`canhBaoDinhKem`) trong popover để luôn thấy nội dung kể cả khi `alert` bị chặn.
+- **Định dạng:** chỉ `.jpg`, `.png`, `.pdf`, `.docx`. File sai định dạng → `alert` + banner liệt kê tên, **bỏ qua** từng file đó, **vẫn** nén/đọc và tiếp tục với file hợp lệ (nếu còn).
+- **Dung lượng:** mỗi file gốc phải **nhỏ hơn 5 MB** (`DHM_DINH_KEM_TOI_DA_BYTES`; điều kiện lọc: `file.size >= 5 * 1024 * 1024`). File **từ 5 MB trở lên** → **không được đính kèm** — `alert` + banner liệt kê (kèm dung lượng hiển thị); **không** đọc/nén file đó; **vẫn** xử lý các file đủ điều kiện còn lại trong cùng lần chọn.
+- **Ô trống còn lại:** Nếu số file hợp lệ sau lọc **nhiều hơn** `slotConLai` → `alert` giải thích, chỉ xử lý **`slotConLai` file hợp lệ đầu tiên** (tiến trình loading chỉ cho các file được xử lý).
+- Sau khi xử lý xong các file sẽ thêm: vẫn **`confirm`** trước khi merge vào `attachments`.
+
+## Hành vi UI (popover + xem file)
+
+- Popover neo dưới nút **Đính kèm**, badge số lượng file khi `attachments.length > 0`.
+- **Tiêu đề:** một dòng — **Đính kèm chứng từ** (in đậm) + cùng dòng phía sau: gợi ý *«Đính kèm tối đa 10 file, các file .jpg, .png, .pdf, .docx — mỗi file phải nhỏ hơn 5 MB»* (chữ nhỏ, màu muted, `flex-wrap` nếu hẹp).
+- **Banner cảnh báo:** trong vùng cuộn của popover, **cuối nội dung** — **sau** dòng *«Chưa có file đính kèm.»* (hoặc sau hàng thumbnail khi đã có file), không nằm phía trên nút **Thêm file…**. `role="alert"` (`canhBaoDinhKem`), bổ sung cho `window.alert`.
+- **Hàng thao tác:** nút **Thêm file…** và **thanh tiến trình** loading (text + %) **cùng một hàng** (`flex`, vùng progress `flex: 1 1 …`); khi không có tiến trình, vùng progress có thể co lại để không chiếm chỗ.
+- **Danh sách file:** hàng thumbnail dùng **`flex-wrap: wrap`** — khi hết chiều ngang thì **xuống dòng**; **`overflow-x: hidden`** (không cuộn ngang một hàng dài). **Không** có block chi tiết file bên dưới.
+- **Hover** lên một thumbnail: **không** phóng to / **không** đổi kích thước ô (luôn **`THUMB_STRIP` × `THUMB_STRIP`**). **Nổi bật** bằng vòng **accent** (`box-shadow: 0 0 0 2px`) + đổ bóng nhẹ; các ô khác **giảm opacity** nhẹ khi có một ô đang hover; `z-index` ô hover cao hơn để bóng chồng đẹp.
+- **Bấm lên ảnh/thumbnail** (nút preview) = mở **popup xem** toàn màn (`z-index` cao), có **tiến/lùi** file và phím mũi tên.
+- Định dạng: `.jpg`, `.png`, `.pdf`, `.docx`; ảnh nén trước khi nhúng data URL.
+- Sau khi xử lý file hợp lệ, **xác nhận** (`confirm` qua `deferUserDialog` / `xacNhanDefer`) mới merge vào `attachments`.
+
+### Nút Xóa dưới thumbnail — layout cố định (`DonHangMuaDinhKemModal.tsx`)
+
+- Chỉ khi **không** `readOnly`: dưới mỗi ảnh thu nhỏ có **một hàng chiều cao cố định** `THUMB_DELETE_ROW_H` (px), **luôn** chiếm chỗ trong layout.
+- **Hover** vào ô (thumbnail + vùng cột): nút **Xóa** **hiện** phía dưới ảnh thu nhỏ; khi không hover: nút **ẩn** bằng `visibility: hidden` và `pointer-events: none` — **không** được gỡ nút khỏi DOM theo hover (tránh nhảy chiều cao).
+- **Bấm Xóa** → gọi `xoaTai(idx)` → `onChange` (bỏ file khỏi `attachments`); `preventDefault` + `stopPropagation` để **không** kích hoạt mở viewer; đồng bộ đóng / lùi chỉ số viewer nếu cần.
+- Hàng strip thumbnails: **`align-items: flex-start`** để mọi cột cùng căn đỉnh, tránh lệch dọc khi một cột có nội dung khác chiều cao.
+- **Kết quả bắt buộc:** vị trí và kích thước ô thumbnail **không đổi** khi hover; **chiều cao tổng** vùng strip + popover **không nhảy** chỉ vì ẩn/hiện nút Xóa (chỉ khi số file đổi sau khi xóa thì layout co lại — đúng nghiệp vụ).
+
+## Payload
+
+- Lưu mảng `attachments` trong JSON đơn (`name`, `data`, `saved_at`, `virtual_path` đã chuẩn hóa khi lưu).

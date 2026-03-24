@@ -1,0 +1,11 @@
+---
+description: Ô địa chỉ gợi ý VN — giữ nguyên khoảng trắng khi gõ; không trim khi đồng bộ state → ô nhập
+globs: src/modules/purchase/don-hang-mua/DonHangMuaForm.tsx,src/modules/purchase/mua-hang/addressAutocompleteApi.ts,src/modules/inventory/kho/ThemKhoModal.tsx,src/styles/global.css
+alwaysApply: false
+---
+
+# Gợi ý địa chỉ (Việt Nam)
+
+- **Không** dùng `.trim()` trên chuỗi đang nhập khi **đồng bộ từ state (`dia_chi`, `dia_chi_cong_trinh`, …) sang danh sách ô Địa điểm giao hàng** hoặc ngược lại trong `useEffect` — trim sẽ xóa dấu cách cuối câu mỗi lần render và khiến **không gõ được khoảng trắng** hoặc mất từ đang soạn.
+- **Trim** chỉ khi **lưu payload / gửi API** hoặc so sánh “có nội dung hay không”, không trim liên tục trên đường đi của controlled input.
+- Ô gợi ý: `suggestAddressVietnam` — debounce hợp lý; chọn gợi ý thì gán full chuỗi; không chặn phím Space trên `input` (trừ khi có lý do UX riêng, phải ghi chú trong code).

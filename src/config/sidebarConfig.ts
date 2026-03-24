@@ -8,6 +8,7 @@ export type ModuleId =
   | 'ngan-hang'
   | 'thu-quy'
   | 'kho'
+  | 'kho-vthh'
   | 'don-vi-tinh'
   | 'thu-kho'
   | 'cong-cu-dung-cu'
@@ -61,7 +62,8 @@ export const MODULE_GROUPS: Array<{
     id: 'group4',
     label: 'Kho và hàng hóa',
     items: [
-      { id: 'kho', label: 'Kho', icon: 'Warehouse' },
+      { id: 'kho', label: 'Kho hàng', icon: 'Warehouse' },
+      { id: 'kho-vthh', label: 'Tồn kho', icon: 'BarChart3' },
       { id: 'don-vi-tinh', label: 'Đơn vị tính', icon: 'Ruler' },
       { id: 'thu-kho', label: 'Thủ kho', icon: 'UserCog' },
       { id: 'cong-cu-dung-cu', label: 'Công cụ dụng cụ', icon: 'Wrench' },

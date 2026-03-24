@@ -1,0 +1,102 @@
+/**
+ * Module Bán hàng — entry point.
+ * Tabs: Quy trình | Báo giá | Đơn hàng bán | Hợp đồng | Hóa đơn | Công nợ | Trả lại hàng
+ * Tuân thủ imports-cau-truc.mdc: folder viết liền, không gạch ngang.
+ * Quản lý tab nội bộ (không phụ thuộc vào ModulePage.setActiveSub).
+ */
+
+import { useState } from 'react'
+import { BaoGia } from './baogia/BaoGia'
+import { DonHangBan } from './donhangban/DonHangBan'
+import { HopDongBan } from './hopdong/HopDongBan'
+import { HoaDonBan } from './hoadon/HoaDonBan'
+import { CongNoKhachHang } from './congno/CongNoKhachHang'
+import { TraLaiHang } from './tralai/TraLaiHang'
+import { QuyTrinhBanHang } from './QuyTrinhBanHang'
+
+type SubId =
+  | 'quy-trinh'
+  | 'baogia'
+  | 'donhangban'
+  | 'hopdong'
+  | 'hoadon'
+  | 'congno'
+  | 'tralai'
+
+const TABS: { id: SubId; label: string }[] = [
+  { id: 'quy-trinh', label: 'Quy trình' },
+  { id: 'baogia', label: 'Báo giá' },
+  { id: 'donhangban', label: 'Đơn hàng bán' },
+  { id: 'hopdong', label: 'Hợp đồng' },
+  { id: 'hoadon', label: 'Hóa đơn bán' },
+  { id: 'congno', label: 'Công nợ KH' },
+  { id: 'tralai', label: 'Trả lại hàng' },
+]
+
+export function BanHang() {
+  const [activeTab, setActiveTab] = useState<SubId>('quy-trinh')
+
+  const navigate = (tab: string) => {
+    const found = TABS.find((t) => t.id === tab)
+    if (found) setActiveTab(found.id)
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
+      height: '100%',
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <h1 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+        Bán hàng
+      </h1>
+
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 4,
+        marginBottom: 8,
+        paddingBottom: 6,
+        borderBottom: '1px solid var(--border-strong)',
+      }}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            style={{
+              padding: '4px 10px',
+              background: activeTab === tab.id ? 'var(--accent)' : 'var(--bg-secondary)',
+              color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-primary)',
+              border: `1px solid ${activeTab === tab.id ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              fontWeight: activeTab === tab.id ? 700 : 400,
+              transition: 'background 0.12s, color 0.12s',
+            }}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {activeTab === 'quy-trinh' && <QuyTrinhBanHang onNavigate={navigate} />}
+        {activeTab === 'baogia' && <BaoGia />}
+        {activeTab === 'donhangban' && <DonHangBan />}
+        {activeTab === 'hopdong' && <HopDongBan />}
+        {activeTab === 'hoadon' && <HoaDonBan />}
+        {activeTab === 'congno' && <CongNoKhachHang />}
+        {activeTab === 'tralai' && <TraLaiHang />}
+      </div>
+    </div>
+  )
+}

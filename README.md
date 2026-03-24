@@ -27,8 +27,8 @@ Mở http://localhost:5173
   - DanhMuc_VatTu (Vật tư hàng hóa, Kho, Đơn vị tính)
   - DanhMuc_TaiKhoan (Ngân hàng, Hệ thống tài khoản)
 - **Cấu hình mạng:** `config_network.py`
-  - Tự nhận diện: ping 192.168.1.68 → dùng LAN, không thì dùng IP Public 14.224.152.48 (có thể cấu hình qua biến môi trường `HTQL_IP_LAN`, `HTQL_IP_PUBLIC`)
-  - Đường dẫn lưu thiết kế (Bán hàng, Kho): `/ssd_2t/htql_550/thietke/` (backup tại `/hdd_4t/htql_550/thietke/`)
+  - Tự nhận diện: ping 192.168.1.68 → dùng LAN, không thì dùng IP Public 14.224.152.48
+  - Đường dẫn lưu thiết kế (Bán hàng, Kho): `/ssd_2tb/HTQL_550/thietke/`
 - **Database:** `database/schema_postgresql.sql` – Tạo bảng PostgreSQL (tên bảng tiếng Việt) cho tất cả phân hệ
 
 ## Các phân hệ (Sidebar)

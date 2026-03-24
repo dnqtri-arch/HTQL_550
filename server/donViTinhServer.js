@@ -164,7 +164,7 @@ app.get('/api/cccd-lookup', (req, res) => {
 
 const PORT = 3001
 app.listen(PORT, () => {
-  console.log(`[HTQL_550] API: http://localhost:${PORT}/api/don-vi-tinh`)
-  console.log(`[HTQL_550] API: http://localhost:${PORT}/api/nha-cung-cap (đồng bộ qua web, mở lại chương trình vẫn còn)`)
-  console.log(`[HTQL_550] API: http://localhost:${PORT}/api/cccd-lookup (tra cứu CCCD)`)
+  console.log(`[HTQL_550] API đơn vị tính: http://localhost:${PORT}/api/don-vi-tinh`)
+  console.log(`[HTQL_550] API nhà cung cấp: http://localhost:${PORT}/api/nha-cung-cap (đồng bộ qua web, mở lại chương trình vẫn còn)`)
+  console.log(`[HTQL_550] API tra cứu CCCD: http://localhost:${PORT}/api/cccd-lookup`)
 })

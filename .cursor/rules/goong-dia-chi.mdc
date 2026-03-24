@@ -1,0 +1,27 @@
+---
+description: Goong / gợi ý địa chỉ — API key qua biến môi trường, gọi API sau ≥3 ký tự
+globs: src/modules/purchase/mua-hang/addressAutocompleteApi.ts,**/*ThemKho*.tsx,**/DonHangMuaForm.tsx
+alwaysApply: false
+---
+
+# Goong.io & gợi ý địa chỉ (HTQL_550)
+
+## 1. API key — không hardcode
+
+- **Không** ghi trực tiếp API key Goong (hay Openmap) trong mã nguồn (string literal, comment, log).
+- **Chỉ** lấy qua biến môi trường Vite:
+  - `VITE_GOONG_API_KEY` — Goong Place AutoComplete
+  - `VITE_OPENMAP_API_KEY` — Openmap (dự phòng)
+- Trong code: `import.meta.env.VITE_GOONG_API_KEY` (hoặc hàm bọc như `getGoongKey()` trong `addressAutocompleteApi.ts`).
+- File mẫu: `.env.example` chỉ có **placeholder** (rỗng hoặc `your_key_here`), **không** commit key thật.
+
+## 2. Khi nào được gọi API
+
+- Chỉ gọi chuỗi gợi ý (Goong → Openmap → Nominatim) sau khi chuỗi tìm kiếm **đã trim** và có **ít nhất 3 ký tự**.
+- Logic tập trung: `suggestAddressVietnam()` trong `src/modules/purchase/mua-hang/addressAutocompleteApi.ts` — dưới 3 ký tự trả về `[]`, không `fetch`.
+- Component vẫn có thể debounce; ngưỡng 3 ký tự là **bắt buộc** ở tầng API để tránh request sớm.
+
+## 3. Tham chiếu
+
+- Implementation: `addressAutocompleteApi.ts`
+- Rule cấu trúc import: **imports-cau-truc.mdc**

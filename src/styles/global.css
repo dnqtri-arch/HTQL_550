@@ -162,6 +162,18 @@ a:hover {
   padding: 2px 5px !important;
 }
 
+/** DataGrid: NCC tối đa 1 dòng + ellipsis (WebKit) */
+.htql-grid-cell-ncc-line-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+  max-height: 1.35em;
+}
+
 .htql-address-input {
   min-height: 40px !important;
   padding: 8px 10px !important;
@@ -285,6 +297,27 @@ input[type="number"].htql-no-spinner::-webkit-outer-spin-button {
   outline: none;
 }
 
+/* Popper lịch: z-index cao hơn sticky header DataGrid (z-index:1) và modal — kết hợp portalId */
+.react-datepicker-popper {
+  z-index: 10100 !important;
+}
+
+/* Portal toàn màn hình: click xuyên qua, riêng lịch (con) nhận pointer-events */
+#htql-react-datepicker-portal {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  z-index: 10100;
+  pointer-events: none;
+}
+
+#htql-react-datepicker-portal .react-datepicker-popper,
+#htql-react-datepicker-portal .react-datepicker__portal {
+  pointer-events: auto;
+}
+
 /* Ô datepicker nhỏ vừa với dd/MM/yyyy */
 .htql-datepicker-inline,
 .htql-datepicker-inline.react-datepicker-ignore-onclickoutside {
@@ -401,4 +434,373 @@ input[type="number"].htql-no-spinner::-webkit-outer-spin-button {
 .htql-datepicker-calendar.react-datepicker .react-datepicker__month-year-read-view:hover {
   background-color: var(--accent-hover) !important;
   color: var(--accent-text) !important;
+}
+
+/* Nút Lùi/Tiến custom header: hover bo tròn, nền nhẹ trên header cam */
+.htql-datepicker-custom-header .htql-datepicker-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+
+.htql-datepicker-custom-header .htql-datepicker-nav-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 1px;
+}
+
+/* Chỉ ngày: card + header đồng bộ bộ chọn Ngày Giờ (tg-nhan) */
+.htql-datepicker-ngay.react-datepicker {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  font-family: inherit;
+  min-width: 300px;
+  background: var(--bg-primary);
+}
+
+.htql-datepicker-ngay.react-datepicker .react-datepicker__navigation {
+  display: none !important;
+}
+
+.htql-datepicker-ngay.react-datepicker .react-datepicker__header {
+  background-color: var(--accent);
+  color: var(--accent-text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 0;
+  padding: 0;
+}
+
+.htql-datepicker-ngay .htql-datepicker-custom-header {
+  background-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.htql-datepicker-ngay .htql-datepicker-custom-header .htql-datepicker-month-select,
+.htql-datepicker-ngay .htql-datepicker-custom-header .htql-datepicker-year-select {
+  color: var(--accent-text);
+  background-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+}
+
+.htql-datepicker-ngay .htql-datepicker-custom-header .htql-datepicker-month-select:hover,
+.htql-datepicker-ngay .htql-datepicker-custom-header .htql-datepicker-year-select:hover {
+  background-color: var(--accent-hover);
+}
+
+.htql-datepicker-ngay .htql-datepicker-custom-header .htql-datepicker-month-select option,
+.htql-datepicker-ngay .htql-datepicker-custom-header .htql-datepicker-year-select option {
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
+.htql-datepicker-ngay .react-datepicker__header .react-datepicker__day-names {
+  background-color: var(--accent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0 6px 8px;
+  margin: 0;
+}
+
+.htql-datepicker-ngay .react-datepicker__header .react-datepicker__day-name {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.htql-datepicker-ngay .react-datepicker__month-container {
+  min-width: 300px;
+  width: 100%;
+}
+
+.htql-datepicker-ngay .react-datepicker__month {
+  margin: 0.5em 0.65em 0.65em;
+  background: var(--bg-primary);
+}
+
+.htql-datepicker-ngay .react-datepicker__day-name,
+.htql-datepicker-ngay .react-datepicker__day {
+  width: 2.5em;
+  line-height: 2.5em;
+  margin: 0.2em;
+  font-size: 12px;
+}
+
+.htql-datepicker-ngay .react-datepicker__day:hover:not(.react-datepicker__day--selected):not(.react-datepicker__day--keyboard-selected) {
+  border-radius: 8px;
+  background-color: var(--row-selected-bg);
+}
+
+/* Ngày chọn: màu xanh đồng bộ cột giờ tg-nhan */
+.htql-datepicker-ngay .react-datepicker__day--selected,
+.htql-datepicker-ngay .react-datepicker__day--keyboard-selected {
+  background-color: #216ba5 !important;
+  color: #fff !important;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.htql-datepicker-ngay .react-datepicker__day--selected:hover,
+.htql-datepicker-ngay .react-datepicker__day--keyboard-selected:hover {
+  background-color: #1a5a8a !important;
+  color: #fff !important;
+}
+
+/* Hôm nay: viền nhẹ (không trùng selected) */
+.htql-datepicker-ngay .react-datepicker__day--today:not(.react-datepicker__day--selected):not(.react-datepicker__day--keyboard-selected) {
+  font-weight: 600;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: 8px;
+  background: transparent;
+}
+
+.htql-datepicker-ngay .react-datepicker__day--outside-month {
+  opacity: 0.42;
+}
+
+/* TG nhận hàng: Lịch trước (trái), Thời gian sau (phải) — rule ngay-gio-input */
+.htql-datepicker-tg-nhan.react-datepicker {
+  display: flex;
+  flex-direction: row;
+  max-height: 320px;
+  overflow: visible;
+  min-width: 400px;
+  width: auto;
+}
+
+/* Phần chọn giờ: overflow hidden, border trái giữa lịch và giờ */
+.htql-datepicker-tg-nhan .react-datepicker__time-container {
+  border-left: 1px solid var(--border);
+  border-right: none;
+  border-bottom: 1px solid #e2e8f0;
+  width: 90px;
+  min-width: 90px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Tiêu đề Thời gian: border dưới rõ ràng */
+.htql-datepicker-tg-nhan .react-datepicker__header.react-datepicker__header--time {
+  border-bottom: 1px solid #e2e8f0;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box {
+  width: 90px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Danh sách giờ: 400px = 10 × 40px, Scroll Snap mandatory, scroll smooth, ẩn thanh cuộn */
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list {
+  max-height: 400px;
+  height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 12px 0;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  box-sizing: border-box;
+}
+
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dòng chọn giờ: 40px cố định, Scroll Snap, căn giữa */
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time-list-item {
+  width: 100% !important;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  line-height: 40px;
+  font-size: 1.1rem;
+  font-weight: 400;
+  text-align: center;
+  padding: 0 6px !important;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Hover: màu nền bao phủ toàn bộ chiều rộng ô */
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time-list-item:hover {
+  background-color: var(--row-selected-bg) !important;
+  cursor: pointer;
+}
+
+/* Selected: màu xanh hệ thống */
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time-list-item--selected {
+  background-color: #216ba5 !important;
+  color: white !important;
+  font-weight: 400;
+}
+
+.htql-datepicker-tg-nhan .react-datepicker__time-container .react-datepicker__time-list-item--selected:hover {
+  background-color: #1a5a8a !important;
+  color: white !important;
+}
+
+/* Phần lịch: độ rộng tối thiểu 300px, ô ngày thông thoáng */
+.htql-datepicker-tg-nhan .react-datepicker__month-container {
+  position: relative;
+  overflow: visible;
+  min-width: 300px;
+  width: 320px;
+  flex-shrink: 0;
+}
+
+.htql-datepicker-tg-nhan .react-datepicker__month-container .react-datepicker__month {
+  overflow: visible;
+  margin: 0.5em 0.6em;
+}
+
+/* Ô ngày: tăng kích thước và margin để dễ bấm */
+.htql-datepicker-tg-nhan .react-datepicker__month-container .react-datepicker__day-name,
+.htql-datepicker-tg-nhan .react-datepicker__month-container .react-datepicker__day {
+  width: 2.5em;
+  line-height: 2.5em;
+  margin: 0.2em;
+  font-size: 12px;
+}
+
+.htql-datepicker-tg-nhan .react-datepicker__month-container .react-datepicker__day-names {
+  margin-bottom: 2px;
+}
+
+/* Custom header (DatePickerCustomHeader): flex space-between, nút Lùi/Tiến hai đầu, Tháng/Năm giữa */
+.htql-datepicker-tg-nhan .htql-datepicker-custom-header {
+  background-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.htql-datepicker-tg-nhan .htql-datepicker-custom-header .htql-datepicker-month-select,
+.htql-datepicker-tg-nhan .htql-datepicker-custom-header .htql-datepicker-year-select {
+  color: var(--accent-text);
+  background-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.htql-datepicker-tg-nhan .htql-datepicker-custom-header .htql-datepicker-month-select:hover,
+.htql-datepicker-tg-nhan .htql-datepicker-custom-header .htql-datepicker-year-select:hover {
+  background-color: var(--accent-hover);
+}
+
+/* Ô TG nhận hàng: chỉ chọn, không nhập; format giống TG tạo */
+.htql-datepicker-tg-nhan-input.react-datepicker-ignore-onclickoutside input,
+.htql-datepicker-tg-nhan-input input {
+  font-size: 11px !important;
+  text-align: right !important;
+  cursor: pointer !important;
+  width: 120px !important;
+  min-width: 120px !important;
+  background: var(--bg-primary) !important;
+}
+
+/*
+ * DatePicker trong ô ĐHM (className kèm htql-datepicker-don-hang-box-full):
+ * Thư viện đặt .react-datepicker-wrapper display:inline-block — ép flex + width 100% để lấp ô cha (band 160px NVTHH thẳng hàng nút +).
+ */
+.htql-datepicker-don-hang-box-full.react-datepicker-wrapper,
+.htql-datepicker-don-hang-box-full.react-datepicker-ignore-onclickoutside {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.htql-datepicker-don-hang-box-full.react-datepicker-wrapper .react-datepicker__input-container,
+.htql-datepicker-don-hang-box-full.react-datepicker-ignore-onclickoutside .react-datepicker__input-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.htql-datepicker-don-hang-box-full .react-datepicker__input-container input,
+.htql-datepicker-don-hang-box-full.react-datepicker-ignore-onclickoutside .react-datepicker__input-container input,
+.htql-datepicker-don-hang-box-full input,
+.htql-datepicker-don-hang-box-full.react-datepicker-ignore-onclickoutside input {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  max-height: 24px !important;
+  box-sizing: border-box;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.htql-datepicker-don-hang-box-full.htql-datepicker-tg-nhan-input .react-datepicker__input-container input,
+.htql-datepicker-don-hang-box-full.htql-datepicker-tg-nhan-input.react-datepicker-ignore-onclickoutside .react-datepicker__input-container input,
+.htql-datepicker-don-hang-box-full.htql-datepicker-tg-nhan-input input,
+.htql-datepicker-don-hang-box-full.htql-datepicker-tg-nhan-input.react-datepicker-ignore-onclickoutside input {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  max-height: 24px !important;
+}
+
+/* Ẩn các giờ không cho chọn (ngoài 7h–19h) trong danh sách thời gian */
+.react-datepicker__time-list-item--disabled {
+  display: none !important;
+}
+
+/*
+ * Fix DatePicker: ép wrapper + input-container lấp đầy ô cha.
+ * Áp dụng cho class htql-datepicker-full-width — dùng khi cần ô ngày
+ * tràn hết chiều rộng container (vd. filter bar, form inline).
+ */
+.htql-datepicker-full-width.react-datepicker-wrapper,
+.htql-datepicker-full-width.react-datepicker-ignore-onclickoutside {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.htql-datepicker-full-width .react-datepicker__input-container {
+  display: flex !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+.htql-datepicker-full-width .react-datepicker__input-container input {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Spin animation cho icon tải lại */
+@keyframes htql-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.htql-spin {
+  animation: htql-spin 0.8s linear infinite;
 }

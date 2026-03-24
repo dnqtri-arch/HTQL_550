@@ -23,7 +23,7 @@
         "chi_nhanh": "",
         "tinh_tp_ngan_hang": "",
         "loai_tk": "cong_ty",
-        "ten_nguoi_nhan": ""
+        "ten_nguoi_nhan": "CÔNG TY TNHH THƯƠNG MẠI VÀ DỊCH VỤ YẾN PHÁT NHA TRANG"
       }
     ],
     "quoc_gia": "Việt Nam",
@@ -50,7 +50,19 @@
     "dieu_khoan_tt": "Trả sau 30 ngày",
     "so_ngay_duoc_no": 30,
     "so_no_toi_da": 500000,
+    "tk_ngan_hang": "999592",
+    "ten_ngan_hang": "Ngân hàng TMCP Đông Nam Á",
     "ngung_theo_doi": false,
+    "tai_khoan_ngan_hang": [
+      {
+        "so_tai_khoan": "999592",
+        "ten_ngan_hang": "Ngân hàng TMCP Đông Nam Á",
+        "chi_nhanh": "",
+        "tinh_tp_ngan_hang": "",
+        "loai_tk": "cong_ty",
+        "ten_nguoi_nhan": "CÔNG TY TNHH QUẢNG CÁO VÀ XÂY DỰNG NAM BẮC"
+      }
+    ],
     "quoc_gia": "Việt Nam",
     "tinh_tp": "Thành phố Cần Thơ",
     "xa_phuong": "Phường Long Tuyền",
@@ -78,7 +90,7 @@
         "chi_nhanh": "",
         "tinh_tp_ngan_hang": "",
         "loai_tk": "cong_ty",
-        "ten_nguoi_nhan": ""
+        "ten_nguoi_nhan": "ĐẶNG NGUYỄN QUANG TRÍ"
       }
     ],
     "quoc_gia": "Việt Nam",

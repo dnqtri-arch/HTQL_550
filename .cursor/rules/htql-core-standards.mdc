@@ -1,0 +1,237 @@
+---
+description: HTQL_550 Master Rule — toan bo tieu chuan UI, form, nut, canh le, import, dat ten
+globs: **/*.{ts,tsx,css}
+alwaysApply: true
+---
+
+# HTQL_550 — Tiêu chuẩn gốc (Master Rule)
+
+> Đây là file quy chuẩn DUY NHẤT. Mọi file .mdc riêng lẻ đã được hợp nhất vào đây.
+> Nguồn: `o-nhap.mdc`, `nut.mdc`, `mau_gia.mdc`, `canh-le.mdc`, `imports-cau-truc.mdc`, `form.mdc`, `menu-ngu-canh.mdc`.
+
+---
+
+## 0. Nguyên tắc bất biến
+
+| # | Quy tắc | Chi tiết |
+|---|---------|---------|
+| 0.1 | **Đặt tên viết liền** | Mọi folder và file trong `src/modules/` viết liền, không gạch ngang/dưới. Ví dụ: `banhang`, `donhangmua`, `nhanvattuhanghoa`. |
+| 0.2 | **Modal z-index = 4000** | Mọi Modal xác nhận / nhập liệu: `zIndex: 4000` (overlay). Tuyệt đối không thấp hơn. |
+| 0.3 | **Toast 3200ms** | `showToast(msg, type, 3200)` — không dùng giá trị khác trừ khi yêu cầu riêng. |
+| 0.4 | **Lý do hủy** | Mọi hành động Hủy bỏ chứng từ (trạng thái → "Hủy bỏ") phải mở Modal yêu cầu nhập `ly_do_huy`. Không dùng `window.confirm` cho nghiệp vụ hủy. |
+| 0.5 | **TypeScript 0 lỗi** | `npx tsc --noEmit` phải trả về exit code 0 trước mọi commit. |
+
+---
+
+## 1. Cấu trúc thư mục & Import
+
+### 1.1 Types và Utils
+
+- **`src/types/*.ts`** — interface / type domain dùng chung. Ưu tiên `import type { … }`.
+- **`src/utils/*.ts`** — format số, string, validation, tính thuế/tiền lưới.
+- `src/types/` và `src/utils/` **không** import từ `src/modules/`.
+
+### 1.2 Đường dẫn module chuẩn
+
+| Cũ | Mới (chuẩn) |
+|----|-------------|
+| `purchase/mua-hang/` | `src/modules/purchase/muahang/` |
+| `purchase/don-hang-mua/` | `src/modules/purchase/donhangmua/` |
+| `inventory/nhan-vat-tu-hang-hoa/` | `src/modules/inventory/nhanvattuhanghoa/` |
+| `ban-hang`, `ban-lam-viec` | `banhang`, `banlamviec` |
+| `hop-dong` | `hopdong` |
+
+### 1.3 UI dùng chung
+
+- **`src/components/common/`** — `DataGrid.tsx`, `Modal.tsx`.
+- Không nhân đôi logic đã có trong utils.
+
+### 1.4 API key ngoài (Goong, Openmap)
+
+- Chỉ `import.meta.env.VITE_*`, không hardcode key. Gợi ý địa chỉ ≥ 3 ký tự.
+
+---
+
+## 2. Ô nhập liệu
+
+### 2.1 Số
+
+| Loại | Hàm format/onChange | Parse |
+|------|---------------------|-------|
+| Số tiền, số thập phân | `formatSoTien(s)`, `formatSoTuNhienInput(s)` | `parseFloatVN(s)` |
+| Số nguyên | `formatSoNguyenInput(s)` | `parseNumber(s)` |
+| Phần trăm | `formatPhanTramInput(s)` | `parseFloatVN(s)` |
+
+Hiển thị: phân cách hàng nghìn bằng `.`, thập phân bằng `,`. Ví dụ: `12.345.678,89`.
+Focus/Blur: ô trống hiển thị 0 → focus xoá 0. Blur: xoá hết thì giữ trống.
+
+### 2.2 Ngày tháng (react-datepicker)
+
+- Chỉ ngày: `dateFormat="dd/MM/yyyy"`, `shouldCloseOnSelect={true}`.
+- Ngày giờ: `showTimeSelect`, `dateFormat="HH:mm dd/MM/yyyy"`, `timeIntervals={30}`, `shouldCloseOnSelect={false}`.
+- Luôn spread `{...htqlDatePickerPopper}` từ `src/constants/datePickerPlacement.ts`.
+- **Không** đặt `readOnly` trực tiếp trên `<DatePicker />`. Dùng `customInput` với `<input readOnly />`.
+- Trigger ngày trong form: `textAlign: 'right'`, `fontVariantNumeric: 'tabular-nums'`.
+- Wrapper CSS: `.react-datepicker-wrapper`, `.react-datepicker__input-container` — `display: flex !important`, `width: 100%`, `min-width: 0`.
+
+### 2.3 Ô thường
+
+- Địa điểm GH, tiêu đề, địa chỉ: `input` đơn, không chevron.
+- Gợi ý địa chỉ qua `createPortal`, `position: fixed`, `z-index` cao.
+
+### 2.4 Ô lookup (dropdown + nút +)
+
+- File: `src/constants/lookupControlStyles.ts` — `LOOKUP_CONTROL_HEIGHT = 24px`.
+- Ô nhập + overlay chevron + nút xoá / nút +. Icon `ChevronDown`, `Plus` (lucide-react, size 12).
+- Chỉ lưu **mã** (id). Hiển thị chỉ mã — một dòng.
+
+### 2.5 Ô chọn nhiều
+
+- Dropdown không đóng khi chọn; đóng khi click ngoài.
+- Dùng `data-*-dropdown` trên div để check `closest` tránh đóng nhầm.
+
+### 2.6 DVT (đơn vị tính)
+
+- Lưu trữ: `ma_dvt`. Hiển thị: `ky_hieu || ten_dvt || ma_dvt` → hàm `dvtHienThiLabel(value, dvtList)`.
+
+### 2.7 Validation
+
+- Hiển thị lỗi **cùng dòng với tiêu đề** form (trong header).
+- Vùng thông báo cố định để tab không nhảy.
+- Sau set lỗi: `setTimeout(() => ref.current?.focus(), 0)`.
+- Viền báo lỗi: `HTQL_FORM_ERROR_BORDER`, `htqlFocusAndScrollIntoView` từ `src/utils/formValidationFocus.ts`.
+
+---
+
+## 3. Nút bấm
+
+### 3.1 Footer form (Hủy bỏ | Lưu | Lưu và tiếp tục)
+
+```tsx
+import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
+
+<div style={{ display: 'flex', gap: 6 }}>
+  <button type="button" style={formFooterButtonCancel} onClick={onClose}>Hủy bỏ</button>
+  <button type="button" style={formFooterButtonSave} onClick={handleLuu}>Lưu</button>
+  {mode === 'add' && (
+    <button type="button" style={formFooterButtonSaveAndAdd} onClick={handleLuuVaTiepTuc}>Lưu và tiếp tục</button>
+  )}
+</div>
+```
+
+Nhãn chuẩn: **Lưu**, **Lưu và cắt**, **Lưu và tiếp tục**. Không dùng "Cắt", "Cắt & Thêm". Thứ tự: Hủy bỏ → Lưu → Lưu và tiếp tục.
+
+### 3.2 Nút Xoá (màn danh sách)
+
+- Icon `Trash2`, label "Xoá"; `disabled` khi chưa chọn dòng.
+- Luồng: `window.confirm` cảnh báo rõ ràng (tên bản ghi + "Thao tác không hoàn tác") → API xoá → cập nhật state.
+- Menu ngữ cảnh Xoá dùng cùng chuẩn xác nhận.
+- Kiểm tra ràng buộc trước khi xoá (ví dụ DVT đang dùng trong VTHH).
+
+### 3.3 Nút Hủy chứng từ (nghiệp vụ)
+
+- **Bắt buộc** mở Modal nhập `ly_do_huy` trước khi thực hiện hủy.
+- Sau hủy: cập nhật `tinh_trang` = "Hủy bỏ", lưu `ly_do_huy`.
+- **Không** dùng `window.confirm` cho thao tác hủy nghiệp vụ.
+
+### 3.4 Nút + (lookup)
+
+`lookupActionButtonStyle` từ `src/constants/lookupControlStyles.ts`. Cùng chiều cao 24px với ô nhập.
+
+---
+
+## 4. Căn lề cột & ô dữ liệu
+
+| Loại dữ liệu | Căn lề |
+|-------------|--------|
+| Số, Số tiền | **Phải** (`textAlign: 'right'`, `align: 'right'`) |
+| Ngày, Giờ | **Phải** |
+| Chữ, Mã (text, tên NCC, địa chỉ, lookup hiển thị tên) | **Trái** |
+
+- Ưu tiên `font-variant-numeric: tabular-nums` cho ô số và ngày giờ.
+- `DataGrid`: `align: 'right'` cho cột số; `align: 'left'` cho cột chữ.
+- Form — nhãn cùng nhóm: `minWidth` đồng nhất để căn bằng lề trái (ví dụ `LABEL_MIN_WIDTH = 90`).
+
+---
+
+## 5. Mẫu giá (chi tiết VTHH)
+
+### 5.1 Mẫu không đơn giá
+
+Cột (thứ tự): STT | Mã VTHH | Tên VTHH | ĐVT | Số lượng | Ghi chú.
+Khi lưu: `don_gia`, `thanh_tien` = 0; `pt_thue_gtgt`, `tien_thue_gtgt` = null.
+
+### 5.2 Mẫu có đơn giá
+
+Cột (thứ tự): STT | Mã VTHH | Tên VTHH | ĐVT | Số lượng | Đơn giá | Thành tiền | % Thuế GTGT | Tiền thuế GTGT | Tổng tiền.
+Logic thuế/tiền dùng: `src/utils/donHangMuaCalculations.ts`.
+
+### 5.3 Nút Mẫu (toolbar form)
+
+- Hover → hiện danh sách 2 dòng (Mẫu có/không đơn giá).
+- 5 cột cố định (STT, Mã, Tên, ĐVT, Số lượng): giữ nguyên khi chuyển mẫu. Dùng hằng `COL_WIDTH_*`.
+- Chọn mẫu không đơn giá → reset dòng nếu trước đó dùng mẫu có đơn giá.
+
+### 5.4 Địa điểm GH
+
+- Nhãn: Địa điểm GH 1, 2, … (tăng dần). Dòng 1 không có nút xoá.
+- Mua hàng nhập kho → hiện Kho nhập. Mua hàng không nhập kho → hiện Tên công trình.
+- Dự đoán địa chỉ: `addressAutocompleteApi` (Goong → Openmap → Nominatim), chỉ gọi khi ≥ 3 ký tự.
+
+---
+
+## 6. Form
+
+### 6.1 Thiết lập
+
+Chuẩn tham chiếu: `src/modules/inventory/kho/VatTuHangHoaForm.tsx`.
+
+1. Footer 3 nút: import `formFooterButtons.ts`.
+2. Ô dropdown + nút thêm: import `lookupControlStyles.ts`, chiều cao 24px.
+3. Validation: lỗi cùng dòng tiêu đề; focus ô thiếu sau khi set lỗi.
+
+### 6.2 Ô Điều khoản TT (form Nhà cung cấp)
+
+- Bấm vào ô: dropdown mở toàn bộ danh sách.
+- Chọn dòng: gán Tên, tự điền Số ngày được nợ, Số nợ tối đa; đóng dropdown.
+- Nút +: mở modal Thêm điều khoản; sau Lưu, form nhận Tên + Số ngày + Số nợ.
+
+---
+
+## 7. Menu ngữ cảnh & submenu
+
+Chuẩn tham chiếu: `src/modules/purchase/donhangmua/DonHangMua.tsx`.
+
+- Delay hover submenu ~200ms (`useRef` timeout).
+- Mặc định bên phải; nếu tràn viewport → bên trái.
+- Màu hover: `var(--row-selected-bg)`.
+
+---
+
+## 8. Quy trình nghiệp vụ (Flow SVG)
+
+- Vẽ bằng SVG hoặc `<div>` position absolute — mũi tên flow mượt mà.
+- Các node click được để điều hướng đến tab tương ứng.
+- Tách biệt: hàng "Nghiệp vụ chính" ở trên, hàng "Danh mục / Tiện ích" ở dưới cùng.
+- Báo cáo nằm panel riêng bên phải.
+- Connector: màu `var(--connector, #d97706)` (amber).
+
+---
+
+## 9. Module mới kế từ module cũ
+
+- **Tách rời hoàn toàn**: thư mục, file, type, API client, form, bảng.
+- **Không** embed form nghiệp vụ của module A vào module B.
+- **Được phép** tái sử dụng: hằng số/style chung (`src/constants/`), tiện ích thuần (`src/utils/`), component UI chung (`Modal`, `DataGrid`, nút footer).
+
+---
+
+## 10. Đính kèm chứng từ
+
+Tham chiếu: `dinh-kem-chung-tu.mdc` — xử lý upload/download file đính kèm theo chuẩn module.
+
+---
+
+## 11. Git & phiên bản
+
+Sau mỗi tính năng quan trọng: nhắc commit. Tin nhắn commit: tiếng Việt có dấu, 5–15 từ, động từ mở đầu (Hoàn thành, Thêm, Sửa, Cập nhật, Refactor).

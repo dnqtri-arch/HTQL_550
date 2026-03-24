@@ -18,7 +18,7 @@ const defaultState: ToastState = { message: '', type: 'info', visible: false }
 
 export const ToastContext = createContext<ToastContextValue | null>(null)
 
-const TOAST_DURATION_MS = 4000
+const TOAST_DURATION_MS = 3200
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<ToastState>(defaultState)

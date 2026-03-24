@@ -1,0 +1,19 @@
+---
+description: Don dep du an — nguyen tac xoa code/ghi chu khong dung, giu nguyen cau truc
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+# Don dep du an (project-cleanup)
+
+## Nguyen tac
+
+- **Giu nguyen:** Cau truc cot, file, module, API dang hien thi va duoc su dung. Khong xoa cot du lieu, file, code dang hoat dong. Module mua hang / don hang mua nam duoi `src/modules/purchase/`; kho / nhan hang nam duoi `src/modules/inventory/` (xem **imports-cau-truc.mdc**).
+- **Co the xoa:** Code chet (dead code) ro rang khong duoc goi; ghi chu debug/comment du thua; file tam (.tmp, .bak, .log) trong thu muc du an.
+- **Bo nho tro chuyen:** Agent transcripts nam ngoai workspace HTQL_550 (Cursor project storage). Xoa thu cong neu can: Cursor → Clear Chat / Xoa lich su.
+
+## Khi kiem tra don dep
+
+1. Chay `npm run build` — dam bao khong pha vo cau truc.
+2. Khong xoa export/import dang duoc dung boi module khac.
+3. Khong xoa cot trong bang (STT, Ma VTHH, …) theo rule mau_gia.mdc.
+4. Ghi chu `//` hoac `/* */` chi xoa khi ro rang la debug tam thoi, khong phai tai lieu.

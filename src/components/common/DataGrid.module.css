@@ -1,0 +1,19 @@
+/* Dải sọc + hover dòng (stripedRows) — chỉ áp cho tr có data-htql-dg-row */
+.stripedWrap :global(tbody) tr[data-htql-dg-row]:nth-child(odd) {
+  background: var(--bg-primary);
+}
+.stripedWrap :global(tbody) tr[data-htql-dg-row]:nth-child(even) {
+  background: rgba(230, 126, 34, 0.068);
+}
+.stripedWrap :global(tbody) tr[data-htql-dg-row]:hover:not([data-htql-dg-selected]) {
+  background: rgba(230, 126, 34, 0.12) !important;
+}
+.stripedWrap :global(tbody) tr[data-htql-dg-row][data-htql-dg-selected] {
+  background: var(--row-selected-bg) !important;
+  color: var(--row-selected-text) !important;
+  box-shadow: inset 0 0 0 2px var(--row-selected-border) !important;
+}
+.stripedWrap :global(tbody) tr[data-htql-dg-row][data-htql-dg-selected]:hover {
+  background: rgba(230, 126, 34, 0.22) !important;
+  color: var(--row-selected-text) !important;
+}

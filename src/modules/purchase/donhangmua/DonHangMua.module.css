@@ -1,0 +1,359 @@
+/* DonHangMua — styles scoped, không ảnh hưởng module khác */
+
+.root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.toolbarWrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.toolbarBtn:hover:not(:disabled) {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}
+
+.dropdownWrap {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 10;
+  min-width: 160px;
+}
+
+.dropdownItem {
+  composes: toolbarBtn;
+  width: 100%;
+  justify-content: flex-start;
+  border: none;
+  border-radius: 0;
+}
+.dropdownItem:hover {
+  background: var(--row-selected-bg) !important;
+}
+
+.filterWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.filterLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Khối Liên quan — phiếu nhận (form ĐHM, tình trạng đã nhận hàng) */
+.lienQuanPhieuNhanTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 8px 4px 6px;
+  margin: 0 -4px 0;
+  border-top: 1px solid var(--border-strong);
+}
+.lienQuanPhieuNhanLink {
+  display: inline-block;
+  margin: 0 8px 6px 0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+}
+.lienQuanPhieuNhanLink:hover {
+  color: var(--text-primary);
+  background: rgba(230, 126, 34, 0.18);
+}
+
+/* Tab Liên quan — phiếu nhận VTHH (NVTHH) */
+.lienQuanNvthhTabLink {
+  display: inline;
+  padding: 1px 4px;
+  margin: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  vertical-align: baseline;
+}
+.lienQuanNvthhTabLink:hover {
+  color: var(--text-primary);
+  background: rgba(230, 126, 34, 0.18);
+}
+
+.filterInput {
+  padding: 4px 8px;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.contentArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gridWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detailWrap {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 260px;
+  min-height: 260px;
+  margin-top: 2px;
+}
+
+.detailTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.detailTabBar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  margin-bottom: 0;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.detailTab,
+.detailTabActive {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  background: var(--bg-tab);
+  color: var(--text-muted);
+  margin-right: 2px;
+  letter-spacing: 0.01em;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.detailTab:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  border-bottom: none;
+}
+
+.detailTabActive {
+  background: var(--bg-secondary);
+  color: var(--accent);
+  border-color: var(--border-strong);
+  border-bottom: 1px solid var(--bg-secondary);
+  margin-bottom: -1px;
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.detailTabPanel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 0 6px 6px 6px;
+  overflow: hidden;
+}
+
+.detailTabPanel .attachmentsScroll {
+  border: none;
+  border-radius: 0;
+}
+
+.detailTabPanel .attachmentsEmpty {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.attachmentsTabBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.attachmentsScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+}
+
+.attachmentsEmpty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+
+.attachmentsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.attachmentsTable th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  padding: 6px 8px;
+  background: var(--bg-tab);
+  border-bottom: 1px solid var(--border-strong);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.attachmentsTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+
+.attachmentsTdNum {
+  white-space: nowrap;
+  width: 88px;
+}
+
+.attachmentsTdPath {
+  word-break: break-all;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.modalBox {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  width: 95vw;
+  max-width: 1100px;
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.modalBtn {
+  composes: toolbarBtn;
+}
+.modalBtnPrimary {
+  composes: toolbarBtn;
+  background: var(--accent) !important;
+  color: var(--accent-text) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Lưới chi tiết VTHH — làm nổi dòng đang hover hoặc đang gõ (dịu mắt) */
+.chiTietDataRow > td {
+  transition: background-color 0.14s ease;
+}
+.chiTietDataRow:hover > td,
+.chiTietDataRow:focus-within > td {
+  /* Fallback trình duyệt không hỗ trợ color-mix */
+  background-color: rgba(230, 126, 34, 0.06) !important;
+}
+@supports (background-color: color-mix(in srgb, white, black)) {
+  .chiTietDataRow:hover > td,
+  .chiTietDataRow:focus-within > td {
+    background-color: color-mix(in srgb, var(--row-selected-bg) 48%, var(--bg-secondary)) !important;
+  }
+}
+
+/* Viền ô nhập trong dòng đang hover / đang focus */
+.chiTietDataRow:hover :global(.misa-input-solo),
+.chiTietDataRow:focus-within :global(.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}
+.chiTietDataRow:hover :global(select.misa-input-solo),
+.chiTietDataRow:focus-within :global(select.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}

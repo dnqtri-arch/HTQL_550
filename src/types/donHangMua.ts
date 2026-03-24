@@ -17,6 +17,8 @@ export interface DonHangMuaRecord {
   ngay_giao_hang: string | null
   nha_cung_cap: string
   dia_chi: string
+  /** Phiếu NVTHH — người giao hàng (cùng dòng Địa chỉ trên form). */
+  nguoi_giao_hang?: string
   ma_so_thue: string
   dien_giai: string
   nv_mua_hang: string
@@ -41,6 +43,33 @@ export interface DonHangMuaRecord {
   /** @deprecated Gộp vào PTTT; giữ khi đọc dữ liệu cũ. */
   chung_tu_mua_ck?: 'tien_mat' | 'chuyen_khoan'
   chung_tu_mua_loai_hd?: 'gtgt' | 'hd_le' | 'khong_co'
+  /** Phiếu NVTHH — số hóa đơn (tab Hóa đơn). */
+  chung_tu_mua_so_hoa_don?: string
+  /** Phiếu NVTHH — tab Hóa đơn: ngày trên HĐ (yyyy-mm-dd). */
+  hoa_don_ngay?: string
+  hoa_don_ky_hieu?: string
+  mau_hoa_don_ma?: string
+  mau_hoa_don_ten?: string
+  /** Phiếu NVTHH — tab Phiếu chi: ngày giờ chi (ISO datetime). */
+  phieu_chi_ngay?: string
+  /** Phiếu NVTHH — tab Phiếu chi. */
+  phieu_chi_nha_cung_cap?: string
+  phieu_chi_dia_chi?: string
+  phieu_chi_nguoi_nhan_tien?: string
+  phieu_chi_ly_do?: string
+  /** Phiếu chi — PTTT chuyển khoản (tài khoản chi công ty). */
+  phieu_chi_tai_khoan_chi?: string
+  phieu_chi_ngan_hang_chi?: string
+  phieu_chi_ten_nguoi_gui?: string
+  /** Tài khoản nhận đối tác (điền từ NCC). */
+  phieu_chi_tai_khoan_nhan?: string
+  phieu_chi_ngan_hang_nhan?: string
+  phieu_chi_ten_chu_tk_nhan?: string
+  /** @deprecated Dùng phieu_chi_ngan_hang_nhan / phieu_chi_ngan_hang_chi */
+  phieu_chi_ngan_hang?: string
+  /** @deprecated Dùng phieu_chi_ten_chu_tk_nhan */
+  phieu_chi_ten_nguoi_nhan_ck?: string
+  phieu_chi_attachments?: DonHangMuaAttachmentItem[]
 }
 
 export interface DonHangMuaChiTiet {
@@ -73,6 +102,7 @@ export interface DonHangMuaCreatePayload {
   ngay_giao_hang: string | null
   nha_cung_cap: string
   dia_chi: string
+  nguoi_giao_hang?: string
   ma_so_thue: string
   dien_giai: string
   nv_mua_hang: string
@@ -94,6 +124,25 @@ export interface DonHangMuaCreatePayload {
   chung_tu_mua_pttt?: string
   chung_tu_mua_ck?: 'tien_mat' | 'chuyen_khoan'
   chung_tu_mua_loai_hd?: 'gtgt' | 'hd_le' | 'khong_co'
+  chung_tu_mua_so_hoa_don?: string
+  hoa_don_ngay?: string
+  hoa_don_ky_hieu?: string
+  mau_hoa_don_ma?: string
+  mau_hoa_don_ten?: string
+  phieu_chi_nha_cung_cap?: string
+  phieu_chi_dia_chi?: string
+  phieu_chi_nguoi_nhan_tien?: string
+  phieu_chi_ly_do?: string
+  phieu_chi_ngay?: string
+  phieu_chi_tai_khoan_chi?: string
+  phieu_chi_ngan_hang_chi?: string
+  phieu_chi_ten_nguoi_gui?: string
+  phieu_chi_tai_khoan_nhan?: string
+  phieu_chi_ngan_hang_nhan?: string
+  phieu_chi_ten_chu_tk_nhan?: string
+  phieu_chi_ngan_hang?: string
+  phieu_chi_ten_nguoi_nhan_ck?: string
+  phieu_chi_attachments?: DonHangMuaAttachmentItem[]
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string

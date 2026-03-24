@@ -9,26 +9,27 @@ function LoadingFallback() {
   )
 }
 
-const BanLamViec = lazy(() => import('../modules/ban-lam-viec').then((m) => ({ default: m.BanLamViec })))
-const CongViec = lazy(() => import('../modules/cong-viec').then((m) => ({ default: m.CongViec })))
-const BanHang = lazy(() => import('../modules/ban-hang').then((m) => ({ default: m.BanHang })))
-const MuaHang = lazy(() => import('../modules/mua-hang').then((m) => ({ default: m.MuaHang })))
-const HopDong = lazy(() => import('../modules/hop-dong').then((m) => ({ default: m.HopDong })))
+const BanLamViec = lazy(() => import('../modules/banlamviec').then((m) => ({ default: m.BanLamViec })))
+const CongViec = lazy(() => import('../modules/congviec').then((m) => ({ default: m.CongViec })))
+const BanHang = lazy(() => import('../modules/banhang').then((m) => ({ default: m.BanHang })))
+const MuaHang = lazy(() => import('../modules/purchase/muahang').then((m) => ({ default: m.MuaHang })))
+const HopDong = lazy(() => import('../modules/hopdong').then((m) => ({ default: m.HopDong })))
 const Quy = lazy(() => import('../modules/quy').then((m) => ({ default: m.Quy })))
-const NganHang = lazy(() => import('../modules/ngan-hang').then((m) => ({ default: m.NganHang })))
-const ThuQuy = lazy(() => import('../modules/thu-quy').then((m) => ({ default: m.ThuQuy })))
-const Kho = lazy(() => import('../modules/kho').then((m) => ({ default: m.Kho })))
-const DonViTinhPage = lazy(() => import('../modules/kho/DonViTinhPage').then((m) => ({ default: m.DonViTinhPage })))
-const ThuKho = lazy(() => import('../modules/thu-kho').then((m) => ({ default: m.ThuKho })))
-const CongCuDungCu = lazy(() => import('../modules/cong-cu-dung-cu').then((m) => ({ default: m.CongCuDungCu })))
-const TaiSanCoDinh = lazy(() => import('../modules/tai-san-co-dinh').then((m) => ({ default: m.TaiSanCoDinh })))
-const TienLuong = lazy(() => import('../modules/tien-luong').then((m) => ({ default: m.TienLuong })))
+const NganHang = lazy(() => import('../modules/nganhang').then((m) => ({ default: m.NganHang })))
+const ThuQuy = lazy(() => import('../modules/thuquy').then((m) => ({ default: m.ThuQuy })))
+const Kho = lazy(() => import('../modules/inventory/kho').then((m) => ({ default: m.Kho })))
+const KhoVthh = lazy(() => import('../modules/inventory/khovthh/Page').then((m) => ({ default: m.KhoVthhPage })))
+const DonViTinhPage = lazy(() => import('../modules/inventory/kho/DonViTinhPage').then((m) => ({ default: m.DonViTinhPage })))
+const ThuKho = lazy(() => import('../modules/thukho').then((m) => ({ default: m.ThuKho })))
+const CongCuDungCu = lazy(() => import('../modules/congcudungcu').then((m) => ({ default: m.CongCuDungCu })))
+const TaiSanCoDinh = lazy(() => import('../modules/taisancodinh').then((m) => ({ default: m.TaiSanCoDinh })))
+const TienLuong = lazy(() => import('../modules/tienluong').then((m) => ({ default: m.TienLuong })))
 const Thue = lazy(() => import('../modules/thue').then((m) => ({ default: m.Thue })))
-const GiaThanh = lazy(() => import('../modules/gia-thanh').then((m) => ({ default: m.GiaThanh })))
-const TongHop = lazy(() => import('../modules/tong-hop').then((m) => ({ default: m.TongHop })))
-const HoaDonDienTu = lazy(() => import('../modules/hoa-don-dien-tu').then((m) => ({ default: m.HoaDonDienTu })))
-const QuanLyHoaDon = lazy(() => import('../modules/quan-ly-hoa-don').then((m) => ({ default: m.QuanLyHoaDon })))
-const TaiLieu = lazy(() => import('../modules/tai-lieu').then((m) => ({ default: m.TaiLieu })))
+const GiaThanh = lazy(() => import('../modules/giathanh').then((m) => ({ default: m.GiaThanh })))
+const TongHop = lazy(() => import('../modules/tonghop').then((m) => ({ default: m.TongHop })))
+const HoaDonDienTu = lazy(() => import('../modules/hoadondientu').then((m) => ({ default: m.HoaDonDienTu })))
+const QuanLyHoaDon = lazy(() => import('../modules/quanlyhoadon').then((m) => ({ default: m.QuanLyHoaDon })))
+const TaiLieu = lazy(() => import('../modules/tailieu').then((m) => ({ default: m.TaiLieu })))
 
 const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
   'ban-lam-viec': BanLamViec,
@@ -40,6 +41,7 @@ const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> 
   'ngan-hang': NganHang,
   'thu-quy': ThuQuy,
   'kho': Kho,
+  'kho-vthh': KhoVthh,
   'don-vi-tinh': DonViTinhPage,
   'thu-kho': ThuKho,
   'cong-cu-dung-cu': CongCuDungCu,
