@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Trash2, Eye, Mail, MessageCircle, ChevronDown, X } from 'lucide-react'
+import { Plus, Trash2, Eye, Mail, MessageCircle, ChevronDown, X, Search, FileText } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../components/common/DataGrid'
 import { Modal } from '../../../components/common/Modal'
 import { useToastOptional } from '../../../context/ToastContext'
@@ -30,6 +30,8 @@ import {
   type BanHangKyValue,
 } from './baoGiaApi'
 import type { BaoGiaCreatePayload, BanHangFilter } from '../../../types/banHang'
+import { khachHangGetAll, type KhachHangRecord } from '../khachhang/khachHangApi'
+import { vatTuHangHoaGetForBanHang, type VatTuHangHoaRecord } from '../../inventory/kho/vatTuHangHoaApi'
 import styles from '../BanHang.module.css'
 
 // ─── Badge ───────────────────────────────────────────────────────────────
@@ -74,6 +76,8 @@ function BaoGiaForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, onS
   const [ngayBaoGia, setNgayBaoGia] = useState(initialRecord?.ngay_bao_gia ?? TODAY_ISO)
   const [ngayHetHan, setNgayHetHan] = useState(initialRecord?.ngay_het_han ?? '')
   const [khachHang, setKhachHang] = useState(initialRecord?.khach_hang ?? '')
+  const [diaChiKh, setDiaChiKh] = useState(initialRecord?.dia_chi_kh ?? '')
+  const [maSoThueKh, setMaSoThueKh] = useState(initialRecord?.ma_so_thue_kh ?? '')
   const [nguoiLienHe, setNguoiLienHe] = useState(initialRecord?.nguoi_lien_he ?? '')
   const [dienGiai, setDienGiai] = useState(initialRecord?.dien_giai ?? '')
   const [tinhTrang, setTinhTrang] = useState<BaoGiaRecord['tinh_trang']>(initialRecord?.tinh_trang ?? 'Chờ duyệt')
@@ -83,6 +87,56 @@ function BaoGiaForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, onS
   const [chiTiet, setChiTiet] = useState<(Partial<BaoGiaChiTiet> & { _key: string })[]>(
     initialChiTiet?.map((c) => ({ ...c, _key: c.id })) ?? []
   )
+
+  // Task 8: Lookup modal cho Khách hàng
+  const [showKhLookup, setShowKhLookup] = useState(false)
+  const [khList, setKhList] = useState<KhachHangRecord[]>([])
+  const [khSearch, setKhSearch] = useState('')
+
+  // Task 9: Lookup modal cho Sản phẩm
+  const [showSpLookup, setShowSpLookup] = useState(false)
+  const [spList, setSpList] = useState<VatTuHangHoaRecord[]>([])
+  const [spSearch, setSpSearch] = useState('')
+  const [editKey, setEditKey] = useState<string | null>(null)
+
+  const moKhLookup = () => {
+    khachHangGetAll().then((list) => { setKhList(list); setShowKhLookup(true); setKhSearch('') })
+  }
+
+  const chonKhachHang = (kh: KhachHangRecord) => {
+    setKhachHang(kh.ten_kh)
+    setDiaChiKh(kh.dia_chi ?? '')
+    setMaSoThueKh(kh.ma_so_thue ?? '')
+    setNguoiLienHe(kh.dai_dien_theo_pl ?? '')
+    setShowKhLookup(false)
+  }
+
+  const moSpLookup = (key: string) => {
+    vatTuHangHoaGetForBanHang().then((list) => { setSpList(list); setShowSpLookup(true); setSpSearch(''); setEditKey(key) })
+  }
+
+  const chonSanPham = (sp: VatTuHangHoaRecord) => {
+    if (!editKey) return
+    setChiTiet((prev) => prev.map((c) => {
+      if (c._key !== editKey) return c
+      return {
+        ...c,
+        ma_hang: sp.ma,
+        ten_hang: sp.ten,
+        dvt: sp.dvt_chinh ?? '',
+      }
+    }))
+    setShowSpLookup(false)
+    setEditKey(null)
+  }
+
+  const filteredKh = khSearch
+    ? khList.filter((k) => `${k.ma_kh} ${k.ten_kh}`.toLowerCase().includes(khSearch.toLowerCase()))
+    : khList
+
+  const filteredSp = spSearch
+    ? spList.filter((s) => `${s.ma} ${s.ten}`.toLowerCase().includes(spSearch.toLowerCase()))
+    : spList
 
   useEffect(() => {
     if (mode === 'add' && !initialRecord) {
@@ -152,6 +206,8 @@ function BaoGiaForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, onS
     ngay_bao_gia: ngayBaoGia,
     ngay_het_han: ngayHetHan || null,
     khach_hang: khachHang.trim(),
+    dia_chi_kh: diaChiKh.trim() || undefined,
+    ma_so_thue_kh: maSoThueKh.trim() || undefined,
     nguoi_lien_he: nguoiLienHe.trim() || undefined,
     dien_giai: dienGiai.trim() || undefined,
     tong_tien_hang: tongTienHang,
@@ -250,8 +306,27 @@ function BaoGiaForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, onS
 
         <div className={styles.formRow}>
           <span className={styles.formLabel}>Khách hàng</span>
-          <div className={styles.formControl} style={{ flex: 3 }}>
+          <div className={styles.formControl} style={{ flex: 3, display: 'flex', gap: 4 }}>
             <input className={styles.formInput} value={khachHang} onChange={(e) => setKhachHang(e.target.value)} readOnly={readOnly} placeholder="Tên khách hàng" />
+            {!readOnly && (
+              <button type="button" onClick={moKhLookup} title="Chọn khách hàng" style={{
+                height: 26, padding: '0 8px', border: '1px solid var(--border)', borderRadius: 3,
+                background: 'var(--bg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center',
+              }}>
+                <Search size={12} />
+              </button>
+            )}
+          </div>
+          <span className={styles.formLabel} style={{ minWidth: 70 }}>MST KH</span>
+          <div className={styles.formControl}>
+            <input className={styles.formInput} value={maSoThueKh} onChange={(e) => setMaSoThueKh(e.target.value)} readOnly={readOnly} />
+          </div>
+        </div>
+
+        <div className={styles.formRow}>
+          <span className={styles.formLabel}>Địa chỉ KH</span>
+          <div className={styles.formControl} style={{ flex: 3 }}>
+            <input className={styles.formInput} value={diaChiKh} onChange={(e) => setDiaChiKh(e.target.value)} readOnly={readOnly} placeholder="Địa chỉ khách hàng" />
           </div>
         </div>
 
@@ -310,7 +385,10 @@ function BaoGiaForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, onS
               {chiTiet.map((c, idx) => (
                 <tr key={c._key}>
                   <td className={styles.tdCenter} style={{ fontSize: 10, color: 'var(--text-muted)' }}>{idx + 1}</td>
-                  <td><input className={styles.chiTietInput} value={c.ma_hang ?? ''} onChange={(e) => capNhatDong(c._key, 'ma_hang', e.target.value)} readOnly={readOnly} /></td>
+                  <td style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <input className={styles.chiTietInput} value={c.ma_hang ?? ''} onChange={(e) => capNhatDong(c._key, 'ma_hang', e.target.value)} readOnly={readOnly} style={{ flex: 1 }} />
+                    {!readOnly && <button type="button" onClick={() => moSpLookup(c._key)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', color: 'var(--accent)' }}><Search size={10} /></button>}
+                  </td>
                   <td><input className={styles.chiTietInput} value={c.ten_hang ?? ''} onChange={(e) => capNhatDong(c._key, 'ten_hang', e.target.value)} readOnly={readOnly} /></td>
                   <td><input className={styles.chiTietInput} value={c.dvt ?? ''} onChange={(e) => capNhatDong(c._key, 'dvt', e.target.value)} readOnly={readOnly} /></td>
                   <td className={styles.tdRight}><input className={styles.chiTietInput} style={{ textAlign: 'right' }} value={c.so_luong ?? ''} onChange={(e) => capNhatDong(c._key, 'so_luong', e.target.value)} readOnly={readOnly} /></td>
@@ -377,6 +455,68 @@ function BaoGiaForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, onS
           <button type="button" style={formFooterButtonCancel} onClick={onClose}>Đóng</button>
         )}
       </div>
+
+      {/* Task 8: Lookup modal Khách hàng */}
+      {showKhLookup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowKhLookup(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 8, width: 480, maxHeight: 420, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.28)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontWeight: 700, fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
+              Chọn khách hàng
+              <button type="button" onClick={() => setShowKhLookup(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={14} /></button>
+            </div>
+            <div style={{ padding: '8px 14px' }}>
+              <input autoFocus value={khSearch} onChange={(e) => setKhSearch(e.target.value)}
+                placeholder="Tìm theo mã, tên..." style={{ width: '100%', height: 26, fontSize: 11, border: '1px solid var(--border)', borderRadius: 3, padding: '0 6px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '0 14px 12px' }}>
+              {filteredKh.map((kh) => (
+                <div key={kh.id} onClick={() => chonKhachHang(kh)}
+                  style={{ padding: '6px 8px', cursor: 'pointer', borderRadius: 3, fontSize: 11, display: 'flex', gap: 12 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <span style={{ color: 'var(--text-muted)', minWidth: 80 }}>{kh.ma_kh}</span>
+                  <span style={{ fontWeight: 500 }}>{kh.ten_kh}</span>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{kh.ma_so_thue}</span>
+                </div>
+              ))}
+              {filteredKh.length === 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>Không tìm thấy khách hàng.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task 9: Lookup modal Sản phẩm hàng hóa */}
+      {showSpLookup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowSpLookup(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 8, width: 540, maxHeight: 440, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.28)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontWeight: 700, fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
+              Chọn sản phẩm, hàng hóa
+              <button type="button" onClick={() => setShowSpLookup(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={14} /></button>
+            </div>
+            <div style={{ padding: '8px 14px' }}>
+              <input autoFocus value={spSearch} onChange={(e) => setSpSearch(e.target.value)}
+                placeholder="Tìm theo mã, tên..." style={{ width: '100%', height: 26, fontSize: 11, border: '1px solid var(--border)', borderRadius: 3, padding: '0 6px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '0 14px 12px' }}>
+              {filteredSp.map((sp) => (
+                <div key={sp.id} onClick={() => chonSanPham(sp)}
+                  style={{ padding: '6px 8px', cursor: 'pointer', borderRadius: 3, fontSize: 11, display: 'flex', gap: 12 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <span style={{ color: 'var(--text-muted)', minWidth: 88 }}>{sp.ma}</span>
+                  <span style={{ fontWeight: 500, flex: 1 }}>{sp.ten}</span>
+                  <span style={{ color: 'var(--text-muted)', minWidth: 50 }}>{sp.dvt_chinh}</span>
+                </div>
+              ))}
+              {filteredSp.length === 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>Chưa có sản phẩm nào có tính chất Vật tư và tích "Là vật tư, hàng hóa bán".</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -507,6 +647,30 @@ export function BaoGia() {
           title={selectedId ? 'Xóa báo giá đang chọn' : 'Chọn một dòng để xóa'}
         >
           <Trash2 size={13} /><span>Xóa</span>
+        </button>
+
+        <button
+          type="button"
+          className={styles.toolbarBtn}
+          disabled={!selectedId}
+          title={selectedId ? 'Lập đơn hàng từ báo giá này' : 'Chọn một báo giá để lập đơn hàng'}
+          onClick={() => {
+            if (!selectedRow) return
+            const ct = baoGiaGetChiTiet(selectedRow.id)
+            const draft = {
+              khach_hang: selectedRow.khach_hang,
+              dien_giai: selectedRow.dien_giai ?? '',
+              chiTiet: ct.map((c) => ({
+                ma_hang: c.ma_hang, ten_hang: c.ten_hang, dvt: c.dvt,
+                so_luong: c.so_luong, don_gia: c.don_gia, thanh_tien: c.thanh_tien,
+              })),
+              bao_gia_ref: selectedRow.so_bao_gia,
+            }
+            try { localStorage.setItem('htql_don_hang_ban_from_baogia', JSON.stringify(draft)) } catch { /* ignore */ }
+            toast?.showToast(`Đã tạo nháp đơn hàng từ ${selectedRow.so_bao_gia}. Chuyển sang tab Đơn hàng bán.`, 'success')
+          }}
+        >
+          <FileText size={13} /><span>Lập đơn hàng</span>
         </button>
 
         <div ref={dropdownRef} className={styles.dropdownWrap} style={{ marginLeft: 8 }}>

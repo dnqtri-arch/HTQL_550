@@ -75,7 +75,22 @@ export interface TabNgamDinhProps {
   khoNgamDinhRef: React.RefObject<HTMLDivElement>
 }
 
-/** Nội dung tab 1 - Ngầm định */
+/** Task 6: Phím tắt Enter — nhảy focus sang ô nhập kế tiếp */
+function handleEnterNav(e: React.KeyboardEvent<HTMLDivElement>) {
+  if (e.key !== 'Enter') return
+  const inputs = Array.from(
+    (e.currentTarget as HTMLDivElement).querySelectorAll<HTMLElement>(
+      'input:not([readonly]):not([type="checkbox"]), select:not([disabled])'
+    )
+  )
+  const idx = inputs.indexOf(e.target as HTMLElement)
+  if (idx >= 0 && idx < inputs.length - 1) {
+    e.preventDefault()
+    inputs[idx + 1].focus()
+  }
+}
+
+/** Nội dung tab 1 - Ngầm định — 4 cột (Label-Left | Input-Left | Label-Right | Input-Right) */
 export function VatTuHangHoaFormTabNgamDinh({
   control,
   register,
@@ -85,8 +100,10 @@ export function VatTuHangHoaFormTabNgamDinh({
   onOpenThemKho,
   khoNgamDinhRef,
 }: TabNgamDinhProps) {
+  const tinhChat = watch('tinh_chat') as string
   return (
-    <div className="misa-form-grid htql-tab-grid htql-tab-ngam-dinh">
+    <div className="misa-form-grid htql-tab-grid htql-tab-ngam-dinh" onKeyDown={handleEnterNav}>
+      {/* Row 1 — Left: Kho ngầm định | Right: ĐG mua cố định */}
       <LabelCell label="Kho ngầm định" />
       <div ref={khoNgamDinhRef} className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <div
@@ -238,50 +255,30 @@ export function VatTuHangHoaFormTabNgamDinh({
           <span style={{ fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>{errors.thue_suat_gtgt_tu_nhap.message}</span>
         )}
       </div>
+      {/* Row 5 — Left: TK giảm giá | Right: Là vật tư, hàng hóa bán (task 7: chỉ hiện khi Tính chất = Vật tư) */}
       <LabelCell label="TK giảm giá" />
       <div className="misa-grid-item" style={{ position: 'relative' }}>
         <input {...register('tk_giam_gia')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
         <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
       </div>
-      {/* Task 5: TK trả lại và TK chi phí nằm cùng khối TK — bên trái */}
-      <LabelCell label="TK trả lại" />
-      <div className="misa-grid-item" style={{ position: 'relative' }}>
-        <input {...register('tk_tra_lai')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
-        <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-      </div>
-      <LabelCell label="TK chi phí" />
-      <div className="misa-grid-item" style={{ position: 'relative' }}>
-        <input {...register('tai_khoan_chi_phi')} className="misa-input-solo" style={inputStyle} placeholder="632" />
-        <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
-      </div>
-      {/* Task 4: Là vật tư, Là hàng hóa xếp trên cùng; task 6: ẩn/hiện bằng visibility */}
-      <div className="misa-grid-item" />
-      <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          <input type="checkbox" {...register('la_vat_tu')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-          <span style={{ color: 'var(--text-primary)' }}>Là vật tư</span>
-        </label>
-      </div>
-      <div className="misa-grid-item" />
-      <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          <input type="checkbox" {...register('la_hang_hoa')} style={{ width: 14, height: 14, flexShrink: 0 }} />
-          <span style={{ color: 'var(--text-primary)' }}>Là hàng hóa</span>
-        </label>
-      </div>
-      {/* Task 6: Chỉ hiện khi tinhChat = Vật tư; dùng visibility để không xáo trộn layout */}
       <div className="misa-grid-item" />
       <div
         className="misa-grid-item htql-checkbox-cell"
         style={{
           width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0,
-          visibility: watch('tinh_chat') === 'Vật tư' ? 'visible' : 'hidden',
+          visibility: tinhChat === 'Vật tư' ? 'visible' : 'hidden',
         }}
       >
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <input type="checkbox" {...register('la_vthh_ban')} style={{ width: 14, height: 14, flexShrink: 0 }} />
           <span style={{ color: 'var(--text-primary)' }}>Là vật tư, hàng hóa bán</span>
         </label>
+      </div>
+      {/* Row 6 — Left: TK chi phí | Right: Là hàng khuyến mãi */}
+      <LabelCell label="TK chi phí" />
+      <div className="misa-grid-item" style={{ position: 'relative' }}>
+        <input {...register('tai_khoan_chi_phi')} className="misa-input-solo" style={inputStyle} placeholder="632" />
+        <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
       </div>
       <div className="misa-grid-item" />
       <div className="misa-grid-item htql-checkbox-cell" style={{ width: 'fit-content', paddingLeft: 0, marginLeft: 0, justifyContent: 'flex-start', minWidth: 0 }}>

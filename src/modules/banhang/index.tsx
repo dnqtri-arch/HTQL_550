@@ -14,6 +14,8 @@ import { CongNoKhachHang } from './congno/CongNoKhachHang'
 import { TraLaiHang } from './tralai/TraLaiHang'
 import { QuyTrinhBanHang } from './QuyTrinhBanHang'
 import { KhachHang } from './khachhang/KhachHang'
+import { SanPhamHangHoaBanHangView } from './sanpham/SanPhamHangHoaBanHangView'
+import { DieuKhoanThanhToanBanHangView } from './dieukhoanthanhtoan/DieuKhoanThanhToanBanHangView'
 
 type SubId =
   | 'quy-trinh'
@@ -24,7 +26,7 @@ type SubId =
   | 'congno'
   | 'tralai'
 
-type ViewDanhMuc = 'khachhang' | null
+type ViewDanhMuc = 'khachhang' | 'vathh' | 'dieukhoanntt' | null
 
 const TABS: { id: SubId; label: string }[] = [
   { id: 'quy-trinh', label: 'Quy trình' },
@@ -41,10 +43,9 @@ export function BanHang() {
   const [viewDanhMuc, setViewDanhMuc] = useState<ViewDanhMuc>(null)
 
   const navigate = (tab: string) => {
-    if (tab === 'khachhang') {
-      setViewDanhMuc('khachhang')
-      return
-    }
+    if (tab === 'khachhang') { setViewDanhMuc('khachhang'); return }
+    if (tab === 'vathh') { setViewDanhMuc('vathh'); return }
+    if (tab === 'dieukhoanntt') { setViewDanhMuc('dieukhoanntt'); return }
     const found = TABS.find((t) => t.id === tab)
     if (found) {
       setViewDanhMuc(null)
@@ -52,7 +53,11 @@ export function BanHang() {
     }
   }
 
-  const tieuDe = viewDanhMuc === 'khachhang' ? 'Khách hàng' : 'Bán hàng'
+  const tieuDe =
+    viewDanhMuc === 'khachhang' ? 'Khách hàng'
+    : viewDanhMuc === 'vathh' ? 'Sản phẩm, hàng hóa'
+    : viewDanhMuc === 'dieukhoanntt' ? 'Điều khoản thanh toán'
+    : 'Bán hàng'
 
   return (
     <div style={{
@@ -72,6 +77,16 @@ export function BanHang() {
       {viewDanhMuc === 'khachhang' && (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <KhachHang onQuayLai={() => setViewDanhMuc(null)} />
+        </div>
+      )}
+      {viewDanhMuc === 'vathh' && (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <SanPhamHangHoaBanHangView onQuayLai={() => setViewDanhMuc(null)} />
+        </div>
+      )}
+      {viewDanhMuc === 'dieukhoanntt' && (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <DieuKhoanThanhToanBanHangView onQuayLai={() => setViewDanhMuc(null)} />
         </div>
       )}
 

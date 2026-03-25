@@ -32,6 +32,8 @@ export interface BaoGiaRecord {
   ngay_bao_gia: string
   ngay_het_han: string | null
   khach_hang: string
+  dia_chi_kh?: string
+  ma_so_thue_kh?: string
   nguoi_lien_he?: string
   dien_giai?: string
   tong_tien_hang: number
@@ -62,6 +64,8 @@ export interface BaoGiaCreatePayload {
   ngay_bao_gia: string
   ngay_het_han: string | null
   khach_hang: string
+  dia_chi_kh?: string
+  ma_so_thue_kh?: string
   nguoi_lien_he?: string
   dien_giai?: string
   tong_tien_hang: number
