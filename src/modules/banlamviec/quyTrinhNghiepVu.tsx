@@ -32,20 +32,20 @@ interface DiagramNode {
 }
 
 const NODES: DiagramNode[] = [
-  { id: 'ngan-sach', label: 'Ngân sách', Icon: DollarSign, moduleId: 'tong-hop', summary: 0 },
+  { id: 'ngan-sach', label: 'Ngân sách', Icon: DollarSign, moduleId: 'tongHop', summary: 0 },
   { id: 'quy', label: 'Quỹ', Icon: Wallet, moduleId: 'quy', summary: 0 },
-  { id: 'ngan-hang', label: 'Ngân hàng', Icon: Landmark, moduleId: 'ngan-hang', summary: 0 },
+  { id: 'ngan-hang', label: 'Ngân hàng', Icon: Landmark, moduleId: 'nganHang', summary: 0 },
   { id: 'khe-uoc-vay', label: 'Khế ước vay', Icon: FileText, summary: 0 },
-  { id: 'mua-hang', label: 'Mua hàng', Icon: ShoppingCart, moduleId: 'mua-hang', summary: 1 },
-  { id: 'ban-hang', label: 'Bán hàng', Icon: Store, moduleId: 'ban-hang', summary: 2 },
-  { id: 'hoa-don', label: 'Hóa đơn', Icon: FileCheck, moduleId: 'hoa-don-dien-tu', summary: 5 },
+  { id: 'mua-hang', label: 'Mua hàng', Icon: ShoppingCart, moduleId: 'donHangMua', summary: 1 },
+  { id: 'ban-hang', label: 'Bán hàng', Icon: Store, moduleId: 'donHangBan', summary: 2 },
+  { id: 'hoa-don', label: 'Hóa đơn', Icon: FileCheck, moduleId: 'hoaDonDienTu', summary: 5 },
   { id: 'thue', label: 'Thuế', Icon: Percent, moduleId: 'thue', summary: 0 },
-  { id: 'kho', label: 'Kho', Icon: Warehouse, moduleId: 'kho', summary: 12 },
-  { id: 'ccdc', label: 'CCDC', Icon: Wrench, moduleId: 'cong-cu-dung-cu', summary: 0 },
-  { id: 'tscd', label: 'TSCĐ', Icon: Car, moduleId: 'tai-san-co-dinh', summary: 0 },
-  { id: 'tien-luong', label: 'Tiền lương', Icon: Banknote, moduleId: 'tien-luong', summary: 3 },
-  { id: 'gia-thanh', label: 'Giá thành', Icon: Calculator, moduleId: 'gia-thanh', summary: 0 },
-  { id: 'hop-dong', label: 'Hợp đồng', Icon: FileSignature, moduleId: 'hop-dong', summary: 1 },
+  { id: 'kho', label: 'Kho', Icon: Warehouse, moduleId: 'khoHang', summary: 12 },
+  { id: 'ccdc', label: 'CCDC', Icon: Wrench, moduleId: 'congCuDungCu', summary: 0 },
+  { id: 'tscd', label: 'TSCĐ', Icon: Car, moduleId: 'taiSanCoDinh', summary: 0 },
+  { id: 'tien-luong', label: 'Tiền lương', Icon: Banknote, moduleId: 'tienLuong', summary: 3 },
+  { id: 'gia-thanh', label: 'Giá thành', Icon: Calculator, moduleId: 'giaThanh', summary: 0 },
+  { id: 'hop-dong', label: 'Hợp đồng', Icon: FileSignature, moduleId: 'hopDongBan', summary: 1 },
 ]
 
 const RADIUS = 200

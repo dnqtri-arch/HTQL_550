@@ -1,30 +1,52 @@
 export type ModuleId =
-  | 'ban-lam-viec'
-  | 'cong-viec'
-  | 'ban-hang'
-  | 'mua-hang'
-  | 'hop-dong'
+  // Công việc
+  | 'banLamViec'
+  | 'congViec'
+  // CRM - Bán hàng (sub-modules)
+  | 'baoGia'
+  | 'donHangBan'
+  | 'khachHang'
+  | 'hoaDon'
+  | 'hopDongBan'
+  | 'congNoKhachHang'
+  | 'traLaiHang'
+  // CRM - Mua hàng (sub-modules)
+  | 'donHangMua'
+  | 'nhaCungCap'
+  | 'nhanVatTuHangHoa'
+  | 'hopDongMua'
+  | 'traLaiHangMua'
+  | 'traTienNcc'
+  | 'nhanHoaDon'
+  | 'giamGiaHangMua'
+  // Tài chính
   | 'quy'
-  | 'ngan-hang'
-  | 'thu-quy'
-  | 'kho'
-  | 'kho-vthh'
-  | 'don-vi-tinh'
-  | 'thu-kho'
-  | 'cong-cu-dung-cu'
-  | 'tai-san-co-dinh'
-  | 'tien-luong'
+  | 'nganHang'
+  | 'thuQuy'
+  // Kho
+  | 'khoHang'
+  | 'tonKho'
+  | 'donViTinh'
+  | 'thuKho'
+  | 'congCuDungCu'
+  | 'taiSanCoDinh'
+  // HRM
+  | 'tienLuong'
   | 'thue'
-  | 'gia-thanh'
-  | 'tong-hop'
-  | 'hoa-don-dien-tu'
-  | 'quan-ly-hoa-don'
-  | 'tai-lieu'
+  | 'giaThanh'
+  | 'tongHop'
+  // Hóa đơn
+  | 'hoaDonDienTu'
+  | 'quanLyHoaDon'
+  | 'taiLieu'
+
+export type SidebarItemId = ModuleId | 'banHang' | 'muaHang'
 
 export interface SidebarItem {
-  id: ModuleId
+  id: SidebarItemId
   label: string
   icon: string
+  children?: SidebarItem[]
 }
 
 export const MODULE_GROUPS: Array<{
@@ -33,60 +55,86 @@ export const MODULE_GROUPS: Array<{
   items: SidebarItem[]
 }> = [
   {
-    id: 'group1',
-    label: 'Công việc',
+    id: 'congViec',
+    label: 'CÔNG VIỆC',
     items: [
-      { id: 'ban-lam-viec', label: 'Bàn làm việc', icon: 'LayoutDashboard' },
-      { id: 'cong-viec', label: 'Công việc', icon: 'ClipboardList' },
+      { id: 'banLamViec', label: 'Bàn làm việc', icon: 'LayoutDashboard' },
+      { id: 'congViec', label: 'Công việc', icon: 'ClipboardList' },
     ],
   },
   {
-    id: 'group2',
+    id: 'crm',
     label: 'CRM',
     items: [
-      { id: 'ban-hang', label: 'Bán hàng', icon: 'Store' },
-      { id: 'mua-hang', label: 'Mua hàng', icon: 'ShoppingCart' },
-      { id: 'hop-dong', label: 'Hợp đồng', icon: 'FileText' },
+      {
+        id: 'banHang',
+        label: 'Bán hàng',
+        icon: 'Store',
+        children: [
+          { id: 'baoGia', label: 'Báo giá', icon: 'FileText' },
+          { id: 'donHangBan', label: 'Đơn hàng bán', icon: 'ShoppingCart' },
+          { id: 'khachHang', label: 'Khách hàng', icon: 'Users' },
+          { id: 'hoaDon', label: 'Hóa đơn bán', icon: 'Receipt' },
+          { id: 'hopDongBan', label: 'Hợp đồng bán', icon: 'FileSignature' },
+          { id: 'congNoKhachHang', label: 'Công nợ KH', icon: 'CreditCard' },
+          { id: 'traLaiHang', label: 'Trả lại hàng', icon: 'RotateCcw' },
+        ],
+      },
+      {
+        id: 'muaHang',
+        label: 'Mua hàng',
+        icon: 'ShoppingCart',
+        children: [
+          { id: 'donHangMua', label: 'Đơn hàng mua', icon: 'FileText' },
+          { id: 'nhaCungCap', label: 'Nhà cung cấp', icon: 'Users' },
+          { id: 'nhanVatTuHangHoa', label: 'Nhận VTHH', icon: 'Package' },
+          { id: 'hopDongMua', label: 'Hợp đồng mua', icon: 'FileSignature' },
+          { id: 'traLaiHangMua', label: 'Trả lại hàng mua', icon: 'RotateCcw' },
+          { id: 'traTienNcc', label: 'Trả tiền NCC', icon: 'CreditCard' },
+          { id: 'nhanHoaDon', label: 'Nhận hóa đơn', icon: 'Receipt' },
+          { id: 'giamGiaHangMua', label: 'Giảm giá hàng mua', icon: 'Percent' },
+        ],
+      },
     ],
   },
   {
-    id: 'group3',
-    label: 'Tài chính',
+    id: 'taiChinh',
+    label: 'TÀI CHÍNH',
     items: [
       { id: 'quy', label: 'Quỹ', icon: 'Wallet' },
-      { id: 'ngan-hang', label: 'Ngân hàng', icon: 'Landmark' },
-      { id: 'thu-quy', label: 'Thủ quỹ', icon: 'UserCircle' },
+      { id: 'nganHang', label: 'Ngân hàng', icon: 'Landmark' },
+      { id: 'thuQuy', label: 'Thủ quỹ', icon: 'UserCircle' },
     ],
   },
   {
-    id: 'group4',
-    label: 'Kho và hàng hóa',
+    id: 'kho',
+    label: 'KHO VÀ HÀNG HÓA',
     items: [
-      { id: 'kho', label: 'Kho hàng', icon: 'Warehouse' },
-      { id: 'kho-vthh', label: 'Tồn kho', icon: 'BarChart3' },
-      { id: 'don-vi-tinh', label: 'Đơn vị tính', icon: 'Ruler' },
-      { id: 'thu-kho', label: 'Thủ kho', icon: 'UserCog' },
-      { id: 'cong-cu-dung-cu', label: 'Công cụ dụng cụ', icon: 'Wrench' },
-      { id: 'tai-san-co-dinh', label: 'Tài sản cố định', icon: 'Car' },
+      { id: 'khoHang', label: 'Kho hàng', icon: 'Warehouse' },
+      { id: 'tonKho', label: 'Tồn kho', icon: 'BarChart3' },
+      { id: 'donViTinh', label: 'Đơn vị tính', icon: 'Ruler' },
+      { id: 'thuKho', label: 'Thủ kho', icon: 'UserCog' },
+      { id: 'congCuDungCu', label: 'Công cụ dụng cụ', icon: 'Wrench' },
+      { id: 'taiSanCoDinh', label: 'Tài sản cố định', icon: 'Car' },
     ],
   },
   {
-    id: 'group5',
+    id: 'hrm',
     label: 'HRM',
     items: [
-      { id: 'tien-luong', label: 'Tiền lương', icon: 'Banknote' },
+      { id: 'tienLuong', label: 'Tiền lương', icon: 'Banknote' },
       { id: 'thue', label: 'Thuế', icon: 'Percent' },
-      { id: 'gia-thanh', label: 'Giá thành', icon: 'Calculator' },
-      { id: 'tong-hop', label: 'Tổng hợp', icon: 'BookOpen' },
+      { id: 'giaThanh', label: 'Giá thành', icon: 'Calculator' },
+      { id: 'tongHop', label: 'Tổng hợp', icon: 'BookOpen' },
     ],
   },
   {
-    id: 'group6',
-    label: 'Hóa đơn',
+    id: 'hoaDon',
+    label: 'HÓA ĐƠN',
     items: [
-      { id: 'hoa-don-dien-tu', label: 'Hóa đơn điện tử', icon: 'FileCheck' },
-      { id: 'quan-ly-hoa-don', label: 'Quản lý hóa đơn', icon: 'Files' },
-      { id: 'tai-lieu', label: 'Tài liệu', icon: 'FolderOpen' },
+      { id: 'hoaDonDienTu', label: 'Hóa đơn điện tử', icon: 'FileCheck' },
+      { id: 'quanLyHoaDon', label: 'Quản lý hóa đơn', icon: 'Files' },
+      { id: 'taiLieu', label: 'Tài liệu', icon: 'FolderOpen' },
     ],
   },
 ]

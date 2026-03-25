@@ -1,9 +1,9 @@
-﻿/**
+/**
  * In Phiếu Nhập kho — mẫu HTML chuyên nghiệp (Logo Nam Bac AD)
  * Gọi `inPhieuNhapKho(record, chiTiet)` để mở cửa sổ in.
  */
 
-import type { NhanVatTuHangHoaRecord, NhanVatTuHangHoaChiTiet } from '../modules/inventory/nhanvattuhanghoa/nhanVatTuHangHoaApi'
+import type { NhanVatTuHangHoaRecord, NhanVatTuHangHoaChiTiet } from '../modules/kho/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 
 function fmt(n: number): string {
   return n.toLocaleString('vi-VN')

@@ -134,7 +134,7 @@ export function Layout() {
       // ignore
     }
     if (tabs.length === 0) {
-      handleSelectModule('ban-lam-viec')
+      handleSelectModule('banLamViec')
     }
   }, [hasRestored, tabs.length, handleSelectModule])
 
@@ -195,7 +195,9 @@ export function Layout() {
 }
 
 function WelcomeScreen({ onSelectModule }: { onSelectModule: (id: ModuleId) => void }) {
-  const welcomeItems = MODULE_GROUPS.flatMap((g) => g.items).slice(0, 6)
+  const welcomeItems = MODULE_GROUPS.flatMap((g) => 
+    g.items.flatMap((item) => item.children ?? [item])
+  ).filter((item): item is typeof item & { id: ModuleId } => !('children' in item && item.children)).slice(0, 6)
   return (
     <div style={{ padding: '24px 16px', textAlign: 'center' }}>
       <h2 style={{ fontSize: '16px', marginBottom: '8px', color: 'var(--text-primary)' }}>
