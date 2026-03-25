@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react'
 
-export type ToastType = 'info' | 'error' | 'success'
+export type ToastType = 'info' | 'error' | 'success' | 'warning'
 
 export interface ToastState {
   message: string
@@ -62,8 +62,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             fontWeight: 500,
             maxWidth: '90vw',
             boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-            background: toast.type === 'error' ? 'var(--accent)' : toast.type === 'success' ? '#22c55e' : 'var(--bg-tab)',
-            color: toast.type === 'error' ? 'var(--accent-text)' : 'var(--text-primary)',
+            background:
+              toast.type === 'error' ? 'var(--accent)'
+              : toast.type === 'success' ? '#22c55e'
+              : toast.type === 'warning' ? '#f59e0b'
+              : 'var(--bg-tab)',
+            color: toast.type === 'error' ? 'var(--accent-text)' : toast.type === 'warning' ? '#fff' : 'var(--text-primary)',
             border: '1px solid var(--border-strong)',
           }}
         >

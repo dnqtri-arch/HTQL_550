@@ -51,6 +51,12 @@ export interface BaoGiaChiTiet {
   ma_hang: string
   ten_hang: string
   dvt: string
+  /** Công thức tính SL, ví dụ "Dài * Rộng" */
+  cong_thuc_tinh_sl?: string
+  /** Tham số 1 (Dài) khi có công thức */
+  tham_so_1?: number
+  /** Tham số 2 (Rộng) khi có công thức */
+  tham_so_2?: number
   so_luong: number
   don_gia: number
   thanh_tien: number

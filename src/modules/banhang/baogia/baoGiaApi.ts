@@ -258,6 +258,35 @@ export function baoGiaPut(id: string, payload: BaoGiaCreatePayload): BaoGiaRecor
   return updated
 }
 
+/** Lấy N lịch sử giao dịch gần nhất của một khách hàng (theo tên) */
+export function baoGiaGetLichSuKhachHang(
+  khachHang: string,
+  limit = 5
+): { so_bao_gia: string; ngay_bao_gia: string; ten_hang: string; so_luong: number; don_gia: number }[] {
+  init()
+  const khLower = khachHang.trim().toLowerCase()
+  if (!khLower) return []
+  const filtered = _list
+    .filter((r) => r.khach_hang.toLowerCase() === khLower)
+    .sort((a, b) => b.ngay_bao_gia.localeCompare(a.ngay_bao_gia))
+    .slice(0, limit * 3)
+  const result: { so_bao_gia: string; ngay_bao_gia: string; ten_hang: string; so_luong: number; don_gia: number }[] = []
+  for (const bg of filtered) {
+    const cts = _chiTietList.filter((c) => c.bao_gia_id === bg.id)
+    for (const ct of cts) {
+      result.push({
+        so_bao_gia: bg.so_bao_gia,
+        ngay_bao_gia: bg.ngay_bao_gia,
+        ten_hang: ct.ten_hang,
+        so_luong: ct.so_luong,
+        don_gia: ct.don_gia,
+      })
+      if (result.length >= limit) return result
+    }
+  }
+  return result
+}
+
 export function baoGiaBuildPayloadFromRecord(r: BaoGiaRecord, ct: BaoGiaChiTiet[]): BaoGiaCreatePayload {
   return {
     so_bao_gia: r.so_bao_gia,
