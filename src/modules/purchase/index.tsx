@@ -1,10 +1,10 @@
-﻿import React, { useState, useEffect } from 'react'
-import { KhoTabs } from '../inventory/kho/KhoTabs'
-import { VatTuHangHoa } from '../inventory/kho/VatTuHangHoa'
-import { QuyTrinhMuaHang } from './QuyTrinhMuaHang'
-import { NhaCungCap } from './NhaCungCap'
-import { DonHangMua } from './donhangmua/DonHangMua'
-import { NhanVatTuHangHoa } from '../inventory/nhanvattuhanghoa/NhanVatTuHangHoa'
+import React, { useState, useEffect } from 'react'
+import { KhoTabs } from '../inventory/kho/khoTabs'
+import { VatTuHangHoa } from '../inventory/kho/vatTuHangHoa'
+import { QuyTrinhMuaHang } from './quyTrinhMuaHang'
+import { NhaCungCap } from './nhaCungCap'
+import { DonHangMua } from './donhangmua/donHangMua'
+import { NhanVatTuHangHoa } from '../inventory/nhanvattuhanghoa/nhanVatTuHangHoa'
 import {
   type DonHangMuaChiTiet,
   type DonHangMuaRecord,
@@ -16,11 +16,11 @@ import {
   HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT,
   type MuaHangTabEventDetail,
 } from './muaHangTabEvent'
-import { ListPageToolbar } from '../../components/ListPageToolbar'
+import { ListPageToolbar } from '../../components/listPageToolbar'
 import { loadDieuKhoanThanhToan, saveDieuKhoanThanhToan, type DieuKhoanThanhToanItem } from './nhaCungCapApi'
 import { formatNumberDisplay } from '../../utils/numberFormat'
-import { ThemDieuKhoanThanhToanModal } from './ThemDieuKhoanThanhToanModal'
-import { HinhThucView } from './HinhThucView'
+import { ThemDieuKhoanThanhToanModal } from './themDieuKhoanThanhToanModal'
+import { HinhThucView } from './hinhThucView'
 import { Plus } from 'lucide-react'
 
 /** Hàng hóa, dịch vụ (Mua hàng) dùng chung danh mục với Vật tư hàng hóa (Kho) — cùng vatTuHangHoaApi / một cơ sở dữ liệu. */

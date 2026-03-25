@@ -6,16 +6,16 @@
  */
 
 import { useState } from 'react'
-import { BaoGia } from './baogia/BaoGia'
-import { DonHangBan } from './donhangban/DonHangBan'
-import { HopDongBan } from './hopdong/HopDongBan'
-import { HoaDonBan } from './hoadon/HoaDonBan'
-import { CongNoKhachHang } from './congno/CongNoKhachHang'
-import { TraLaiHang } from './tralai/TraLaiHang'
-import { QuyTrinhBanHang } from './QuyTrinhBanHang'
-import { KhachHang } from './khachhang/KhachHang'
-import { SanPhamHangHoaBanHangView } from './sanpham/SanPhamHangHoaBanHangView'
-import { DieuKhoanThanhToanBanHangView } from './dieukhoanthanhtoan/DieuKhoanThanhToanBanHangView'
+import { BaoGia } from './baogia/baoGia'
+import { DonHangBan } from './donhangban/donHangBan'
+import { HopDongBan } from './hopdong/hopDongBan'
+import { HoaDonBan } from './hoadon/hoaDonBan'
+import { CongNoKhachHang } from './congno/congNoKhachHang'
+import { TraLaiHang } from './tralai/traLaiHang'
+import { QuyTrinhBanHang } from './quyTrinhBanHang'
+import { KhachHang } from './khachhang/khachHang'
+import { SanPhamHangHoaBanHangView } from './sanpham/sanPhamHangHoaBanHangView'
+import { DieuKhoanThanhToanBanHangView } from './dieukhoanthanhtoan/dieuKhoanThanhToanBanHangView'
 
 type SubId =
   | 'quy-trinh'

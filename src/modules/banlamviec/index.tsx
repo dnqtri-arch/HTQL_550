@@ -1,5 +1,5 @@
-import { ModulePage } from '../../components/ModulePage'
-import { QuyTrinhNghiepVu } from './QuyTrinhNghiepVu'
+import { ModulePage } from '../../components/modulePage'
+import { QuyTrinhNghiepVu } from './quyTrinhNghiepVu'
 
 const subNav = [
   { id: 'tong-quan', label: 'Tổng quan tài chính' },

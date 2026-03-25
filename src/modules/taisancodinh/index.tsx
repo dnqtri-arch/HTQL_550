@@ -1,4 +1,4 @@
-import { ModulePage } from '../../components/ModulePage'
+import { ModulePage } from '../../components/modulePage'
 
 const subNav = [
   { id: 'danh-sach-tscd', label: 'Danh sách TSCĐ' },

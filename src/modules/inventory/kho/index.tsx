@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { KhoTabs } from './KhoTabs'
-import { QuyTrinhKho } from './QuyTrinhKho'
-import { VatTuHangHoa } from './VatTuHangHoa'
-import { DonViTinh } from './DonViTinh'
-import { DanhSachKho } from './DanhSachKho'
-import { KhoVthhPage } from '../khovthh/Page'
-import { NhapKhoList } from './NhapKhoList'
-import { XuatKhoList } from '../xuatkho/XuatKhoList'
+import { KhoTabs } from './khoTabs'
+import { QuyTrinhKho } from './quyTrinhKho'
+import { VatTuHangHoa } from './vatTuHangHoa'
+import { DonViTinh } from './donViTinh'
+import { DanhSachKho } from './danhSachKho'
+import { KhoVthhPage } from '../khovthh/page'
+import { NhapKhoList } from './nhapKhoList'
+import { XuatKhoList } from '../xuatkho/xuatKhoList'
 
 const TABS_KHO = [
   { id: 'ton-kho', label: 'Tồn kho' },
