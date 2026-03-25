@@ -2071,6 +2071,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
   }, [diaDiemGiaoHangList, effectiveDiaDiemFirst])
 
   const buildPayload = (): BaoGiaCreatePayload => {
+    const { tongTienHang, tienThue, tongTienThanhToan: ttTongThanhToan } = computeDonHangMuaFooterTotals(lines)
     const isCodongia = initialDon != null || mauHienTai === 'codongia'
     let giaTriDonHang = 0
     const chiTiet = lines
@@ -2116,7 +2117,9 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       so_ngay_duoc_no: soNgayDuocNo.trim() || '0',
       dia_diem_giao_hang: diaDiemGiaoHangFull,
       dieu_khoan_khac: dieuKhoanKhac.trim(),
-      tong_thanh_toan: tongTienThanhToan,
+      tong_tien_hang: tongTienHang,
+      tong_thue_gtgt: tienThue,
+      tong_thanh_toan: ttTongThanhToan,
       so_chung_tu_cukcuk: thamChieu.trim(),
       // [BaoGia] Bỏ logic đối chiếu đơn mua
       // doi_chieu_don_mua_id: undefined,

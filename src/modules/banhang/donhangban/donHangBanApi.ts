@@ -9,9 +9,8 @@ import type {
   DonHangBanCreatePayload,
   BanHangFilter,
   BanHangKyValue,
-  BaoGiaRecord,
-  BaoGiaChiTiet,
 } from '../../../types/banHang'
+import type { BaoGiaRecord, BaoGiaChiTiet } from '../../../types/baoGia'
 import { maFormatHeThong, getCurrentYear } from '../../../utils/maFormat'
 
 export type { DonHangBanRecord, DonHangBanChiTiet, DonHangBanCreatePayload, BanHangKyValue }

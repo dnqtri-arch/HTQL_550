@@ -18,12 +18,20 @@ import {
   baoGiaGetChiTiet,
   baoGiaDelete,
   getDefaultBaoGiaFilter,
+  getDateRangeForKy,
   KY_OPTIONS,
   type BaoGiaRecord,
   type BaoGiaChiTiet,
   type BaoGiaKyValue,
   type BaoGiaFilter,
+  baoGiaPost,
+  baoGiaPut,
+  getBaoGiaDraft,
+  setBaoGiaDraft,
+  clearBaoGiaDraft,
+  baoGiaSoDonHangTiepTheo,
 } from './baoGiaApi'
+import { BaoGiaApiProvider, type BaoGiaApi } from './baoGiaApiContext'
 import { BaoGiaForm } from './baoGiaForm'
 import styles from '../BanHang.module.css'
 
@@ -118,8 +126,24 @@ const Pagination = React.memo(({ page, total, onChange }: { page: number; total:
   )
 })
 
-// ─── Màn hình danh sách Báo giá ──────────────────────────────────────────────
-export function BaoGia() {
+// ─── API instance cho Provider ──────────────────────────────────────────────
+const apiBaoGia: BaoGiaApi = {
+  getAll: baoGiaGetAll,
+  getChiTiet: baoGiaGetChiTiet,
+  delete: baoGiaDelete,
+  getDefaultFilter: getDefaultBaoGiaFilter,
+  getDateRangeForKy: getDateRangeForKy,
+  KY_OPTIONS: KY_OPTIONS,
+  post: baoGiaPost,
+  put: baoGiaPut,
+  soDonHangTiepTheo: baoGiaSoDonHangTiepTheo,
+  getDraft: getBaoGiaDraft,
+  setDraft: setBaoGiaDraft,
+  clearDraft: clearBaoGiaDraft,
+}
+
+// ─── Màn hình danh sách Báo giá (Content) ────────────────────────────────────
+function BaoGiaContent() {
   const toast = useToastOptional()
   const [filter,      setFilter]      = useState<BaoGiaFilter>(getDefaultBaoGiaFilter)
   const [danhSach,    setDanhSach]    = useState<BaoGiaRecord[]>([])
@@ -377,5 +401,14 @@ export function BaoGia() {
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Export chính với Provider wrapper ────────────────────────────────────────
+export function BaoGia() {
+  return (
+    <BaoGiaApiProvider api={apiBaoGia}>
+      <BaoGiaContent />
+    </BaoGiaApiProvider>
   )
 }

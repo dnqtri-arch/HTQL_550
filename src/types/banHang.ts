@@ -22,67 +22,6 @@ export interface KhachHangRecord {
   isNhaCungCap: boolean
 }
 
-// ─── Báo giá ──────────────────────────────────────────────────────────────
-
-export type BaoGiaTinhTrang = 'Chờ duyệt' | 'Đã gửi khách' | 'Đã chốt' | 'Hủy bỏ'
-
-export interface BaoGiaRecord {
-  id: string
-  so_bao_gia: string
-  ngay_bao_gia: string
-  ngay_het_han: string | null
-  khach_hang: string
-  dia_chi_kh?: string
-  ma_so_thue_kh?: string
-  nguoi_lien_he?: string
-  dien_giai?: string
-  tong_tien_hang: number
-  tong_thue_gtgt: number
-  tong_thanh_toan: number
-  tinh_trang: BaoGiaTinhTrang
-  ghi_chu?: string
-  nv_ban_hang?: string
-}
-
-export interface BaoGiaChiTiet {
-  id: string
-  bao_gia_id: string
-  stt?: number
-  ma_hang: string
-  ten_hang: string
-  dvt: string
-  /** Công thức tính SL, ví dụ "Dài * Rộng" */
-  cong_thuc_tinh_sl?: string
-  /** Tham số 1 (Dài) khi có công thức */
-  tham_so_1?: number
-  /** Tham số 2 (Rộng) khi có công thức */
-  tham_so_2?: number
-  so_luong: number
-  don_gia: number
-  thanh_tien: number
-  pt_thue_gtgt: number | null
-  tien_thue_gtgt: number | null
-  ghi_chu?: string
-}
-
-export interface BaoGiaCreatePayload {
-  so_bao_gia: string
-  ngay_bao_gia: string
-  ngay_het_han: string | null
-  khach_hang: string
-  dia_chi_kh?: string
-  ma_so_thue_kh?: string
-  nguoi_lien_he?: string
-  dien_giai?: string
-  tong_tien_hang: number
-  tong_thue_gtgt: number
-  tong_thanh_toan: number
-  tinh_trang: BaoGiaTinhTrang
-  ghi_chu?: string
-  nv_ban_hang?: string
-  chi_tiet: Omit<BaoGiaChiTiet, 'id' | 'bao_gia_id'>[]
-}
-
 // ─── Đơn hàng bán ─────────────────────────────────────────────────────────
 
 export type DonHangBanTinhTrang = 'Chưa thực hiện' | 'Đang thực hiện' | 'Đã xuất kho' | 'Hủy bỏ'

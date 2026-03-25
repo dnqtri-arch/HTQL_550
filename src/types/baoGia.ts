@@ -26,6 +26,8 @@ export interface BaoGiaRecord {
   so_ngay_duoc_no: string
   dia_diem_giao_hang: string
   dieu_khoan_khac: string
+  tong_tien_hang: number
+  tong_thue_gtgt: number
   tong_thanh_toan: number
   so_chung_tu_cukcuk: string
   doi_chieu_don_mua_id?: string
@@ -75,6 +77,7 @@ export interface BaoGiaRecord {
 export interface BaoGiaChiTiet {
   id: string
   bao_gia_id: string
+  stt?: number
   ma_hang: string
   ten_hang: string
   ma_quy_cach: string
@@ -110,6 +113,8 @@ export interface BaoGiaCreatePayload {
   so_ngay_duoc_no: string
   dia_diem_giao_hang: string
   dieu_khoan_khac: string
+  tong_tien_hang: number
+  tong_thue_gtgt: number
   tong_thanh_toan: number
   so_chung_tu_cukcuk: string
   doi_chieu_don_mua_id?: string
