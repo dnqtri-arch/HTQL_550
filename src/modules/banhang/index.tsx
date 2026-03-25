@@ -14,7 +14,7 @@ import { CongNoKhachHang } from './congno/congNoKhachHang'
 import { TraLaiHang } from './tralai/traLaiHang'
 import { QuyTrinhBanHang } from './quyTrinhBanHang'
 import { KhachHang } from './khachhang/khachHang'
-import { SanPhamHangHoaBanHangView } from './sanpham/sanPhamHangHoaBanHangView'
+import { VatTuHangHoa } from '../inventory/kho/vatTuHangHoa'
 import { DieuKhoanThanhToanBanHangView } from './dieukhoanthanhtoan/dieuKhoanThanhToanBanHangView'
 
 type SubId =
@@ -81,7 +81,7 @@ export function BanHang() {
       )}
       {viewDanhMuc === 'vathh' && (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <SanPhamHangHoaBanHangView onQuayLai={() => setViewDanhMuc(null)} />
+          <VatTuHangHoa onQuayLai={() => setViewDanhMuc(null)} filterMode="ban" />
         </div>
       )}
       {viewDanhMuc === 'dieukhoanntt' && (

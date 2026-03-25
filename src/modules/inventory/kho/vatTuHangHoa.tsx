@@ -150,7 +150,13 @@ const modalBox: React.CSSProperties = {
   pointerEvents: 'auto',
 }
 
-export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
+interface VatTuHangHoaProps {
+  onQuayLai?: () => void
+  /** [YC26] Filter mode: 'all' (mặc định - tất cả VTHH), 'ban' (chỉ la_vthh_ban = true) */
+  filterMode?: 'all' | 'ban'
+}
+
+export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProps) {
   const toastApi = useToastOptional()
   const showError = toastApi ? (msg: string) => toastApi.showToast(msg, 'error') : (msg: string) => alert(msg)
 
@@ -182,17 +188,19 @@ export function VatTuHangHoa({ onQuayLai }: { onQuayLai?: () => void }) {
         const dv = await donViTinhGetAll()
         return [d, dv] as const
       })()
-      setDanhSach(data)
+      // [YC26] Filter theo module: 'ban' → chỉ la_vthh_ban = true
+      const filtered = filterMode === 'ban' ? data.filter((r) => r.la_vthh_ban === true) : data
+      setDanhSach(filtered)
       setDvtList(dvt.map((r) => ({ id: r.id, ma_dvt: r.ma_dvt, ten_dvt: r.ten_dvt, ky_hieu: r.ky_hieu })))
-      if (!dongChon && data.length > 0) setDongChon(data[0])
+      if (!dongChon && filtered.length > 0) setDongChon(filtered[0])
       else if (dongChon) {
-        const capNhat = data.find((r) => r.id === dongChon.id)
-        setDongChon(capNhat ?? data[0] ?? null)
+        const capNhat = filtered.find((r) => r.id === dongChon.id)
+        setDongChon(capNhat ?? filtered[0] ?? null)
       }
     } finally {
       setDangTai(false)
     }
-  }, [dongChon])
+  }, [dongChon, filterMode])
 
   const refreshDvtList = useCallback(async () => {
     const dv = await donViTinhGetAll()
