@@ -21,9 +21,9 @@ import {
   KY_OPTIONS,
   type BaoGiaRecord,
   type BaoGiaChiTiet,
-  type BanHangKyValue,
+  type BaoGiaKyValue,
+  type BaoGiaFilter,
 } from './baoGiaApi'
-import type { BanHangFilter } from '../../../types/banHang'
 import { BaoGiaForm } from './baoGiaForm'
 import styles from '../BanHang.module.css'
 
@@ -121,7 +121,7 @@ const Pagination = React.memo(({ page, total, onChange }: { page: number; total:
 // ─── Màn hình danh sách Báo giá ──────────────────────────────────────────────
 export function BaoGia() {
   const toast = useToastOptional()
-  const [filter,      setFilter]      = useState<BanHangFilter>(getDefaultBaoGiaFilter)
+  const [filter,      setFilter]      = useState<BaoGiaFilter>(getDefaultBaoGiaFilter)
   const [danhSach,    setDanhSach]    = useState<BaoGiaRecord[]>([])
   const [selectedId,  setSelectedId]  = useState<string | null>(null)
   const [chiTiet,     setChiTiet]     = useState<BaoGiaChiTiet[]>([])
@@ -195,15 +195,12 @@ export function BaoGia() {
     const ct = baoGiaGetChiTiet(selectedRow.id)
     const draft = {
       khach_hang:      selectedRow.khach_hang,
-      dia_chi:         selectedRow.dia_chi_kh,
-      ma_so_thue:      selectedRow.ma_so_thue_kh,
-      nguoi_lien_he:   selectedRow.nguoi_lien_he,
+      dia_chi:         selectedRow.dia_chi,
+      ma_so_thue:      selectedRow.ma_so_thue,
       dien_giai:       selectedRow.dien_giai ?? '',
       nv_ban_hang:     selectedRow.nv_ban_hang,
       bao_gia_ref:     selectedRow.so_bao_gia,
       bao_gia_id:      selectedRow.id,
-      tong_tien_hang:  selectedRow.tong_tien_hang,
-      tong_thue_gtgt:  selectedRow.tong_thue_gtgt,
       tong_thanh_toan: selectedRow.tong_thanh_toan,
       chiTiet: ct.map((c) => ({
         ma_hang:        c.ma_hang,
@@ -259,7 +256,7 @@ export function BaoGia() {
         <div className={styles.filterWrap} style={{ marginLeft: 8 }}>
           <span className={styles.filterLabel}>Kỳ</span>
           <select className={styles.filterInput} value={filter.ky}
-            onChange={(e) => setFilter((f) => ({ ...f, ky: e.target.value as BanHangKyValue }))}>
+            onChange={(e) => setFilter((f) => ({ ...f, ky: e.target.value as BaoGiaKyValue }))}>
             {KY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
@@ -370,12 +367,11 @@ export function BaoGia() {
             onClick={(e) => e.stopPropagation()}>
             <BaoGiaForm
               key={formKey}
-              mode={formMode}
-              initialRecord={formRecord ?? undefined}
+              readOnly={formMode === 'view'}
+              initialDon={formMode === 'view' || formMode === 'edit' ? (formRecord ?? undefined) : null}
               initialChiTiet={formRecord ? baoGiaGetChiTiet(formRecord.id) : undefined}
               onClose={() => setShowForm(false)}
               onSaved={() => { setShowForm(false); loadData() }}
-              onSavedAndAdd={() => { loadData(); setFormKey((k) => k + 1) }}
             />
           </div>
         </div>

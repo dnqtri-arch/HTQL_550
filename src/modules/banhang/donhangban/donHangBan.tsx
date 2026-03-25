@@ -60,7 +60,7 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10)
 // ─── Chọn báo giá (modal) ────────────────────────────────────────────────
 
 function ChonBaoGiaModal({ onClose, onChon }: { onClose: () => void; onChon: (bg: BaoGiaRecord) => void }) {
-  const [list] = useState<BaoGiaRecord[]>(() => baoGiaGetAll({ ...getDefaultBaoGiaFilter(), tim_kiem: '' }))
+  const [list] = useState<BaoGiaRecord[]>(() => baoGiaGetAll(getDefaultBaoGiaFilter()))
   const [search, setSearch] = useState('')
   const filtered = search.trim()
     ? list.filter((r) => matchSearchKeyword(`${r.so_bao_gia} ${r.khach_hang}`, search))
