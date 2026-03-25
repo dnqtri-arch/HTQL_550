@@ -2,6 +2,9 @@ export type ModuleId =
   // Công việc
   | 'banLamViec'
   | 'congViec'
+  // CRM - Entry points (parent modules with internal tabs/workflow)
+  | 'banHang'
+  | 'muaHang'
   // CRM - Bán hàng (sub-modules)
   | 'baoGia'
   | 'donHangBan'
@@ -40,10 +43,8 @@ export type ModuleId =
   | 'quanLyHoaDon'
   | 'taiLieu'
 
-export type SidebarItemId = ModuleId | 'banHang' | 'muaHang'
-
 export interface SidebarItem {
-  id: SidebarItemId
+  id: ModuleId
   label: string
   icon: string
   children?: SidebarItem[]
@@ -71,6 +72,7 @@ export const MODULE_GROUPS: Array<{
         label: 'Bán hàng',
         icon: 'Store',
         children: [
+          { id: 'banHang', label: 'Quy trình', icon: 'GitBranch' },
           { id: 'baoGia', label: 'Báo giá', icon: 'FileText' },
           { id: 'donHangBan', label: 'Đơn hàng bán', icon: 'ShoppingCart' },
           { id: 'khachHang', label: 'Khách hàng', icon: 'Users' },
@@ -85,6 +87,7 @@ export const MODULE_GROUPS: Array<{
         label: 'Mua hàng',
         icon: 'ShoppingCart',
         children: [
+          { id: 'muaHang', label: 'Quy trình', icon: 'GitBranch' },
           { id: 'donHangMua', label: 'Đơn hàng mua', icon: 'FileText' },
           { id: 'nhaCungCap', label: 'Nhà cung cấp', icon: 'Users' },
           { id: 'nhanVatTuHangHoa', label: 'Nhận VTHH', icon: 'Package' },

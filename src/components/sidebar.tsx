@@ -175,7 +175,7 @@ export function Sidebar({ activeModuleId, onSelectModule }: SidebarProps) {
                                 background: isActive ? 'var(--accent)' : 'transparent',
                                 color: isActive ? 'var(--accent-text)' : 'var(--text-primary)',
                               }}
-                              onClick={() => onSelectModule(child.id as ModuleId)}
+                              onClick={() => onSelectModule(child.id)}
                             >
                               <ChildIcon size={16} style={{ flexShrink: 0, color: isActive ? 'var(--accent-text)' : 'var(--text-secondary)' }} />
                               {child.label}
@@ -197,7 +197,7 @@ export function Sidebar({ activeModuleId, onSelectModule }: SidebarProps) {
                         background: isActive ? 'var(--accent)' : 'transparent',
                         color: isActive ? 'var(--accent-text)' : 'var(--text-primary)',
                       }}
-                      onClick={() => onSelectModule(item.id as ModuleId)}
+                      onClick={() => onSelectModule(item.id)}
                     >
                       <Icon size={18} style={{ flexShrink: 0, color: isActive ? 'var(--accent-text)' : 'var(--text-secondary)' }} />
                       {item.label}

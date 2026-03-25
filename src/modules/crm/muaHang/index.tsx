@@ -116,7 +116,7 @@ const TABS_MUA_HANG = [
 type ViewDanhMuc = 'nha-cung-cap' | 'hang-hoa-dich-vu' | 'dieu-khoan-thanh-toan' | 'hinh-thuc' | 'tien-ich' | null
 
 export function MuaHang() {
-  const [tabHienTai, setTabHienTai] = useState('donhangmua')
+  const [tabHienTai, setTabHienTai] = useState('quy-trinh')
   const [viewDanhMuc, setViewDanhMuc] = useState<ViewDanhMuc>(null)
   const [prefillNhanHangTuDhm, setPrefillNhanHangTuDhm] = useState<{ don: DonHangMuaRecord; chiTiet: DonHangMuaChiTiet[] } | null>(null)
   const [xemPhieuNhanHangId, setXemPhieuNhanHangId] = useState<string | null>(null)

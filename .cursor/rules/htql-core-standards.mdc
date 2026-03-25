@@ -15,7 +15,7 @@ alwaysApply: true
 
 | # | Quy tắc | Chi tiết |
 |---|---------|---------|
-| 0.1 | **Đặt tên viết liền** | Mọi folder và file trong `src/modules/` viết liền, không gạch ngang/dưới. Ví dụ: `banhang`, `donhangmua`, `nhanvattuhanghoa`. |
+| 0.1 | **Đặt tên camelCase** | Mọi folder và file trong `src/modules/` dùng **camelCase** (chữ đầu thường). Ví dụ: `banHang`, `donHangMua`, `nhanVatTuHangHoa`, `khoHang`. ModuleIds cũng camelCase: `baoGia`, `khachHang`, `donViTinh`. |
 | 0.2 | **Modal z-index = 4000** | Mọi Modal xác nhận / nhập liệu: `zIndex: 4000` (overlay). Tuyệt đối không thấp hơn. |
 | 0.3 | **Toast 3200ms** | `showToast(msg, type, 3200)` — không dùng giá trị khác trừ khi yêu cầu riêng. |
 | 0.4 | **Lý do hủy** | Mọi hành động Hủy bỏ chứng từ (trạng thái → "Hủy bỏ") phải mở Modal yêu cầu nhập `ly_do_huy`. Không dùng `window.confirm` cho nghiệp vụ hủy. |
@@ -31,15 +31,29 @@ alwaysApply: true
 - **`src/utils/*.ts`** — format số, string, validation, tính thuế/tiền lưới.
 - `src/types/` và `src/utils/` **không** import từ `src/modules/`.
 
-### 1.2 Đường dẫn module chuẩn
+### 1.2 Đường dẫn module chuẩn (Sau tái cấu trúc Yêu cầu 28)
 
-| Cũ | Mới (chuẩn) |
-|----|-------------|
-| `purchase/mua-hang/` | `src/modules/purchase/muahang/` |
-| `purchase/don-hang-mua/` | `src/modules/purchase/donhangmua/` |
-| `inventory/nhan-vat-tu-hang-hoa/` | `src/modules/inventory/nhanvattuhanghoa/` |
-| `ban-hang`, `ban-lam-viec` | `banhang`, `banlamviec` |
-| `hop-dong` | `hopdong` |
+**Cấu trúc thư mục hiện tại:**
+```
+src/modules/
+├── crm/
+│   ├── shared/          # Utilities chung (addressApi, banksApi, modals...)
+│   ├── banHang/         # 8 sub-modules: baoGia, donHangBan, khachHang, hoaDon, hopDong, congNo, traLai, dieuKhoanThanhToan
+│   └── muaHang/         # 8 sub-modules: donHangMua, nhaCungCap, hopDongMua, nhanVatTuHangHoa, traLaiHangMua, traTienNcc, nhanHoaDon, giamGiaHangMua
+├── kho/
+│   ├── khoHang/         # VTHH core, DVT, Kho storage
+│   ├── tonKho/
+│   ├── nhanVatTuHangHoa/
+│   └── xuatKho/
+├── banlamviec/
+├── congviec/
+└── [other modules...]
+```
+
+**Quy tắc đặt tên:**
+- **Folders & ModuleIds:** 100% camelCase (ví dụ: `donHangMua`, `khachHang`, `khoHang`, `banLamViec`)
+- **Không dùng:** kebab-case, snake_case, hay gạch ngang trong tên folder/file module
+- **Import paths:** Tuyệt đối không import từ paths cũ (`inventory/`, `banhang/`, `purchase/`, `hopdong/`) - đã bị xóa
 
 ### 1.3 UI dùng chung
 
@@ -232,6 +246,25 @@ Tham chiếu: `dinh-kem-chung-tu.mdc` — xử lý upload/download file đính k
 
 ---
 
-## 11. Git & phiên bản
+## 11. Giao diện quy trình (Workflow Interface)
+
+- **CRM modules** (Bán hàng, Mua hàng): Giao diện mặc định (`index.tsx`) phải hiển thị **sơ đồ quy trình** (`quyTrinhBanHang.tsx` / `quyTrinhMuaHang.tsx`).
+- **Kết nối navigation:** Các nút/icon trên sơ đồ phải trỏ đúng `ModuleId` camelCase của sub-modules (ví dụ: `baoGia`, `donHangMua`, `khachHang`).
+- **Tránh:** Hiển thị form/list trực tiếp làm trang index; ưu tiên workflow visual để user dễ định hướng.
+
+---
+
+## 12. Nhất thể hóa dữ liệu VTHH (Data Unification)
+
+- **Nguồn duy nhất:** `src/modules/kho/khoHang/vatTuHangHoaApi.ts` — API chung cho Vật tư, Hàng hóa, Sản phẩm.
+- **Filter logic:**
+  - Bán hàng: `filterMode="ban"` → chỉ lấy `la_vthh_ban = true`.
+  - Mua hàng: Không filter, hiển thị toàn bộ VTHH.
+- **Tuyệt đối không tạo** API riêng cho Sản phẩm hay Hàng hóa — đã nhất thể hóa.
+- **Import paths:** Mọi module cần VTHH phải import từ `src/modules/kho/khoHang/vatTuHangHoaApi.ts` (không import từ inventory/kho/vatTuHangHoaApi.ts - đã xóa).
+
+---
+
+## 13. Git & phiên bản
 
 Sau mỗi tính năng quan trọng: nhắc commit. Tin nhắn commit: tiếng Việt có dấu, 5–15 từ, động từ mở đầu (Hoàn thành, Thêm, Sửa, Cập nhật, Refactor).

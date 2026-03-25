@@ -13,6 +13,10 @@ function LoadingFallback() {
 const BanLamViec = lazy(() => import('../modules/banlamviec').then((m) => ({ default: m.BanLamViec })))
 const CongViec = lazy(() => import('../modules/congviec').then((m) => ({ default: m.CongViec })))
 
+// CRM - Entry points (modules with internal tabs/workflow)
+const BanHang = lazy(() => import('../modules/crm/banHang').then((m) => ({ default: m.BanHang })))
+const MuaHang = lazy(() => import('../modules/crm/muaHang').then((m) => ({ default: m.MuaHang })))
+
 // CRM - Bán hàng
 const BaoGia = lazy(() => import('../modules/crm/banHang/baoGia/baoGia').then((m) => ({ default: m.BaoGia })))
 const DonHangBan = lazy(() => import('../modules/crm/banHang/donHangBan/donHangBan').then((m) => ({ default: m.DonHangBan })))
@@ -60,6 +64,10 @@ const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> 
   // Công việc
   banLamViec: BanLamViec,
   congViec: CongViec,
+  
+  // CRM - Entry points
+  banHang: BanHang,
+  muaHang: MuaHang,
   
   // CRM - Bán hàng
   baoGia: BaoGia,
