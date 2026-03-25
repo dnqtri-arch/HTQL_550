@@ -170,7 +170,7 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
             {label}
           </div>
           {label2 && (
-            <div style={{ fontSize: 9.5, color: T.muted, marginTop: 1 }}>{label2}</div>
+            <div style={{ fontSize: 9.5, fontWeight: 600, color: T.muted, marginTop: 1 }}>{label2}</div>
           )}
         </div>
       </button>

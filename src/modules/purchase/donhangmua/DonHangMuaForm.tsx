@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import ReactDOM from 'react-dom'
 import {
   Plus,
@@ -102,6 +102,7 @@ import { HTQL_FORM_ERROR_BORDER, htqlFocusAndScrollIntoView } from '../../../uti
 import { ThemDieuKhoanThanhToanModal } from '../ThemDieuKhoanThanhToanModal'
 import { ThemKhoModal } from '../../inventory/kho/ThemKhoModal'
 import { hinhThucGetAll, type HinhThucRecord } from '../hinhThucApi'
+import { getBanksVietnam, type BankItem } from '../banksApi'
 import { ThemHinhThucModal } from '../ThemHinhThucModal'
 import { mauHoaDonGetAll, type MauHoaDonItem } from '../mauHoaDonApi'
 import { ThemMauHoaDonModal } from '../ThemMauHoaDonModal'
@@ -525,12 +526,12 @@ const phieuChiStkInputBase = (chW: number): React.CSSProperties => ({
   fontVariantNumeric: 'tabular-nums',
   textAlign: 'right',
 })
-/** Cột NH — viết tắt, rộng vừa nội dung; cao đồng bộ `FORM_FIELD_HEIGHT`. */
+/** Cột NH — ưu tiên tên viết tắt (Short Name); rộng hơn để hiện đầy đủ gợi ý. */
 const phieuChiBankFieldCompact: React.CSSProperties = {
   ...inputStyle,
   flex: '1 1 auto',
-  minWidth: 44,
-  maxWidth: 92,
+  minWidth: 80,
+  maxWidth: 180,
   width: 0,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -1286,6 +1287,7 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
     return Array.isArray(a) && a.length ? a.map((x) => ({ ...x })) : []
   })
   const [showDinhKemPhieuChiModal, setShowDinhKemPhieuChiModal] = useState(false)
+  const [bankSuggestList, setBankSuggestList] = useState<BankItem[]>([])
   const [diaDiemSuggestions, setDiaDiemSuggestions] = useState<string[]>([])
   const [diaDiemSuggestionRect, setDiaDiemSuggestionRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const diaDiemDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1431,6 +1433,13 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
     window.addEventListener('mousedown', onMouseDown)
     return () => window.removeEventListener('mousedown', onMouseDown)
   }, [mauHoaDonDropdownOpen])
+
+  // Smart Suggest ngân hàng — load 1 lần khi form mở
+  useEffect(() => {
+    getBanksVietnam().then((list) => {
+      if (list.length > 0) setBankSuggestList(list)
+    })
+  }, [])
 
   const toIsoDate = (d: Date | null): string => {
     if (!d) return ''
@@ -3800,8 +3809,17 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                               onChange={(e) => setPhieuChiNganHangChi(e.target.value)}
                               readOnly={effectiveReadOnly}
                               disabled={effectiveReadOnly}
-                              title={phieuChiNganHangChi.trim() || undefined}
+                              title={phieuChiNganHangChi.trim() || 'Nhập tên ngân hàng — chọn từ gợi ý'}
+                              list="htql-bank-suggest-list"
+                              placeholder="Tên NH..."
                             />
+                            {bankSuggestList.length > 0 && (
+                              <datalist id="htql-bank-suggest-list">
+                                {bankSuggestList.map((b) => (
+                                  <option key={b.id} value={b.shortName}>{b.name}</option>
+                                ))}
+                              </datalist>
+                            )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '3 1 200px', minWidth: 120 }}>
                             <span style={phieuChiInlineLabel}>Tên người gửi</span>

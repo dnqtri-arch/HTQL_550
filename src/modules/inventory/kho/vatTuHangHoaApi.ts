@@ -168,11 +168,12 @@ export function vatTuHangHoaMaTuDong(tinhChat: string): string {
 export const VATTU_IMAGE_BASE = '/ssd_2t/htql_550/thietke/vattu/'
 
 /**
- * Task 3 (YC18): Lấy danh sách vật tư dùng trong Bán hàng.
- * Chỉ trả các bản ghi: Tính chất = 'Vật tư' AND la_vthh_ban = true.
+ * YC21 (Mục 8): Lấy danh sách vật tư dùng trong Bán hàng.
+ * Chỉ trả các bản ghi có la_vthh_ban = true (không phân biệt tính chất).
  * Dùng cho bộ chọn hàng hóa trong các nghiệp vụ Bán hàng (BaoGia, DonHangBan, HoaDonBan).
+ * Module Kho dùng vatTuHangHoaGetAll() để hiện tất cả.
  */
 export async function vatTuHangHoaGetForBanHang(): Promise<VatTuHangHoaRecord[]> {
   const all = await vatTuHangHoaGetAll()
-  return all.filter((r) => r.tinh_chat === 'Vật tư' && r.la_vthh_ban === true)
+  return all.filter((r) => r.la_vthh_ban === true)
 }
