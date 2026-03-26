@@ -114,6 +114,11 @@ export function chiTietToLines(ct: DonHangMuaChiTiet[]): DonHangMuaGridLineRow[]
 }
 
 /** Tổng tiền hàng, thuế, thanh toán từ các dòng lưới (có mã hàng). */
+/** Đơn giá dòng lưới (Báo giá dùng «Đơn giá», Đơn hàng mua dùng «ĐG mua»). */
+export function lineDonGiaCell(line: DonHangMuaGridLineRow): string {
+  return (line['Đơn giá'] ?? line['ĐG mua'] ?? '') as string
+}
+
 export function computeDonHangMuaFooterTotals(lines: DonHangMuaGridLineRow[]): {
   tongTienHang: number
   tienThue: number
@@ -123,7 +128,7 @@ export function computeDonHangMuaFooterTotals(lines: DonHangMuaGridLineRow[]): {
   let thue = 0
   for (const line of lines) {
     if ((line['Mã'] ?? '').trim() === '') continue
-    const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
+    const thanhTien = parseFloatVN(lineDonGiaCell(line)) * parseFloatVN(line['Số lượng'] ?? '')
     const pt = parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '')
     const tienThueDong = pt != null ? (thanhTien * pt) / 100 : 0
     hang += thanhTien
@@ -135,19 +140,19 @@ export function computeDonHangMuaFooterTotals(lines: DonHangMuaGridLineRow[]): {
 /** Enrich chi tiết với ĐG mua, % thuế từ VTHH — prefill / đối chiếu. */
 /** Hiển thị ô chỉ đọc: Thành tiền / Tiền thuế / Tổng tiền (đồng bộ parse % thuế). */
 export function formatDonHangLineThanhTienDisplay(line: DonHangMuaGridLineRow): string {
-  const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
+  const thanhTien = parseFloatVN(lineDonGiaCell(line)) * parseFloatVN(line['Số lượng'] ?? '')
   return formatSoTienHienThi(thanhTien)
 }
 
 export function formatDonHangLineTienThueDisplay(line: DonHangMuaGridLineRow): string {
-  const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
+  const thanhTien = parseFloatVN(lineDonGiaCell(line)) * parseFloatVN(line['Số lượng'] ?? '')
   const pt = parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '')
   const tienThue = pt != null ? (thanhTien * pt) / 100 : 0
   return formatSoTienHienThi(tienThue)
 }
 
 export function formatDonHangLineTongTienDisplay(line: DonHangMuaGridLineRow): string {
-  const thanhTien = parseFloatVN(line['ĐG mua'] ?? '') * parseFloatVN(line['Số lượng'] ?? '')
+  const thanhTien = parseFloatVN(lineDonGiaCell(line)) * parseFloatVN(line['Số lượng'] ?? '')
   const pt = parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '')
   const tienThue = pt != null ? (thanhTien * pt) / 100 : 0
   return formatSoTienHienThi(thanhTien + tienThue)

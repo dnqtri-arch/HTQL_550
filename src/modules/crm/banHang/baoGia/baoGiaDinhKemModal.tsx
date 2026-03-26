@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import type { BaoGiaAttachmentItem } from '../../../../types/baoGia'
 
-const ACCEPT_ATTR = '.jpg,.jpeg,.png,.pdf,.docx'
+/** Đính kèm thiết kế (dktk): AI, EPS, SVG, PDF, Corel (CDR), PSD, ảnh, TIFF */
+const ACCEPT_ATTR = '.ai,.eps,.svg,.pdf,.cdr,.psd,.jpg,.jpeg,.png,.tif,.tiff'
 
 function hopLeDinhDangFile(file: File): boolean {
   const n = file.name.toLowerCase()
-  return /\.(jpe?g|png|pdf|docx)$/i.test(n)
+  return /\.(ai|eps|svg|pdf|cdr|psd|jpe?g|png|tiff?)$/i.test(n)
 }
 
 /** 2026/BG/3 → 2026_bg_3 */
@@ -41,7 +42,7 @@ export function formatTgGiaoForAttachmentFile(d: Date): string {
 
 /**
  * `maKhPathPart`: kết quả `partMccForPath(ma_kh)` — chỉ mã KH; chưa có mã → `kh_unknown`.
- * Thời gian trong tên file: TG giao hàng nếu có, không thì TG tạo báo giá, không thì thời điểm hiện tại.
+ * Thời gian trong tên file: «Hiệu lực đến» (ngày hiệu lực báo giá) nếu có, không thì TG tạo báo giá, không thì thời điểm hiện tại.
  */
 export function buildBgAttachmentBaseName(
   soDon: string,
@@ -133,16 +134,31 @@ export function duongDanHienThi(item: BaoGiaAttachmentItem, soBaoGia: string, ma
   return `${buildBgAttachmentFolderVirtualPath(soBaoGia, maKhPathPart)}/`
 }
 
-function phanMoRongTheoMime(mime: string): string {
+function phanMoRongTheoTen(ten: string): string {
+  const n = ten.toLowerCase()
+  const m = n.match(/(\.[^./\\]+)$/)
+  return m ? m[1] : ''
+}
+
+function phanMoRongTheoMime(mime: string, tenGoc: string): string {
+  const t = phanMoRongTheoTen(tenGoc)
+  if (t) return t
   if (mime === 'application/pdf') return '.pdf'
-  if (mime.includes('wordprocessingml') || mime.includes('msword')) return '.docx'
+  if (mime === 'image/svg+xml') return '.svg'
   if (mime === 'image/png') return '.png'
+  if (mime === 'image/tiff') return '.tiff'
   return '.jpg'
 }
 
-async function docFileThanhDataUrl(file: File): Promise<string> {
+async function docFileThanhDataUrl(
+  file: File,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader()
+    r.onprogress = (ev) => {
+      if (ev.lengthComputable && ev.total > 0 && onProgress) onProgress(ev.loaded, ev.total)
+    }
     r.onload = () => resolve(String(r.result))
     r.onerror = () => reject(new Error('Đọc file lỗi'))
     r.readAsDataURL(file)
@@ -198,8 +214,13 @@ function laPdfDataUrl(data: string): boolean {
   return /^data:application\/pdf/i.test(data)
 }
 
-function loaiXemTruocTuData(data: string): 'image' | 'pdf' | 'other' {
+function laSvgDataUrl(data: string): boolean {
+  return /^data:image\/svg\+xml/i.test(data) || /^data:text\/xml.*svg/i.test(data)
+}
+
+function loaiXemTruocTuData(data: string): 'image' | 'pdf' | 'svg' | 'other' {
   if (laAnhDataUrl(data)) return 'image'
+  if (laSvgDataUrl(data)) return 'svg'
   if (laPdfDataUrl(data)) return 'pdf'
   return 'other'
 }
@@ -214,9 +235,47 @@ export function uocLuongByteTuDataUrl(dataUrl: string): number {
 }
 
 export function formatDungLuongHienThi(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B'
+  if (bytes < 1024) return `${Math.round(bytes)} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10_240 ? 1 : 0)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  const mib = 1024 * 1024
+  const gib = 1024 ** 3
+  const tib = 1024 ** 4
+  /** Từ ~1000 MB trở lên dùng GB/TB cho gọn (tránh số MB quá dài). */
+  if (bytes >= 1000 * mib) {
+    if (bytes >= tib) return `${(bytes / tib).toFixed(2)} TB`
+    return `${(bytes / gib).toFixed(2)} GB`
+  }
+  if (bytes < gib) return `${(bytes / mib).toFixed(bytes < 10 * mib ? 1 : 0)} MB`
+  if (bytes < tib) return `${(bytes / gib).toFixed(2)} GB`
+  return `${(bytes / tib).toFixed(2)} TB`
+}
+
+/** Ảnh thumbnail trực tiếp từ data URL — file quá lớn gây lag DOM / ảnh trắng; dùng icon. */
+const NGUONG_BYTE_HIEN_THI_ANH_THUMB = 800_000
+
+/** Thumbnail ảnh trong danh sách — lỗi giải mã / file lớn → icon. */
+function DinhKemThumbAnh({
+  src,
+  alt,
+}: {
+  src: string
+  alt: string
+}) {
+  const [loi, setLoi] = useState(false)
+  if (loi) {
+    return <FileText size={24} style={{ color: 'var(--accent)' }} />
+  }
+  return (
+    <img
+      loading="lazy"
+      decoding="async"
+      src={src}
+      alt={alt}
+      onError={() => setLoi(true)}
+      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+    />
+  )
 }
 
 export function formatNgayGioLuu(iso?: string): string {
@@ -229,6 +288,14 @@ export function formatNgayGioLuu(iso?: string): string {
   const hh = String(d.getHours()).padStart(2, '0')
   const mi = String(d.getMinutes()).padStart(2, '0')
   return `${dd}/${mm}/${yyyy} ${hh}:${mi}`
+}
+
+export type BaoGiaDinhKemPendingRow = {
+  id: string
+  ten: string
+  sizeBytes: number
+  phanTram: number
+  chu: string
 }
 
 export type BaoGiaDinhKemModalProps = {
@@ -245,14 +312,22 @@ export type BaoGiaDinhKemModalProps = {
   ngayGiaoHang: Date | null
   /** Fallback thời gian trong tên file khi chưa chọn TG giao hàng */
   ngayBaoGia: Date | null
+  /** Đã lưu báo giá xuống CSDL (hoặc mở từ bản ghi đã lưu, chưa sửa đính kèm). `false` = chỉ trên form, chưa Lưu. */
+  daDongBoLuuCsdl?: boolean
+  /**
+   * Tiến trình đọc file (upload vào bộ nhớ) — nên giữ state ở form cha để khi đóng popover vẫn hiện trên nút Đính kèm.
+   * Nếu không truyền, modal dùng state nội bộ (chỉ hiện khi popover mở).
+   */
+  pendingUploadRows?: BaoGiaDinhKemPendingRow[]
+  onPendingUploadRowsChange?: React.Dispatch<React.SetStateAction<BaoGiaDinhKemPendingRow[]>>
 }
 
 const THUMB_STRIP = 52
-/** Chiều cao cố định hàng nút Xóa — luôn chiếm chỗ để hover không đẩy layout / chiều cao form. */
-const THUMB_DELETE_ROW_H = 28
 const BG_DINH_KEM_TOI_DA_TEP = 10
-const BG_DINH_KEM_TOI_DA_BYTES = 5 * 1024 * 1024
-const PANEL_Z = 1060
+/** Đính kèm thiết kế (dktk): tối đa 2000 MB / file */
+const BG_DINH_KEM_TOI_DA_BYTES = 2000 * 1024 * 1024
+/** Trên overlay modal HTQL (z-index 4000) — popover đính kèm phải cao hơn (htql550.mdc). */
+const PANEL_Z = 4100
 const VIEWER_Z = 12000
 
 /** Đưa `alert` / `confirm` ra sau vài frame — tránh trình duyệt chặn khi vừa đóng hộp thoại chọn file. */
@@ -279,16 +354,23 @@ export function BaoGiaDinhKemModal({
   maKhPathPart,
   ngayGiaoHang,
   ngayBaoGia,
+  daDongBoLuuCsdl = true,
+  pendingUploadRows: pendingUploadRowsProp,
+  onPendingUploadRowsChange,
 }: BaoGiaDinhKemModalProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   /** Index file đang xem trong popup toàn màn (null = đóng). */
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
-  /** Thumbnail đang hover — nổi bật (không đổi kích thước ô) + hiện nút Xóa. */
-  const [hoverStripIdx, setHoverStripIdx] = useState<number | null>(null)
-  const [tienTrinh, setTienTrinh] = useState<{ phanTram: number; chu: string } | null>(null)
+  const [viewerMediaReady, setViewerMediaReady] = useState(false)
+  /** Dòng danh sách đang hover — viền nhẹ (không đổi kích thước ô thumbnail). */
+  const [hoverRowIdx, setHoverRowIdx] = useState<number | null>(null)
+  /** Tiến trình từng file đang đọc (trước khi confirm thêm vào báo giá) — fallback khi form không truyền state cha. */
+  const [pendingTienTrinhLocal, setPendingTienTrinhLocal] = useState<BaoGiaDinhKemPendingRow[]>([])
+  const pendingTienTrinh = pendingUploadRowsProp ?? pendingTienTrinhLocal
+  const setPendingTienTrinh = onPendingUploadRowsChange ?? setPendingTienTrinhLocal
   const [canhBaoDinhKem, setCanhBaoDinhKem] = useState<string | null>(null)
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 440 })
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 520 })
 
   const baoLoiDinhKem = useCallback((msg: string) => {
     setCanhBaoDinhKem(msg)
@@ -309,7 +391,7 @@ export function BaoGiaDinhKemModal({
     const el = anchorRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    const w = Math.min(560, Math.max(400, window.innerWidth - r.left - 12))
+    const w = Math.min(640, Math.max(420, window.innerWidth - r.left - 12))
     const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8))
     const top = r.bottom + 4
     setPos({ top, left, width: w })
@@ -331,6 +413,7 @@ export function BaoGiaDinhKemModal({
     if (!open) {
       setViewerIndex(null)
       setCanhBaoDinhKem(null)
+      /** Không xóa pending upload — tiếp tục hiển thị trên nút Đính kèm / khi mở lại popover. */
     }
   }, [open])
 
@@ -339,6 +422,10 @@ export function BaoGiaDinhKemModal({
       setViewerIndex(null)
     }
   }, [attachments.length, viewerIndex])
+
+  useEffect(() => {
+    setViewerMediaReady(false)
+  }, [viewerIndex])
 
   useEffect(() => {
     if (!open) return
@@ -407,12 +494,12 @@ export function BaoGiaDinhKemModal({
         const phan: string[] = []
         if (saiDinhDang.length > 0) {
           phan.push(
-            `Sai định dạng (chỉ .jpg, .png, .pdf, .docx) — sẽ bỏ qua, vẫn xử lý file hợp lệ:\n${saiDinhDang.map((n) => `• ${n}`).join('\n')}`
+            `Sai định dạng (chỉ file thiết kế: .ai, .eps, .svg, .pdf, .cdr, .psd, .jpg, .png, .tif/.tiff) — sẽ bỏ qua, vẫn xử lý file hợp lệ:\n${saiDinhDang.map((n) => `• ${n}`).join('\n')}`
           )
         }
         if (vuotDungLuong.length > 0) {
           phan.push(
-            `Dung lượng từ 5 MB trở lên — không được đính kèm (các file sau sẽ không được thêm):\n${vuotDungLuong.map((n) => `• ${n}`).join('\n')}`
+            `Dung lượng từ 2000 MB trở lên — không được đính kèm (các file sau sẽ không được thêm):\n${vuotDungLuong.map((n) => `• ${n}`).join('\n')}`
           )
         }
         baoLoiDinhKem(phan.join('\n\n'))
@@ -430,46 +517,57 @@ export function BaoGiaDinhKemModal({
         )
       }
 
+      const pendingIds = listXuLy.map((f, j) => `pending-${j}-${f.name}-${f.size}`)
+      setPendingTienTrinh(
+        listXuLy.map((f, j) => ({
+          id: pendingIds[j]!,
+          ten: f.name,
+          sizeBytes: f.size,
+          phanTram: 0,
+          chu: 'Đang chờ…',
+        }))
+      )
+
       const hangMoi: BaoGiaAttachmentItem[] = []
+      const capNhatPending = (j: number, phanTram: number, chu: string) => {
+        setPendingTienTrinh((prev) =>
+          prev.map((row) => (row.id === pendingIds[j] ? { ...row, phanTram, chu } : row))
+        )
+      }
+
       for (let i = 0; i < listXuLy.length; i++) {
         const file = listXuLy[i]
         const chiSo = attachments.length + hangMoi.length + 1
         const tenGoc = buildBgAttachmentBaseName(soBaoGia, maKhPathPart, ngayGiaoHang, ngayBaoGia, chiSo)
-        setTienTrinh({
-          phanTram: Math.round((i / listXuLy.length) * 100),
-          chu: `(${i + 1}/${listXuLy.length}) Đang xử lý: ${file.name}`,
-        })
+        capNhatPending(i, 2, 'Đang xử lý…')
         try {
-          const laAnh = file.type.startsWith('image/') || /\.(jpe?g|png)$/i.test(file.name)
+          const laAnhNen = /\.(jpe?g|png)$/i.test(file.name) || /^image\/(jpeg|png)$/i.test(file.type || '')
           let dataUrl: string
           let tenLuu: string
-          if (laAnh) {
-            setTienTrinh({
-              phanTram: Math.round(((i + 0.3) / listXuLy.length) * 100),
-              chu: `Nén ảnh giữ độ nét: ${file.name}`,
-            })
+          const sizeByte = file.size
+          if (laAnhNen) {
+            capNhatPending(i, 15, 'Đang nén ảnh…')
             const blob = await nenAnhThanhJpeg(file)
+            capNhatPending(i, 85, 'Đang đọc sau nén…')
             dataUrl = await blobThanhDataUrl(blob)
             tenLuu = `${tenGoc}.jpg`
           } else {
-            setTienTrinh({
-              phanTram: Math.round(((i + 0.5) / listXuLy.length) * 100),
-              chu: `Đọc file: ${file.name}`,
+            capNhatPending(i, 5, 'Đang đọc file…')
+            dataUrl = await docFileThanhDataUrl(file, (loaded, total) => {
+              const sub = total > 0 ? loaded / total : 0
+              capNhatPending(i, Math.min(99, Math.round(5 + sub * 94)), `Đang tải ${Math.round(sub * 100)}%`)
             })
-            dataUrl = await docFileThanhDataUrl(file)
-            const lower = file.name.toLowerCase()
-            if (lower.endsWith('.pdf')) tenLuu = `${tenGoc}.pdf`
-            else if (lower.endsWith('.docx')) tenLuu = `${tenGoc}.docx`
-            else tenLuu = `${tenGoc}${phanMoRongTheoMime(file.type || '')}`
+            const ext = phanMoRongTheoMime(file.type || '', file.name)
+            tenLuu = `${tenGoc}${ext}`
           }
-          hangMoi.push({ name: tenLuu, data: dataUrl })
+          hangMoi.push({ name: tenLuu, data: dataUrl, kich_thuoc_byte: sizeByte })
+          capNhatPending(i, 100, 'Đã đọc xong')
         } catch {
-          setTienTrinh({ phanTram: 100, chu: `Lỗi xử lý: ${file.name}` })
+          capNhatPending(i, 0, 'Lỗi xử lý')
         }
       }
+      setPendingTienTrinh([])
       if (hangMoi.length === 0) {
-        setTienTrinh({ phanTram: 100, chu: 'Hoàn tất' })
-        setTimeout(() => setTienTrinh(null), 500)
         return
       }
 
@@ -479,7 +577,6 @@ export function BaoGiaDinhKemModal({
           ? `Thêm 1 file đính kèm vào báo giá?\n\n${hangMoi[0].name}`
           : `Thêm ${n} file đính kèm vào báo giá?`
       if (!(await xacNhanDefer(msg))) {
-        setTienTrinh(null)
         return
       }
 
@@ -490,8 +587,6 @@ export function BaoGiaDinhKemModal({
         virtual_path: buildBgAttachmentFullVirtualPath(soBaoGia, maKhPathPart, x.name),
       }))
       onChange([...attachments, ...withMeta])
-      setTienTrinh({ phanTram: 100, chu: 'Đã thêm vào báo giá' })
-      setTimeout(() => setTienTrinh(null), 600)
     },
     [attachments, onChange, readOnly, soBaoGia, maKhPathPart, ngayGiaoHang, ngayBaoGia, baoLoiDinhKem, xacNhanDefer]
   )
@@ -549,13 +644,13 @@ export function BaoGiaDinhKemModal({
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="Đính kèm chứng từ"
+      aria-label="Đính kèm thiết kế"
       style={{
         position: 'fixed',
         top: pos.top,
         left: pos.left,
         width: pos.width,
-        maxHeight: 'min(420px, 50vh)',
+        maxHeight: 'min(560px, 62vh)',
         zIndex: PANEL_Z,
         background: 'var(--bg-primary)',
         border: '1px solid var(--border-strong)',
@@ -576,9 +671,9 @@ export function BaoGiaDinhKemModal({
           gap: '4px 10px',
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>Đính kèm chứng từ</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>Đính kèm thiết kế (dktk)</span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400, lineHeight: 1.35, flex: '1 1 200px', minWidth: 0 }}>
-          Đính kèm tối đa 10 file, các file .jpg, .png, .pdf, .docx — mỗi file phải nhỏ hơn 5 MB
+          Tối đa 10 file — .ai, .eps, .svg, .pdf, .cdr, .psd, .jpg, .png, .tif — mỗi file nhỏ hơn 2000 MB
         </span>
       </div>
       <div style={{ padding: '8px 10px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
@@ -622,73 +717,90 @@ export function BaoGiaDinhKemModal({
             >
               Thêm file…
             </button>
-            <div style={{ flex: '1 1 140px', minWidth: 100, minHeight: tienTrinh ? 22 : 0 }}>
-              {tienTrinh ? (
-                <div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: 10,
-                      color: 'var(--text-muted)',
-                      marginBottom: 4,
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{tienTrinh.chu}</span>
-                    <span style={{ flexShrink: 0 }}>{tienTrinh.phanTram}%</span>
+          </div>
+        )}
+        {pendingTienTrinh.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+            {pendingTienTrinh.map((row) => (
+              <div
+                key={row.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '6px 8px',
+                  borderRadius: 4,
+                  border: '1px dashed var(--accent)',
+                  background: 'rgba(230, 126, 34, 0.06)',
+                }}
+              >
+                <div style={{ width: THUMB_STRIP, height: THUMB_STRIP, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={22} style={{ color: 'var(--accent)', opacity: 0.85 }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.ten}>
+                    {row.ten}
                   </div>
-                  <div style={{ height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Dung lượng: {formatDungLuongHienThi(row.sizeBytes)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{row.chu}</div>
+                  <div style={{ height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden', marginTop: 6 }}>
                     <div
                       style={{
                         height: '100%',
-                        width: `${tienTrinh.phanTram}%`,
+                        width: `${row.phanTram}%`,
                         background: 'var(--accent)',
-                        transition: 'width 0.2s ease',
+                        transition: 'width 0.12s ease-out',
                       }}
                     />
                   </div>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ))}
           </div>
         )}
-        {attachments.length === 0 ? (
+        {attachments.length === 0 && pendingTienTrinh.length === 0 ? (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>Chưa có file đính kèm.</div>
-        ) : (
+        ) : attachments.length > 0 ? (
           <div
             style={{
               display: 'flex',
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 12,
+              flexDirection: 'column',
+              gap: 10,
+              padding: '4px 0 8px',
               overflowX: 'hidden',
-              overflowY: 'visible',
-              padding: '8px 6px 10px',
-              alignItems: 'flex-start',
-              flexShrink: 0,
             }}
           >
             {attachments.map((item, idx) => {
-              const isHover = hoverStripIdx === idx
+              const isHover = hoverRowIdx === idx
               const isViewer = viewerIndex === idx
-              const anDiemKhac = hoverStripIdx !== null && hoverStripIdx !== idx
               const nhanManh = isHover || isViewer
+              const bytesRaw = item.kich_thuoc_byte ?? uocLuongByteTuDataUrl(item.data)
+              const bytes = Number.isFinite(bytesRaw) && bytesRaw > 0 ? bytesRaw : uocLuongByteTuDataUrl(item.data)
+              const duongDan = duongDanHienThi(item, soBaoGia, maKhPathPart)
+              const anhNhoDuoc =
+                (laAnhDataUrl(item.data) || laSvgDataUrl(item.data)) && bytes < NGUONG_BYTE_HIEN_THI_ANH_THUMB
+              const trangThaiLuu = daDongBoLuuCsdl
+                ? 'Đã lưu trong dữ liệu báo giá'
+                : 'Sẵn sàng lưu vào dữ liệu báo giá — bấm Lưu trên form'
               return (
                 <div
-                  key={`strip-${item.name}-${idx}`}
+                  key={`row-${item.name}-${idx}`}
+                  role="listitem"
                   style={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 6,
-                    flex: '0 0 auto',
-                    position: 'relative',
-                    zIndex: isHover ? 3 : 1,
+                    flexDirection: 'row',
+                    alignItems: 'stretch',
+                    gap: 10,
+                    padding: '6px 8px',
+                    borderRadius: 4,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-secondary)',
+                    boxShadow: nhanManh ? '0 0 0 1px var(--accent)' : 'none',
+                    transition: 'box-shadow 0.15s ease',
                   }}
-                  onMouseEnter={() => setHoverStripIdx(idx)}
-                  onMouseLeave={() => setHoverStripIdx((h) => (h === idx ? null : h))}
+                  onMouseEnter={() => setHoverRowIdx(idx)}
+                  onMouseLeave={() => setHoverRowIdx((h) => (h === idx ? null : h))}
                 >
                   <button
                     type="button"
@@ -697,10 +809,12 @@ export function BaoGiaDinhKemModal({
                     style={{
                       width: THUMB_STRIP,
                       height: THUMB_STRIP,
+                      minWidth: THUMB_STRIP,
+                      minHeight: THUMB_STRIP,
                       padding: 0,
                       border: '1px solid var(--border)',
                       borderRadius: 4,
-                      background: 'var(--bg-secondary)',
+                      background: 'var(--bg-primary)',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -708,52 +822,65 @@ export function BaoGiaDinhKemModal({
                       overflow: 'hidden',
                       boxSizing: 'border-box',
                       flexShrink: 0,
-                      opacity: anDiemKhac ? 0.62 : 1,
-                      transition: 'opacity 0.15s ease, box-shadow 0.15s ease',
-                      boxShadow: nhanManh
-                        ? '0 0 0 2px var(--accent), 0 4px 14px rgba(0,0,0,0.14)'
-                        : 'none',
                     }}
                   >
-                    {laAnhDataUrl(item.data) ? (
-                      <img src={item.data} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {anhNhoDuoc && laAnhDataUrl(item.data) ? (
+                      <DinhKemThumbAnh src={item.data} alt="" />
+                    ) : anhNhoDuoc && laSvgDataUrl(item.data) ? (
+                      <img loading="lazy" decoding="async" src={item.data} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     ) : laPdfDataUrl(item.data) ? (
                       <FileText size={24} style={{ color: 'var(--accent)' }} />
                     ) : (
                       <FileText size={24} style={{ color: '#2b579a' }} />
                     )}
                   </button>
-                  {!readOnly ? (
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 0 }}>
                     <div
                       style={{
-                        height: THUMB_DELETE_ROW_H,
-                        minHeight: THUMB_DELETE_ROW_H,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        width: '100%',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}
+                      title={item.name}
                     >
+                      {item.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Dung lượng: {formatDungLuongHienThi(bytes)}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--text-muted)',
+                        marginTop: 2,
+                        wordBreak: 'break-all',
+                        lineHeight: 1.35,
+                      }}
+                      title={duongDan}
+                    >
+                      Thư mục: {duongDan}
+                    </div>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>{trangThaiLuu}</span>
+                  </div>
+                  {!readOnly ? (
+                    <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                       <button
                         type="button"
-                        tabIndex={isHover ? 0 : -1}
-                        aria-hidden={!isHover}
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          if (!isHover) return
                           xoaTai(idx)
                         }}
                         style={{
                           ...nutPhu,
                           fontSize: 10,
-                          padding: '3px 10px',
+                          padding: '6px 12px',
                           color: 'var(--accent)',
                           borderColor: 'var(--accent)',
                           fontWeight: 600,
-                          visibility: isHover ? 'visible' : 'hidden',
-                          pointerEvents: isHover ? 'auto' : 'none',
                         }}
                       >
                         Xóa
@@ -764,7 +891,7 @@ export function BaoGiaDinhKemModal({
               )
             })}
           </div>
-        )}
+        ) : null}
         {canhBaoDinhKem ? (
           <div
             role="alert"
@@ -854,17 +981,95 @@ export function BaoGiaDinhKemModal({
           >
             <ChevronLeft size={28} strokeWidth={2.5} />
           </button>
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              position: 'relative',
+            }}
+          >
             {viewerKind === 'image' && (
-              <img src={viewerItem.data} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              <>
+                {!viewerMediaReady && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      color: '#eee',
+                      fontSize: 12,
+                    }}
+                  >
+                    <Loader2 size={36} className="htql-spin" />
+                    Đang giải mã ảnh…
+                  </div>
+                )}
+                <img
+                  src={viewerItem.data}
+                  alt=""
+                  decoding="async"
+                  onLoad={() => setViewerMediaReady(true)}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    opacity: viewerMediaReady ? 1 : 0,
+                    transition: 'opacity 0.15s ease',
+                  }}
+                />
+              </>
+            )}
+            {viewerKind === 'svg' && (
+              <>
+                {!viewerMediaReady && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#eee',
+                    }}
+                  >
+                    <Loader2 size={32} className="htql-spin" />
+                  </div>
+                )}
+                <img
+                  src={viewerItem.data}
+                  alt=""
+                  decoding="async"
+                  onLoad={() => setViewerMediaReady(true)}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    opacity: viewerMediaReady ? 1 : 0,
+                  }}
+                />
+              </>
             )}
             {viewerKind === 'pdf' && (
-              <iframe title="PDF" src={viewerItem.data} style={{ width: '100%', height: '100%', minHeight: 400, border: 'none', background: '#fff' }} />
+              <iframe
+                title="PDF"
+                src={viewerItem.data}
+                onLoad={() => setViewerMediaReady(true)}
+                style={{ width: '100%', height: '100%', minHeight: 400, border: 'none', background: '#fff' }}
+              />
             )}
             {viewerKind === 'other' && (
               <div style={{ color: '#ccc', fontSize: 12, textAlign: 'center', padding: 24 }}>
                 <FileText size={48} style={{ marginBottom: 8, opacity: 0.7 }} />
-                <p>Không xem trước DOCX trực tiếp. File đã lưu trong dữ liệu báo giá.</p>
+                <p>Không xem trước trực tiếp (AI, EPS, PSD, CDR, TIFF…). File đã lưu trong dữ liệu báo giá.</p>
               </div>
             )}
           </div>

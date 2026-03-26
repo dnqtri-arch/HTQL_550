@@ -127,6 +127,9 @@ function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: s
   const doiChieu = d.doi_chieu_don_mua_id ?? legacyDx
   return {
     id: d.id,
+    loai_khach_hang: d.loai_khach_hang ?? undefined,
+    ten_nguoi_lien_he: d.ten_nguoi_lien_he ?? undefined,
+    so_dien_thoai_lien_he: d.so_dien_thoai_lien_he ?? undefined,
     tinh_trang: d.tinh_trang ?? 'Chưa thực hiện',
     ngay_bao_gia: d.ngay_bao_gia ?? '',
     so_bao_gia: d.so_bao_gia ?? '',
@@ -144,6 +147,9 @@ function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: s
     tong_tien_hang: typeof d.tong_tien_hang === 'number' ? d.tong_tien_hang : 0,
     tong_thue_gtgt: typeof d.tong_thue_gtgt === 'number' ? d.tong_thue_gtgt : 0,
     tong_thanh_toan: typeof d.tong_thanh_toan === 'number' ? d.tong_thanh_toan : 0,
+    tl_ck: typeof d.tl_ck === 'number' ? d.tl_ck : undefined,
+    tien_ck: typeof d.tien_ck === 'number' ? d.tien_ck : undefined,
+    so_dien_thoai: d.so_dien_thoai ?? undefined,
     so_chung_tu_cukcuk: d.so_chung_tu_cukcuk ?? '',
     doi_chieu_don_mua_id: doiChieu ?? undefined,
     attachments: Array.isArray((d as { attachments?: BaoGiaAttachmentItem[] }).attachments)
@@ -311,15 +317,24 @@ export function baoGiaGetChiTiet(baoGiaId: string): BaoGiaChiTiet[] {
   return _chiTietList.filter((c) => c.bao_gia_id === baoGiaId)
 }
 
-/** Tình trạng báo giá sau khi gửi cho khách hàng. */
-export const TINH_TRANG_BAO_GIA_DA_GUI_KHACH = 'Đã gửi khách'
+/** [YC30] Trạng thái báo giá - 5 options mới */
+export const TINH_TRANG_BAO_GIA = [
+  'Mới tạo',
+  'Đã gửi KH',
+  'Đã chuyển ĐHB',
+  'Đã chuyển HĐ',
+  'KH không đồng ý',
+] as const
 
-/** Tình trạng báo giá sau khi nhập kho (từ phiếu NVTHH có đối chiếu). */
+export const TINH_TRANG_BAO_GIA_DA_GUI_KHACH = 'Đã gửi KH'
 export const TINH_TRANG_NVTHH_DA_NHAP_KHO = 'Đã nhập kho'
 
 /** Ghép payload PUT từ bản ghi + chi tiết (dùng modal hủy/phục hồi và đồng bộ tình trạng). */
 export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGiaChiTiet[]): BaoGiaCreatePayload {
   return {
+    loai_khach_hang: row.loai_khach_hang,
+    ten_nguoi_lien_he: row.ten_nguoi_lien_he,
+    so_dien_thoai_lien_he: row.so_dien_thoai_lien_he,
     tinh_trang: row.tinh_trang,
     ngay_bao_gia: row.ngay_bao_gia,
     so_bao_gia: row.so_bao_gia,
@@ -337,6 +352,9 @@ export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGia
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
     tong_thanh_toan: row.tong_thanh_toan,
+    tl_ck: row.tl_ck,
+    tien_ck: row.tien_ck,
+    so_dien_thoai: row.so_dien_thoai,
     so_chung_tu_cukcuk: row.so_chung_tu_cukcuk ?? '',
     doi_chieu_don_mua_id: row.doi_chieu_don_mua_id,
     attachments: row.attachments?.length ? row.attachments.map((a) => ({ ...a })) : undefined,
@@ -404,6 +422,9 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
   const id = `bg${Date.now()}`
   const baoGiaRow: BaoGiaRecord = {
     id,
+    loai_khach_hang: payload.loai_khach_hang,
+    ten_nguoi_lien_he: payload.ten_nguoi_lien_he,
+    so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_bao_gia: payload.ngay_bao_gia,
     so_bao_gia: payload.so_bao_gia,
@@ -421,6 +442,9 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
     tong_thanh_toan: payload.tong_thanh_toan,
+    tl_ck: payload.tl_ck,
+    tien_ck: payload.tien_ck,
+    so_dien_thoai: payload.so_dien_thoai,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
     doi_chieu_don_mua_id: payload.doi_chieu_don_mua_id ?? undefined,
     attachments: payload.attachments ? [...payload.attachments] : undefined,
@@ -489,6 +513,9 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
   if (idx < 0) return
   _baoGiaList[idx] = {
     id: baoGiaId,
+    loai_khach_hang: payload.loai_khach_hang,
+    ten_nguoi_lien_he: payload.ten_nguoi_lien_he,
+    so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_bao_gia: payload.ngay_bao_gia,
     so_bao_gia: payload.so_bao_gia,
@@ -506,6 +533,9 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
     tong_thanh_toan: payload.tong_thanh_toan,
+    tl_ck: payload.tl_ck,
+    tien_ck: payload.tien_ck,
+    so_dien_thoai: payload.so_dien_thoai,
     so_chung_tu_cukcuk: payload.so_chung_tu_cukcuk ?? '',
     doi_chieu_don_mua_id: payload.doi_chieu_don_mua_id ?? undefined,
     attachments: payload.attachments ? [...payload.attachments] : undefined,

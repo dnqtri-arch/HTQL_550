@@ -1,7 +1,7 @@
 /**
  * API danh mục Khách hàng — phân hệ Bán hàng.
  * Dữ liệu ĐỘC LẬP hoàn toàn với NhaCungCap (khác key localStorage, khác API endpoint).
- * Tuân thủ htql-core-standards.mdc: viết liền, zIndex 4000, Toast 3200ms.
+ * Tuân thủ htql550.mdc: viết liền, zIndex 4000, Toast 3200ms.
  */
 
 export type LoaiKhachHang = 'to_chuc' | 'ca_nhan'

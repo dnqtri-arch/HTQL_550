@@ -1,6 +1,6 @@
 ---
 description: Nhận vật tư hàng hóa (NVTHH) — tách form giống pattern Đơn hàng mua
-globs: src/modules/inventory/nhan-vat-tu-hang-hoa/NhanVatTuHangHoa*.tsx, src/modules/inventory/nhan-vat-tu-hang-hoa/nhanVatTuHangHoa*.ts
+globs: ["src/modules/kho/nhanVatTuHangHoa/**/*.tsx", "src/modules/kho/nhanVatTuHangHoa/**/*.ts", "src/modules/crm/muaHang/donHangMua/*Form*.tsx"]
 alwaysApply: false
 ---
 

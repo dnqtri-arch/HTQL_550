@@ -3,7 +3,7 @@
 API danh mục Khách hàng — HTQL_550 Phân hệ Bán hàng.
 Độc lập hoàn toàn với api/nhacungcap.
 Endpoint: /api/khach-hang
-Tuân thủ htql-core-standards.mdc: viết liền, không gạch ngang trong định danh Python.
+Tuân thủ htql550.mdc: viết liền, không gạch ngang trong định danh Python.
 """
 
 import json

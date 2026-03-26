@@ -7,10 +7,17 @@ export interface BaoGiaAttachmentItem {
   data: string
   saved_at?: string
   virtual_path?: string
+  /** Dung lượng file gốc (byte) khi đính kèm — hiển thị chính xác khi data URL quá lớn / không ước lượng tốt. */
+  kich_thuoc_byte?: number
 }
 
 export interface BaoGiaRecord {
   id: string
+  /** Loại khách (form Báo giá): cá nhân / doanh nghiệp — tối đa một giá trị. */
+  loai_khach_hang?: 'ca_nhan' | 'doanh_nghiep' | null
+  /** KH tổ chức — người liên hệ / SĐT (cùng một cụm trên form). */
+  ten_nguoi_lien_he?: string
+  so_dien_thoai_lien_he?: string
   tinh_trang: string
   ngay_bao_gia: string
   so_bao_gia: string
@@ -29,6 +36,9 @@ export interface BaoGiaRecord {
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
+  tl_ck?: number | null
+  tien_ck?: number | null
+  so_dien_thoai?: string
   so_chung_tu_cukcuk: string
   doi_chieu_don_mua_id?: string
   attachments?: BaoGiaAttachmentItem[]
@@ -99,6 +109,9 @@ export interface BaoGiaChiTiet {
 }
 
 export interface BaoGiaCreatePayload {
+  loai_khach_hang?: 'ca_nhan' | 'doanh_nghiep' | null
+  ten_nguoi_lien_he?: string
+  so_dien_thoai_lien_he?: string
   tinh_trang: string
   ngay_bao_gia: string
   so_bao_gia: string
@@ -116,6 +129,9 @@ export interface BaoGiaCreatePayload {
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
+  tl_ck?: number | null
+  tien_ck?: number | null
+  so_dien_thoai?: string
   so_chung_tu_cukcuk: string
   doi_chieu_don_mua_id?: string
   attachments?: BaoGiaAttachmentItem[]

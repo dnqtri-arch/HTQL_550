@@ -63,10 +63,38 @@
   text-decoration: underline;
 }
 
-.chiTietDataRow {
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
+/* [YC30+YC32] Lưới chi tiết VTHH — zebra stripes + hover effects */
+.chiTietDataRow > td {
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
 }
 
-.chiTietDataRow:hover {
-  background: var(--hover-bg, #f9fafb);
+/* Zebra stripes - dòng chẵn nhẹ hơn */
+.chiTietDataRow:nth-child(even) > td {
+  background-color: rgba(107, 114, 128, 0.03);
+}
+
+/* Hover effects - ghi đè zebra stripes */
+.chiTietDataRow:hover > td,
+.chiTietDataRow:focus-within > td {
+  background-color: rgba(230, 126, 34, 0.06) !important;
+  border-top-color: rgba(230, 126, 34, 0.24) !important;
+  border-bottom-color: rgba(230, 126, 34, 0.24) !important;
+}
+@supports (background-color: color-mix(in srgb, white, black)) {
+  .chiTietDataRow:hover > td,
+  .chiTietDataRow:focus-within > td {
+    background-color: color-mix(in srgb, var(--row-selected-bg) 48%, var(--bg-secondary)) !important;
+  }
+}
+
+/* Viền ô nhập trong dòng đang hover / đang focus */
+.chiTietDataRow:hover :global(.misa-input-solo),
+.chiTietDataRow:focus-within :global(.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}
+.chiTietDataRow:hover :global(select.misa-input-solo),
+.chiTietDataRow:focus-within :global(select.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
 }

@@ -196,6 +196,47 @@ export function formatPhanTramInput(s: string): string {
 }
 
 /**
+ * TLCK (%) trên form Báo giá — tối đa **3** chữ số thập phân sau dấu phẩy (khác `formatPhanTramInput` 2 số).
+ */
+export function formatTlCkBaoGiaInput(s: string): string {
+  let cleaned = (s || '').replace(/[^\d.,]/g, '')
+  if (!cleaned.includes(',') && cleaned.includes('.')) {
+    const parts = cleaned.split('.')
+    const nonFirst = parts.slice(1)
+    const allNonFirstAre3 = nonFirst.every((p) => p.length === 3)
+    const firstLen = parts[0].length
+    const looksLikeThousands =
+      (allNonFirstAre3 && (firstLen >= 3 && firstLen % 3 === 0 || parts.length > 2)) ||
+      (parts.length === 2 && parts[1].length >= 3)
+    if (looksLikeThousands) cleaned = parts.join('')
+  }
+  const lastSep = findDecimalSeparatorIndex(cleaned)
+  const hasDecimal = lastSep >= 0
+  let intStr: string
+  let decStr: string
+  if (!hasDecimal) {
+    intStr = cleaned.replace(/\./g, '').replace(/,/g, '')
+    decStr = ''
+  } else {
+    intStr = cleaned.slice(0, lastSep).replace(/\./g, '').replace(/,/g, '')
+    const decStrRaw = cleaned.slice(lastSep + 1).replace(/\D/g, '')
+    decStr = decStrRaw.slice(0, 3)
+  }
+  if (!intStr && !decStr) return ''
+  const intPart = stripLeadingZeros(intStr || '0')
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
+  if (hasDecimal) return `${formattedInt}${DECIMAL_SEP}${decStr}`
+  return formattedInt
+}
+
+/** Chuẩn hóa TLCK sau blur — luôn đủ 3 chữ số thập phân (vd. `0,000`). */
+export function chuanHoaTlCkBaoGiaSauBlur(s: string): string {
+  const n = parseFloatVN((s ?? '').trim() || '0')
+  if (!Number.isFinite(n)) return formatSoThapPhan(0, 3)
+  return formatSoThapPhan(n, 3)
+}
+
+/**
  * Định dạng số thập phân: hàng nghìn (.), thập phân (,).
  * decimals: số chữ số thập phân (mặc định 2).
  * VD: 1234567.5 -> "1.234.567,50"

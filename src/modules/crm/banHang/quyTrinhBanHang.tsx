@@ -12,7 +12,7 @@
  *   Col 3: Thu tiền khách hàng (trên) [không có cặp dưới]
  *   Cuối:  → Báo cáo phân tích
  *
- * Tuân thủ htql-core-standards.mdc: viết liền, zIndex 4000, Toast 3200ms.
+ * Tuân thủ htql550.mdc: viết liền, zIndex 4000, Toast 3200ms.
  */
 
 import { useState } from 'react'

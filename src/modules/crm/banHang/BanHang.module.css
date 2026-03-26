@@ -374,8 +374,29 @@
   vertical-align: middle;
 }
 
-.chiTietTable tbody tr:hover td {
-  background: rgba(230,126,34,0.06);
+/* [YC30] Hover effects đồng bộ với Form ĐHM */
+.chiTietTable tbody tr > td {
+  transition: background-color 0.14s ease;
+}
+.chiTietTable tbody tr:hover > td,
+.chiTietTable tbody tr:focus-within > td {
+  background-color: rgba(230, 126, 34, 0.06) !important;
+}
+@supports (background-color: color-mix(in srgb, white, black)) {
+  .chiTietTable tbody tr:hover > td,
+  .chiTietTable tbody tr:focus-within > td {
+    background-color: color-mix(in srgb, var(--row-selected-bg) 48%, var(--bg-secondary)) !important;
+  }
+}
+
+/* Viền ô nhập trong dòng đang hover / đang focus */
+.chiTietTable tbody tr:hover :global(.misa-input-solo),
+.chiTietTable tbody tr:focus-within :global(.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}
+.chiTietTable tbody tr:hover :global(select.misa-input-solo),
+.chiTietTable tbody tr:focus-within :global(select.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
 }
 
 .chiTietInput {

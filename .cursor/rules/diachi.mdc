@@ -1,0 +1,42 @@
+---
+description: Gợi ý địa chỉ VN — Goong/Openmap API, không trim khi gõ, chỉ gọi sau ≥3 ký tự
+globs: ["src/**/*Form*.tsx", "src/**/addressAutocompleteApi.ts", "src/**/ThemKho*.tsx"]
+alwaysApply: false
+---
+
+# Logic gợi ý địa chỉ (Address Logic)
+
+## 1. API key — không hardcode
+
+- **Không** ghi trực tiếp API key Goong (hay Openmap) trong mã nguồn (string literal, comment, log).
+- **Chỉ** lấy qua biến môi trường Vite:
+  - `VITE_GOONG_API_KEY` — Goong Place AutoComplete + Geocode (cùng key)
+  - `VITE_OPENMAP_API_KEY` — Openmap (dự phòng)
+- Trong code: `import.meta.env.VITE_GOONG_API_KEY` (hoặc hàm bọc như `getGoongKey()` trong `addressAutocompleteApi.ts`).
+- File mẫu: `.env.example` chỉ có **placeholder** (rỗng hoặc `your_key_here`), **không** commit key thật.
+
+## 2. Khi nào được gọi API
+
+- Chỉ gọi chuỗi gợi ý (Goong → Openmap → Nominatim) sau khi chuỗi tìm kiếm **đã trim** và có **ít nhất 3 ký tự**.
+- Logic tập trung: `suggestAddressVietnam()` — dưới 3 ký tự trả về `[]`, không `fetch`.
+- Component vẫn có thể debounce; ngưỡng 3 ký tự là **bắt buộc** ở tầng API để tránh request sớm.
+
+## 3. Goong — Autocomplete V2 + Geocode (địa chỉ đầy đủ)
+
+- **Autocomplete V2:** `https://rsapi.goong.io/v2/place/autocomplete` — lấy `predictions[]` (có `place_id`, `description`).
+- **Geocode V2 / Geocode:** với mỗi `place_id` (tối đa 8 gợi ý/sốt), gọi `https://rsapi.goong.io/v2/geocode` hoặc dự phòng `https://rsapi.goong.io/geocode` (cùng `api_key`) để có địa chỉ chuẩn (số nhà, đường, phường/xã, tỉnh/TP), ví dụ: *Số 78, Đường Nguyễn Hiền, P. Tân An, TP. Cần Thơ*.
+- Ưu tiên ghép từ `address_components` (Geocode); nếu không đủ thì dùng `formatted_address` đã `cleanAddressForDisplay`.
+- Không có `place_id` hoặc Geocode lỗi → dùng `description` từ Autocomplete (đã làm sạch).
+
+## 4. Ô địa chỉ — giữ nguyên khoảng trắng khi gõ
+
+- **Không** dùng `.trim()` trên chuỗi đang nhập khi **đồng bộ từ state** (`dia_chi`, `dia_chi_cong_trinh`, …) **sang danh sách ô Địa điểm giao hàng** hoặc ngược lại trong `useEffect` — trim sẽ xóa dấu cách cuối câu mỗi lần render và khiến **không gõ được khoảng trắng** hoặc mất từ đang soạn.
+- **Trim** chỉ khi **lưu payload / gửi API** hoặc so sánh "có nội dung hay không", không trim liên tục trên đường đi của controlled input.
+- Ô gợi ý: chọn gợi ý thì gán full chuỗi; không chặn phím Space trên `input` (trừ khi có lý do UX riêng, phải ghi chú trong code).
+- Popover gợi ý: `createPortal`, `position: fixed`, `z-index` cao.
+
+## 5. Tham chiếu implementation
+
+- **API:** `src/modules/crm/shared/addressAutocompleteApi.ts`
+- **Forms:** `DonHangMuaForm.tsx`, `BaoGiaForm.tsx`, `ThemKhoModal.tsx`
+- **Rule cấu trúc tổng:** `htql550.mdc`

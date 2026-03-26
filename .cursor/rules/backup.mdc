@@ -1,0 +1,70 @@
+---
+description: Khôi phục hệ thống HTQL_550 — Xử lý OOM và mở lại chương trình
+globs: []
+alwaysApply: true
+---
+
+# Khôi phục hệ thống (System Recovery)
+
+## 1. Xử lý lỗi OOM (Out Of Memory)
+
+Khi Cursor hiện hộp thoại **reason: 'oom', code: '-536870904'** nghĩa là cửa sổ bị tắt do **hết bộ nhớ**.
+
+### 1.1 Cách xử lý ngay
+
+1. **Reopen (Mở lại)**  
+   Bấm **Reopen** để mở lại cửa sổ. Cursor thường khôi phục workspace.
+
+2. **Giảm tải bộ nhớ khi mở lại**  
+   - Tick **"Don't restore editors"** nếu không cần mở lại đúng các file cũ — giúp Cursor nhẹ hơn khi khởi động.  
+   - Sau khi mở lại, chỉ mở vài file cần làm việc, đóng bớt tab không dùng.
+
+3. **Lưu dự án trước khi làm việc nặng**  
+   - Dự án đã dùng Git: chạy `git add -A` và `git commit -m "..."` để lưu trạng thái.  
+   - Sau khi OOM, code đã commit vẫn an toàn trong repo.
+
+### 1.2 Giảm nguy cơ OOM về sau
+
+- Đóng bớt tab/file không dùng trong Cursor.  
+- Tắt extension hoặc tính năng không cần thiết.  
+- Nếu máy có ít RAM: tránh mở thêm trình duyệt/tool nặng khi đang dùng Cursor.  
+- Định kỳ chạy `git prune` nếu Git báo nhiều loose objects (giúp repo gọn hơn).
+
+### 1.3 Lưu ý
+
+- OOM là lỗi **môi trường/IDE**, không phải lỗi code dự án.  
+- Không cần sửa source HTQL_550 để "fix" OOM; cần giảm tải bộ nhớ hoặc tăng RAM / đóng bớt ứng dụng.
+
+---
+
+## 2. Mở lại chương trình (HTQL_550)
+
+Khi người dùng nói **mở lại chương trình** (hoặc cùng ý: *mở lại giao diện*, *mở lại dự án để xem*, *chạy lại app*, *tiếp tục phát triển / kiểm tra giao diện* trong ngữ cảnh HTQL_550), **bắt buộc thực thi** — không chỉ hướng dẫn.
+
+### 2.1 Thư mục và lệnh
+
+- **Thư mục:** gốc dự án HTQL_550 (có `package.json`).
+- **Lệnh chính:** `npm run dev` — **Node API** (`server/donViTinhServer.js`, port **3001**) + **Vite** (port **5173**), qua `concurrently`.
+
+### 2.2 Windows PowerShell
+
+- **Không** dùng `cd ... && npm run dev` — trên nhiều bản PowerShell `&&` lỗi cú pháp.
+- **Dùng:** `Set-Location "đường_dẫn_HTQL_550"; npm run dev` (hoặc tương đương một dòng hợp lệ với shell đang dùng).
+
+### 2.3 Đã chạy rồi / chạy nền
+
+- Nếu terminal đã có `npm run dev` cho đúng dự án → **không** khởi động trùng; chỉ nhắc URL.
+- Nếu chưa → chạy `npm run dev` ở **nền** (background) hoặc terminal phù hợp, rồi **đọc output** để xác nhận.
+
+### 2.4 Kiểm tra sau khi chạy
+
+- **Vite:** log có `Local: http://localhost:5173/`.
+- **API:** log có dòng `[HTQL_550] API đơn vị tính: http://localhost:3001/...`
+- Nếu log báo `node server/donViTinhServer.js exited` hoặc không thấy API lắng nghe **3001** → chạy thêm **một lệnh nền** tại gốc dự án: `node server/donViTinhServer.js` để giao diện dùng đủ DVT / NCC / CCCD.
+
+### 2.5 Thông báo cho user
+
+- Giao diện: **http://localhost:5173/** (hoặc port khác nếu 5173 đã dùng)
+- API: **http://localhost:3001/**
+
+Đây là **giao diện chính** HTQL_550 (React + Vite), không phải ứng dụng khác trừ khi user nói rõ.

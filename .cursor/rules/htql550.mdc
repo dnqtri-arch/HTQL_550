@@ -16,8 +16,8 @@ alwaysApply: true
 | # | Quy tắc | Chi tiết |
 |---|---------|---------|
 | 0.1 | **Đặt tên camelCase** | Mọi folder và file trong `src/modules/` dùng **camelCase** (chữ đầu thường). Ví dụ: `banHang`, `donHangMua`, `nhanVatTuHangHoa`, `khoHang`. ModuleIds cũng camelCase: `baoGia`, `khachHang`, `donViTinh`. |
-| 0.2 | **Modal z-index = 4000** | Mọi Modal xác nhận / nhập liệu: `zIndex: 4000` (overlay). Tuyệt đối không thấp hơn. |
-| 0.3 | **Toast 3200ms** | `showToast(msg, type, 3200)` — không dùng giá trị khác trừ khi yêu cầu riêng. |
+| 0.2 | **Thang z-index (UI xếp lớp)** | **Modal** (overlay xác nhận / nhập liệu): `zIndex: 4000` — tuyệt đối không thấp hơn. **Nội dung nổi trên Modal** (datepicker popper, gợi ý địa chỉ `createPortal`, dropdown lookup, menu ngữ cảnh mở từ trong form modal): phải **cao hơn 4000** (ví dụ `4100`–`5000` hoặc hằng dùng chung trong module), để không bị che bởi nền modal. **Toast toàn cục**: trong app dùng `ToastProvider` — toast hiển thị `z-index: 9999` (xem `src/context/toastContext.tsx`). |
+| 0.3 | **Toast 3200ms** | API: `showToast(message, type?)` — **không** có tham số thời lượng; 3200ms là hằng `TOAST_DURATION_MS` trong `src/context/toastContext.tsx`. |
 | 0.4 | **Lý do hủy** | Mọi hành động Hủy bỏ chứng từ (trạng thái → "Hủy bỏ") phải mở Modal yêu cầu nhập `ly_do_huy`. Không dùng `window.confirm` cho nghiệp vụ hủy. |
 | 0.5 | **TypeScript 0 lỗi** | `npx tsc --noEmit` phải trả về exit code 0 trước mọi commit. |
 
@@ -242,7 +242,7 @@ Chuẩn tham chiếu: `src/modules/purchase/donhangmua/DonHangMua.tsx`.
 
 ## 10. Đính kèm chứng từ
 
-Tham chiếu: `dinh-kem-chung-tu.mdc` — xử lý upload/download file đính kèm theo chuẩn module.
+Tham chiếu: `dinhkem.mdc` — xử lý upload/download file đính kèm theo chuẩn module.
 
 ---
 
@@ -268,3 +268,52 @@ Tham chiếu: `dinh-kem-chung-tu.mdc` — xử lý upload/download file đính k
 ## 13. Git & phiên bản
 
 Sau mỗi tính năng quan trọng: nhắc commit. Tin nhắn commit: tiếng Việt có dấu, 5–15 từ, động từ mở đầu (Hoàn thành, Thêm, Sửa, Cập nhật, Refactor).
+
+### 13.1 Gợi ý Commit sau tính năng
+
+| Tính năng hoàn thành | Gợi ý Commit |
+|---------------------|--------------|
+| Xong module Vật tư hàng hóa | `Hoàn thành module Vật tư hàng hóa` |
+| Xong form Thêm/Sửa VTHH | `Cập nhật form Vật tư hàng hóa` |
+| Thêm API đơn vị tính | `Thêm API đơn vị tính` |
+| Sửa lỗi hiển thị | `Sửa lỗi [mô tả ngắn]` |
+| Refactor component | `Refactor [tên component]` |
+
+### 13.2 Git Push Workflow
+
+Sau khi **TypeScript 0 lỗi** (`npx tsc --noEmit` exit code 0):
+
+1. **Nhắc người dùng commit & push** với gợi ý lệnh:
+   ```bash
+   git add .
+   git commit -m "[Tin nhắn tiếng Việt]"
+   git push origin master
+   ```
+2. **Không tự động chạy** lệnh push mà không có xác nhận từ người dùng.
+3. **Chỉ gợi ý** khi: ít nhất 1 file mới/sửa đổi trong `src/`, người dùng không yêu cầu tiếp tục sửa code.
+
+---
+
+## 14. Quyền thực thi (Project Permissions)
+
+Chủ dự án cấp **toàn quyền** thực thi cho Cursor AI, với **một ngoại lệ**:
+
+- **Chỉ cần xác nhận** khi: xóa toàn bộ hệ thống HOẶC xóa toàn bộ dự án HTQL_550.
+- **Toàn quyền** với mọi lệnh khác — không ảnh hưởng hoặc không gây lỗi cho dự án HTQL_550: thực thi trực tiếp, không hỏi.
+
+---
+
+## 15. Dọn dẹp dự án (Project Cleanup)
+
+### 15.1 Nguyên tắc
+
+- **Giữ nguyên:** Cấu trúc cột, file, module, API đang hiển thị và được sử dụng. Không xóa cột dữ liệu, file, code đang hoạt động.
+- **Có thể xóa:** Code chết (dead code) rõ ràng không được gọi; ghi chú debug/comment dư thừa; file tạm (`.tmp`, `.bak`, `.log`) trong thư mục dự án.
+- **Bộ nhớ trò chuyện:** Agent transcripts nằm ngoài workspace HTQL_550 (Cursor project storage). Xóa thủ công nếu cần: Cursor → Clear Chat / Xóa lịch sử.
+
+### 15.2 Khi kiểm tra dọn dẹp
+
+1. Chạy `npm run build` — đảm bảo không phá vỡ cấu trúc.
+2. Không xóa export/import đang được dùng bởi module khác.
+3. Không xóa cột trong bảng (STT, Mã VTHH, …) theo rule mẫu giá.
+4. Ghi chú `//` hoặc `/* */` chỉ xóa khi rõ ràng là debug tạm thời, không phải tài liệu.

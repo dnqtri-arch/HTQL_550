@@ -1,7 +1,7 @@
 /**
  * Domain types — Danh mục Khách hàng (Phân hệ Bán hàng).
  * Độc lập hoàn toàn với `nhaCungCapApi` / purchase module.
- * Tuân thủ htql-core-standards.mdc: viết liền, không gạch ngang.
+ * Tuân thủ htql550.mdc: viết liền, không gạch ngang.
  */
 
 // ─── Kiểu phân loại ─────────────────────────────────────────────────────────

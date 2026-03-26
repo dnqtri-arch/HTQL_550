@@ -1,6 +1,6 @@
 ---
-description: Đính kèm chứng từ — Đơn hàng mua (đường dẫn, UI, xác nhận)
-globs: src/modules/purchase/don-hang-mua/DonHangMua*.tsx
+description: Đính kèm chứng từ — Đơn hàng mua, Báo giá (đường dẫn, UI, xác nhận)
+globs: ["**/*DinhKem*.tsx", "**/*Attachment*.ts", "src/modules/crm/**/baoGia/*Form*.tsx", "src/modules/crm/**/donHangMua/*Form*.tsx"]
 alwaysApply: false
 ---
 
@@ -39,7 +39,7 @@ alwaysApply: false
 
 - Popover neo dưới nút **Đính kèm**, badge số lượng file khi `attachments.length > 0`.
 - **Tiêu đề:** một dòng — **Đính kèm chứng từ** (in đậm) + cùng dòng phía sau: gợi ý *«Đính kèm tối đa 10 file, các file .jpg, .png, .pdf, .docx — mỗi file phải nhỏ hơn 5 MB»* (chữ nhỏ, màu muted, `flex-wrap` nếu hẹp).
-- **Banner cảnh báo:** trong vùng cuộn của popover, **cuối nội dung** — **sau** dòng *«Chưa có file đính kèm.»* (hoặc sau hàng thumbnail khi đã có file), không nằm phía trên nút **Thêm file…**. `role="alert"` (`canhBaoDinhKem`), bổ sung cho `window.alert`.
+- **Banner cảnh báo:** trong vùng cuộn của popover, **cuối nội dung** — **sau** dòng *«Chưa có file đính kèm.»* (hoặc sau danh sách file khi đã có file), không nằm phía trên nút **Thêm file…**. `role="alert"` (`canhBaoDinhKem`), bổ sung cho `window.alert`.
 - **Hàng thao tác:** nút **Thêm file…** và **thanh tiến trình** loading (text + %) **cùng một hàng** (`flex`, vùng progress `flex: 1 1 …`); khi không có tiến trình, vùng progress có thể co lại để không chiếm chỗ.
 - **Danh sách file:** hàng thumbnail dùng **`flex-wrap: wrap`** — khi hết chiều ngang thì **xuống dòng**; **`overflow-x: hidden`** (không cuộn ngang một hàng dài). **Không** có block chi tiết file bên dưới.
 - **Hover** lên một thumbnail: **không** phóng to / **không** đổi kích thước ô (luôn **`THUMB_STRIP` × `THUMB_STRIP`**). **Nổi bật** bằng vòng **accent** (`box-shadow: 0 0 0 2px`) + đổ bóng nhẹ; các ô khác **giảm opacity** nhẹ khi có một ô đang hover; `z-index` ô hover cao hơn để bóng chồng đẹp.
@@ -54,6 +54,25 @@ alwaysApply: false
 - **Bấm Xóa** → gọi `xoaTai(idx)` → `onChange` (bỏ file khỏi `attachments`); `preventDefault` + `stopPropagation` để **không** kích hoạt mở viewer; đồng bộ đóng / lùi chỉ số viewer nếu cần.
 - Hàng strip thumbnails: **`align-items: flex-start`** để mọi cột cùng căn đỉnh, tránh lệch dọc khi một cột có nội dung khác chiều cao.
 - **Kết quả bắt buộc:** vị trí và kích thước ô thumbnail **không đổi** khi hover; **chiều cao tổng** vùng strip + popover **không nhảy** chỉ vì ẩn/hiện nút Xóa (chỉ khi số file đổi sau khi xóa thì layout co lại — đúng nghiệp vụ).
+
+## Đính kèm thiết kế (dktk) — Báo giá
+
+- **Tên gọi:** **Đính kèm thiết kế** hoặc viết tắt **dktk** (nút/popover đính kèm trên form Báo giá — `BaoGiaDinhKemModal.tsx`).
+- **Định dạng:** `.ai`, `.eps`, `.svg`, `.pdf`, `.cdr` (Corel), `.psd`, `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`.
+- **Dung lượng:** mỗi file phải **nhỏ hơn 2000 MB** (`BG_DINH_KEM_TOI_DA_BYTES`); file **từ 2000 MB trở lên** không đính kèm — `alert` + banner, không đọc file đó; vẫn xử lý file hợp lệ còn lại.
+- **Hiển thị dung lượng:** `formatDungLuongHienThi` — từ khoảng **1000 MB** trở lên dùng **GB / TB** cho gọn (tránh chuỗi MB quá dài).
+- **Tối đa 10 file** / báo giá; defer `alert`/`confirm` như Đơn hàng mua; tiêu đề popover: *Đính kèm thiết kế (dktk)*.
+- **Thời gian trong tên file** (khi chuẩn hóa): ưu tiên **Hiệu lực đến** (`ngay_giao_hang` trên form BG), không thì TG tạo báo giá — cùng hàm `buildBgAttachmentBaseName` / props `ngayGiaoHang`, `ngayBaoGia`.
+- **Đọc file nặng:** `FileReader.readAsDataURL` kèm **`onprogress`** — cập nhật **từng dòng file đang xử lý** (tên + % theo `loaded/total`), không gom một thanh tổng riêng.
+- **Tiến trình & đóng popover:** state pending (`pendingUploadRows` / `onPendingUploadRowsChange`) nên giữ ở **form cha** (`baoGiaForm.tsx`) để khi đóng popover, upload vẫn chạy; nút **Đính kèm thiết kế** hiện *Đang upload…*; mở lại popover vẫn thấy từng file và %.
+- **`daDongBoLuuCsdl`:** `true` khi bản ghi đã lưu CSDL và **chưa** đổi đính kèm trên form; `false` khi file mới chỉ nằm trên form — nhãn: *Sẵn sàng lưu vào dữ liệu báo giá — bấm Lưu trên form* / *Đã lưu trong dữ liệu báo giá*. Trong lúc đọc file vào bộ nhớ: *Đang upload…* (theo từng dòng).
+- **Danh sách file (UI):** **một cột dòng** (`flex-direction: column`), mỗi file một **hàng** (`flex` ngang):
+  - **Trái:** ảnh thu nhỏ cố định `THUMB_STRIP × THUMB_STRIP` (bấm mở viewer toàn màn); file ảnh quá lớn hoặc lỗi decode → **icon** (`FileText`), không ép `<img>` data URL nặng (giảm lag).
+  - **Giữa (flex 1):** tên file (ellipsis); **Dung lượng:** `formatDungLuongHienThi` / `kich_thuoc_byte`; **Thư mục:** `duongDanHienThi(item, soBaoGia, maKhPathPart)`; dòng trạng thái (sẵn sàng lưu / đã lưu / đang upload) — **không** dùng thanh progress giả 100% trên file đã hoàn tất.
+  - **Phải (cuối dòng):** nút **Xóa** (`readOnly` không hiện); không đặt Xóa dưới thumbnail.
+- **Hàng công cụ:** chỉ nút **Thêm file…** (tiến trình gắn **theo từng dòng** trong danh sách, không thanh tổng chung).
+- **Banner cảnh báo:** cuối vùng cuộn popover, **sau** danh sách (hoặc sau *Chưa có file…*).
+- **Hiệu năng:** mở popover xem lại nhiều file — tránh render ảnh thumb quá nặng; ưu tiên icon khi vượt ngưỡng byte; viewer toàn màn có loader.
 
 ## Payload
 
