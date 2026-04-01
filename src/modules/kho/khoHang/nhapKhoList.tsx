@@ -9,7 +9,7 @@ import {
   nhanVatTuHangHoaGetAll,
   getDefaultNhanVatTuHangHoaFilter,
   type NhanVatTuHangHoaRecord,
-} from '../nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+} from '../../crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 import { loadKhoListFromStorage } from './khoStorage'
 import { formatSoNguyen } from '../../../utils/numberFormat'
 

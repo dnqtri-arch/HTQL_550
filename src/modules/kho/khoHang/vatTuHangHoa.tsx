@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Copy, Pencil, Trash2, RefreshCw, Upload, Download, Printer } from 'lucide-react'
-import { DataGrid } from '../../../components/common/dataGrid'
+import { DataGrid, type DataGridColumn } from '../../../components/common/dataGrid'
 import { ListPageToolbar } from '../../../components/listPageToolbar'
 import {
   type VatTuHangHoaRecord,
@@ -13,22 +13,20 @@ import {
   vatTuHangHoaMaTuDong,
   VATTU_IMAGE_BASE,
 } from './vatTuHangHoaApi'
-import { formatNumberDisplay, formatSoTienHienThi, parseFloatVN, parseDecimalFlex } from '../../../utils/numberFormat'
+import { formatNumberDisplay, formatSoTienHienThi, formatSoThapPhan, parseFloatVN, parseDecimalFlex } from '../../../utils/numberFormat'
 import { exportCsv } from '../../../utils/exportCsv'
 import { useToastOptional } from '../../../context/toastContext'
 import { Modal } from '../../../components/common/modal'
 import { VatTuHangHoaForm } from './vatTuHangHoaForm'
 import { donViTinhGetAll } from './donViTinhApi'
+import { tonKhoCuoikyTheoMaVthh } from '../tonKho/api'
 
-const COT: { key: keyof VatTuHangHoaRecord; label: string; width?: string; align?: 'left' | 'right' }[] = [
-  { key: 'ma', label: 'Mã VTHH', width: '12%' },
-  { key: 'ten', label: 'Tên VTHH', width: '22%' },
-  { key: 'tinh_chat', label: 'Tính chất', width: '14%' },
-  { key: 'nhom_vthh', label: 'Nhóm VTHH', width: '14%' },
-  { key: 'dvt_chinh', label: 'ĐVT', width: '10%' },
-  { key: 'so_luong_ton', label: 'Số lượng tồn', width: '12%', align: 'right' },
-  { key: 'gia_tri_ton', label: 'Giá trị tồn', width: '14%', align: 'right' },
-]
+function formatThueGtgtBangHienThi(r: VatTuHangHoaRecord): string {
+  const s = (r.thue_suat_gtgt_dau_ra ?? r.thue_suat_gtgt ?? '').trim()
+  if (!s || s === 'Chưa xác định') return 'Chưa xác định%'
+  if (s.endsWith('%')) return s
+  return `${s}%`
+}
 
 /** Hiển thị cột ĐVT theo nguyên tắc ĐVT chính: hiển thị ký hiệu/tên (ky_hieu || ten_dvt), không hiển thị mã */
 function dvtHienThiLabel(
@@ -207,13 +205,90 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
     setDvtList(dv.map((r) => ({ id: r.id, ma_dvt: r.ma_dvt, ten_dvt: r.ten_dvt, ky_hieu: r.ky_hieu })))
   }, [])
 
-  /** Dữ liệu lưới: cột ĐVT hiển thị theo ĐVT chính (ky_hieu hoặc ten_dvt), không hiển thị mã */
+  const tonTheoMa = useMemo(() => tonKhoCuoikyTheoMaVthh(), [danhSach])
+
+  /** Lưới: ĐVT theo ký hiệu/tên; tồn lấy từ module Tồn kho (báo cáo nhập − xuất). */
   const displayData = useMemo(() => {
-    return danhSach.map((r) => ({
-      ...r,
-      dvt_chinh: dvtHienThiLabel(r.dvt_chinh, dvtList),
-    }))
-  }, [danhSach, dvtList])
+    return danhSach.map((r) => {
+      const maU = (r.ma ?? '').trim().toUpperCase()
+      const tk = tonTheoMa.get(maU)
+      return {
+        ...r,
+        dvt_chinh: dvtHienThiLabel(r.dvt_chinh, dvtList),
+        so_luong_ton: tk?.so_luong ?? 0,
+        gia_tri_ton: tk?.gia_tri ?? 0,
+      }
+    })
+  }, [danhSach, dvtList, tonTheoMa])
+
+  const columns: DataGridColumn<VatTuHangHoaRecord>[] = useMemo(
+    () => [
+      { key: 'ma', label: 'Mã VTHH', width: '7%', filterable: false },
+      { key: 'ten', label: 'Tên VTHH', width: '14%', filterable: false },
+      { key: 'tinh_chat', label: 'Tính chất', width: '8%', filterable: false },
+      { key: 'nhom_vthh', label: 'Nhóm VTHH', width: '8%', filterable: false },
+      { key: 'dvt_chinh', label: 'ĐVT', width: '6%', filterable: false },
+      {
+        key: 'vt_chinh',
+        label: 'VT cấp cha',
+        width: 56,
+        align: 'center',
+        filterable: false,
+        renderCell: (_v, row) => (row.vt_chinh ? '✓' : ''),
+      },
+      {
+        key: 'don_gia_mua_co_dinh',
+        label: 'ĐG mua CĐ',
+        width: 88,
+        align: 'right',
+        filterable: false,
+        renderCell: (_v, row) => formatNumberDisplay(Number(row.don_gia_mua_co_dinh ?? 0), 0),
+      },
+      {
+        key: 'gia_mua_gan_nhat',
+        label: 'ĐG mua gần nhất',
+        width: 100,
+        align: 'right',
+        filterable: false,
+        renderCell: (_v, row) =>
+          formatNumberDisplay(Number(row.gia_mua_gan_nhat ?? row.don_gia_mua ?? 0), 0),
+      },
+      {
+        key: 'don_gia_ban',
+        label: 'ĐG bán',
+        width: 80,
+        align: 'right',
+        filterable: false,
+        renderCell: (_v, row) => formatNumberDisplay(Number(row.don_gia_ban ?? 0), 0),
+      },
+      {
+        key: 'thue_suat_gtgt_dau_ra',
+        label: 'Thuế GTGT',
+        width: 72,
+        align: 'right',
+        filterable: false,
+        renderCell: (_v, row) => formatThueGtgtBangHienThi(row),
+      },
+      { key: 'kho_ngam_dinh', label: 'Kho ngầm định', width: 96, filterable: false },
+      {
+        key: 'so_luong_ton',
+        label: 'SL tồn',
+        width: 72,
+        align: 'right',
+        filterable: false,
+        renderCell: (v) => formatSoThapPhan(Number(v), 2),
+      },
+      {
+        key: 'gia_tri_ton',
+        label: 'Giá trị tồn',
+        width: 88,
+        align: 'right',
+        filterable: false,
+        renderCell: (v) => formatNumberDisplay(Number(v), 0),
+      },
+    ],
+    []
+  )
 
   useEffect(() => {
     napLai()
@@ -348,26 +423,43 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
   }
 
   const xuatKhau = () => {
-    const header = ['Mã', 'Tên', 'Tính chất', 'Nhóm VTHH', 'ĐVT', 'Số lượng tồn', 'Giá trị tồn']
-    const rows = danhSach.map((r) => [
-      r.ma,
-      r.ten,
-      r.tinh_chat,
-      r.nhom_vthh,
-      dvtHienThiLabel(r.dvt_chinh, dvtList),
-      String(r.so_luong_ton ?? ''),
-      String(r.gia_tri_ton ?? ''),
-    ])
+    const ton = tonKhoCuoikyTheoMaVthh()
+    const header = [
+      'Mã',
+      'Tên',
+      'Tính chất',
+      'Nhóm VTHH',
+      'ĐVT',
+      'VT cấp cha',
+      'ĐG mua CĐ',
+      'ĐG mua gần nhất',
+      'ĐG bán',
+      'Thuế GTGT',
+      'Kho ngầm định',
+      'Số lượng tồn',
+      'Giá trị tồn',
+    ]
+    const rows = danhSach.map((r) => {
+      const maU = (r.ma ?? '').trim().toUpperCase()
+      const tk = ton.get(maU)
+      return [
+        r.ma,
+        r.ten,
+        r.tinh_chat,
+        r.nhom_vthh,
+        dvtHienThiLabel(r.dvt_chinh, dvtList),
+        r.vt_chinh ? 'Có' : '',
+        String(r.don_gia_mua_co_dinh ?? ''),
+        String(r.gia_mua_gan_nhat ?? r.don_gia_mua ?? ''),
+        String(r.don_gia_ban ?? ''),
+        formatThueGtgtBangHienThi(r),
+        r.kho_ngam_dinh ?? '',
+        String(tk?.so_luong ?? 0),
+        String(tk?.gia_tri ?? 0),
+      ]
+    })
     exportCsv([header, ...rows], 'Vat_tu_hang_hoa.csv')
   }
-
-  const columns = COT.map((c) => ({
-    key: c.key,
-    label: c.label,
-    width: c.width,
-    align: c.align,
-    filterable: false,
-  }))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: 'var(--bg-secondary)' }}>
@@ -386,11 +478,12 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
       />
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <DataGrid<VatTuHangHoaRecord>
             columns={columns}
             data={displayData}
             keyField="id"
+            height="100%"
             selectedRowId={dongChon?.id ?? null}
             onRowSelect={(row) => {
               const original = danhSach.find((r) => r.id === row.id) ?? null
@@ -405,11 +498,10 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
             summary={[
               { label: 'Số dòng', value: danhSach.length },
               {
-                label: 'Tổng giá trị',
-                value: formatNumberDisplay(danhSach.reduce((s, r) => s + r.gia_tri_ton, 0), 0),
+                label: 'Tổng giá trị tồn (TK)',
+                value: formatNumberDisplay(displayData.reduce((s, r) => s + r.gia_tri_ton, 0), 0),
               },
             ]}
-            maxHeight={240}
           />
         </div>
 

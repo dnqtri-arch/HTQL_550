@@ -5,23 +5,27 @@
  * Quản lý tab nội bộ (không phụ thuộc vào ModulePage.setActiveSub).
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BaoGia } from './baoGia/baoGia'
 import { DonHangBan } from './donHangBan/donHangBan'
-import { HopDongBan } from './hopDong/hopDongBan'
+import { HopDongBan } from './hopDongBan/hopDongBan'
 import { HoaDonBan } from './hoaDon/hoaDonBan'
 import { CongNoKhachHang } from './congNo/congNoKhachHang'
 import { TraLaiHang } from './traLai/traLaiHang'
+import { GhiNhanDoanhThu } from './ghiNhanDoanhThu/ghiNhanDoanhThu'
 import { QuyTrinhBanHang } from './quyTrinhBanHang'
 import { KhachHang } from './khachHang/khachHang'
 import { VatTuHangHoa } from '../../kho/khoHang/vatTuHangHoa'
 import { DieuKhoanThanhToanBanHangView } from './dieuKhoanThanhToan/dieuKhoanThanhToanBanHangView'
+import { HTQL_BAN_HANG_TAB_EVENT, type BanHangTabEventDetail } from './banHangTabEvent'
+import type { DonHangBanChungTuRecord, DonHangBanChungTuChiTiet } from '../../../types/donHangBanChungTu'
 
 type SubId =
   | 'quy-trinh'
   | 'baogia'
   | 'donhangban'
   | 'hopdong'
+  | 'ghinhandoanhthu'
   | 'hoadon'
   | 'congno'
   | 'tralai'
@@ -33,6 +37,7 @@ const TABS: { id: SubId; label: string }[] = [
   { id: 'baogia', label: 'Báo giá' },
   { id: 'donhangban', label: 'Đơn hàng bán' },
   { id: 'hopdong', label: 'Hợp đồng' },
+  { id: 'ghinhandoanhthu', label: 'Ghi nhận doanh thu' },
   { id: 'hoadon', label: 'Hóa đơn bán' },
   { id: 'congno', label: 'Công nợ KH' },
   { id: 'tralai', label: 'Trả lại hàng' },
@@ -41,6 +46,29 @@ const TABS: { id: SubId; label: string }[] = [
 export function BanHang() {
   const [activeTab, setActiveTab] = useState<SubId>('quy-trinh')
   const [viewDanhMuc, setViewDanhMuc] = useState<ViewDanhMuc>(null)
+  const [prefillGndtTuDhb, setPrefillGndtTuDhb] = useState<{
+    don: DonHangBanChungTuRecord
+    chiTiet: DonHangBanChungTuChiTiet[]
+  } | null>(null)
+
+  useEffect(() => {
+    const onTab = (e: Event) => {
+      const raw = (e as CustomEvent<BanHangTabEventDetail>).detail
+      let tabId: string | undefined
+      let gndtTuDhb: { don: DonHangBanChungTuRecord; chiTiet: DonHangBanChungTuChiTiet[] } | undefined
+      if (typeof raw === 'string') tabId = raw
+      else if (raw && typeof raw === 'object' && 'tab' in raw) {
+        tabId = raw.tab
+        gndtTuDhb = raw.ghiNhanTuDonBan
+      }
+      if (!tabId || !TABS.some((t) => t.id === tabId)) return
+      setViewDanhMuc(null)
+      setActiveTab(tabId as SubId)
+      if (gndtTuDhb) setPrefillGndtTuDhb(gndtTuDhb)
+    }
+    window.addEventListener(HTQL_BAN_HANG_TAB_EVENT, onTab)
+    return () => window.removeEventListener(HTQL_BAN_HANG_TAB_EVENT, onTab)
+  }, [])
 
   const navigate = (tab: string) => {
     if (tab === 'khachhang') { setViewDanhMuc('khachhang'); return }
@@ -127,9 +155,15 @@ export function BanHang() {
           {/* Content */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {activeTab === 'quy-trinh' && <QuyTrinhBanHang onNavigate={navigate} />}
-            {activeTab === 'baogia' && <BaoGia />}
-            {activeTab === 'donhangban' && <DonHangBan />}
+            {activeTab === 'baogia' && <BaoGia onNavigate={navigate} />}
+            {activeTab === 'donhangban' && <DonHangBan onNavigate={navigate} />}
             {activeTab === 'hopdong' && <HopDongBan />}
+            {activeTab === 'ghinhandoanhthu' && (
+              <GhiNhanDoanhThu
+                prefillTuDonHangBan={prefillGndtTuDhb}
+                onConsumedPrefillTuDonHangBan={() => setPrefillGndtTuDhb(null)}
+              />
+            )}
             {activeTab === 'hoadon' && <HoaDonBan />}
             {activeTab === 'congno' && <CongNoKhachHang />}
             {activeTab === 'tralai' && <TraLaiHang />}

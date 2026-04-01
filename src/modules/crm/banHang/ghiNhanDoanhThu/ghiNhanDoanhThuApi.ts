@@ -4,11 +4,12 @@
  * Đồng bộ «Đã nhận hàng» sang ĐHM khi phiếu ở tình trạng đã nhập kho: phát CustomEvent (shell Mua hàng gọi donHangMuaSetTinhTrang).
  */
 
-import { maFormatHeThong, getCurrentYear } from '../../../utils/maFormat'
-import type { NhanVatTuHangHoaAttachmentItem } from './nhanVatTuHangHoaAttachmentTypes'
-import { TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG } from '../../crm/muaHang/donHangMua/donHangMuaApi'
+import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import type { GhiNhanDoanhThuAttachmentItem } from './ghiNhanDoanhThuAttachmentTypes'
+import { TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG } from '../../muaHang/donHangMua/donHangMuaApi'
+import { HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT } from '../../muaHang/muaHangTabEvent'
 
-export type { NhanVatTuHangHoaAttachmentItem } from './nhanVatTuHangHoaAttachmentTypes'
+export type { GhiNhanDoanhThuAttachmentItem } from './ghiNhanDoanhThuAttachmentTypes'
 
 /** Tình trạng phiếu NVTHH sau nhập kho (form/danh sách); ĐHM vẫn dùng «Đã nhận hàng» khi đồng bộ. */
 export const TINH_TRANG_NVTHH_DA_NHAP_KHO = 'Đã nhập kho'
@@ -23,18 +24,15 @@ function shouldEmitDongBoDhmTuPhieuNvthh(tinhTrang: string): boolean {
   return t === TINH_TRANG_NVTHH_DA_NHAP_KHO || t === TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG
 }
 
-/** Trùng với `HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT` trong shell `mua-hang/muaHangTabEvent` — không import chéo module. */
-const HTQL_NVTHH_SYNC_DHM_TINH_TRANG = 'htql-nvthh-sync-dhm-tinh-trang'
-
 function emitYeuCauDongBoDaNhanHangDonMua(doiChieuDonMuaId: string | undefined): void {
   const id = doiChieuDonMuaId?.trim()
   if (!id || typeof window === 'undefined') return
   window.dispatchEvent(
-    new CustomEvent(HTQL_NVTHH_SYNC_DHM_TINH_TRANG, { detail: { doi_chieu_don_mua_id: id } })
+    new CustomEvent(HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT, { detail: { doi_chieu_don_mua_id: id } })
   )
 }
 
-export interface NhanVatTuHangHoaRecord {
+export interface GhiNhanDoanhThuRecord {
   id: string
   tinh_trang: string
   ngay_don_hang: string
@@ -53,7 +51,7 @@ export interface NhanVatTuHangHoaRecord {
   gia_tri_don_hang: number
   so_chung_tu_cukcuk: string
   doi_chieu_don_mua_id?: string
-  attachments?: NhanVatTuHangHoaAttachmentItem[]
+  attachments?: GhiNhanDoanhThuAttachmentItem[]
   hinh_thuc?: 'nhap_kho' | 'khong_nhap_kho' | 'ca_hai' | string
   kho_nhap_id?: string
   ten_cong_trinh?: string
@@ -82,10 +80,10 @@ export interface NhanVatTuHangHoaRecord {
   phieu_chi_ten_chu_tk_nhan?: string
   phieu_chi_ngan_hang?: string
   phieu_chi_ten_nguoi_nhan_ck?: string
-  phieu_chi_attachments?: NhanVatTuHangHoaAttachmentItem[]
+  phieu_chi_attachments?: GhiNhanDoanhThuAttachmentItem[]
 }
 
-export interface NhanVatTuHangHoaChiTiet {
+export interface GhiNhanDoanhThuChiTiet {
   id: string
   don_hang_mua_id: string
   ma_hang: string
@@ -108,7 +106,7 @@ export interface NhanVatTuHangHoaChiTiet {
   dd_gh_index?: number | null
 }
 
-export interface NhanVatTuHangHoaCreatePayload {
+export interface GhiNhanDoanhThuCreatePayload {
   tinh_trang: string
   ngay_don_hang: string
   so_don_hang: string
@@ -126,7 +124,7 @@ export interface NhanVatTuHangHoaCreatePayload {
   gia_tri_don_hang: number
   so_chung_tu_cukcuk: string
   doi_chieu_don_mua_id?: string
-  attachments?: NhanVatTuHangHoaAttachmentItem[]
+  attachments?: GhiNhanDoanhThuAttachmentItem[]
   hinh_thuc?: 'nhap_kho' | 'khong_nhap_kho' | 'ca_hai' | string
   kho_nhap_id?: string
   ten_cong_trinh?: string
@@ -155,7 +153,7 @@ export interface NhanVatTuHangHoaCreatePayload {
   phieu_chi_ten_chu_tk_nhan?: string
   phieu_chi_ngan_hang?: string
   phieu_chi_ten_nguoi_nhan_ck?: string
-  phieu_chi_attachments?: NhanVatTuHangHoaAttachmentItem[]
+  phieu_chi_attachments?: GhiNhanDoanhThuAttachmentItem[]
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string
@@ -171,7 +169,7 @@ export interface NhanVatTuHangHoaCreatePayload {
 }
 
 /** Dữ liệu mẫu phiếu nhận hàng */
-const MOCK_DON: NhanVatTuHangHoaRecord[] = [
+const MOCK_DON: GhiNhanDoanhThuRecord[] = [
   {
     id: 'nvthh1',
     tinh_trang: 'Chưa thực hiện',
@@ -211,7 +209,7 @@ const MOCK_DON: NhanVatTuHangHoaRecord[] = [
 ]
 
 /** Chi tiết theo phiếu */
-const MOCK_CHI_TIET: NhanVatTuHangHoaChiTiet[] = [
+const MOCK_CHI_TIET: GhiNhanDoanhThuChiTiet[] = [
   {
     id: 'ctnvthh1-0',
     don_hang_mua_id: 'nvthh1',
@@ -235,9 +233,9 @@ const MOCK_CHI_TIET: NhanVatTuHangHoaChiTiet[] = [
   },
 ]
 
-const STORAGE_KEY_DON = 'htql_nhan_vat_tu_hang_hoa_list'
-const STORAGE_KEY_CHI_TIET = 'htql_nhan_vat_tu_hang_hoa_chi_tiet'
-const STORAGE_KEY_DRAFT = 'htql_nhan_vat_tu_hang_hoa_draft'
+const STORAGE_KEY_DON = 'htql_ghi_nhan_doanh_thu_list'
+const STORAGE_KEY_CHI_TIET = 'htql_ghi_nhan_doanh_thu_chi_tiet'
+const STORAGE_KEY_DRAFT = 'htql_ghi_nhan_doanh_thu_draft'
 
 const LEGACY_STORAGE_KEY_DON = 'htql_nhan_hang_list'
 const LEGACY_STORAGE_KEY_CHI_TIET = 'htql_nhan_hang_chi_tiet'
@@ -245,7 +243,7 @@ const LEGACY_STORAGE_KEY_DRAFT = 'htql_nhan_hang_draft'
 
 const MODULE_PREFIX = 'NVTHH'
 
-function normalizeDon(d: Partial<NhanVatTuHangHoaRecord> & { id: string; de_xuat_id?: string }): NhanVatTuHangHoaRecord {
+function normalizeDon(d: Partial<GhiNhanDoanhThuRecord> & { id: string; de_xuat_id?: string }): GhiNhanDoanhThuRecord {
   const legacyDx = (d as { de_xuat_id?: string }).de_xuat_id
   const doiChieu = d.doi_chieu_don_mua_id ?? legacyDx
   const rawTt = d.tinh_trang ?? 'Chưa thực hiện'
@@ -268,8 +266,8 @@ function normalizeDon(d: Partial<NhanVatTuHangHoaRecord> & { id: string; de_xuat
     gia_tri_don_hang: typeof d.gia_tri_don_hang === 'number' ? d.gia_tri_don_hang : 0,
     so_chung_tu_cukcuk: d.so_chung_tu_cukcuk ?? '',
     doi_chieu_don_mua_id: doiChieu ?? undefined,
-    attachments: Array.isArray((d as { attachments?: NhanVatTuHangHoaAttachmentItem[] }).attachments)
-      ? (d as { attachments: NhanVatTuHangHoaAttachmentItem[] }).attachments
+    attachments: Array.isArray((d as { attachments?: GhiNhanDoanhThuAttachmentItem[] }).attachments)
+      ? (d as { attachments: GhiNhanDoanhThuAttachmentItem[] }).attachments
       : undefined,
     hinh_thuc: d.hinh_thuc,
     kho_nhap_id: d.kho_nhap_id,
@@ -307,19 +305,19 @@ function normalizeDon(d: Partial<NhanVatTuHangHoaRecord> & { id: string; de_xuat
 function migrateParsedDonChi(
   donRaw: unknown[],
   chiRaw: unknown[]
-): { don: NhanVatTuHangHoaRecord[]; chiTiet: NhanVatTuHangHoaChiTiet[] } {
+): { don: GhiNhanDoanhThuRecord[]; chiTiet: GhiNhanDoanhThuChiTiet[] } {
   const idMap = new Map<string, string>()
   for (const x of donRaw) {
     const id = String((x as { id?: string }).id ?? '')
     if (id.startsWith('nhhvt')) idMap.set(id, `nvthh${id.slice(5)}`)
   }
   const newDon = donRaw.map((x) => {
-    const d = x as Partial<NhanVatTuHangHoaRecord> & { id: string }
+    const d = x as Partial<GhiNhanDoanhThuRecord> & { id: string }
     const newId = idMap.get(d.id) ?? d.id
     return normalizeDon({ ...d, id: newId })
   })
   const newChi = chiRaw.map((x) => {
-    const c = x as NhanVatTuHangHoaChiTiet
+    const c = x as GhiNhanDoanhThuChiTiet
     const oldDonId = String(c.don_hang_mua_id ?? '')
     let newDonId = idMap.get(oldDonId) ?? oldDonId
     if (newDonId === oldDonId && oldDonId.startsWith('nhhvt')) newDonId = `nvthh${oldDonId.slice(5)}`
@@ -336,7 +334,7 @@ function migrateParsedDonChi(
   return { don: newDon, chiTiet: newChi }
 }
 
-function loadFromStorage(): { don: NhanVatTuHangHoaRecord[]; chiTiet: NhanVatTuHangHoaChiTiet[] } {
+function loadFromStorage(): { don: GhiNhanDoanhThuRecord[]; chiTiet: GhiNhanDoanhThuChiTiet[] } {
   try {
     const ls = typeof localStorage !== 'undefined' ? localStorage : null
     if (!ls) throw new Error('no storage')
@@ -378,9 +376,9 @@ function saveToStorage(): void {
   }
 }
 
-export type NhanVatTuHangHoaDraftLine = Record<string, string> & { _dvtOptions?: string[] }
+export type GhiNhanDoanhThuDraftLine = Record<string, string> & { _dvtOptions?: string[] }
 
-export function getNhanVatTuHangHoaDraft(): NhanVatTuHangHoaDraftLine[] | null {
+export function getGhiNhanDoanhThuDraft(): GhiNhanDoanhThuDraftLine[] | null {
   try {
     const ls = typeof localStorage !== 'undefined' ? localStorage : null
     if (!ls) return null
@@ -393,7 +391,7 @@ export function getNhanVatTuHangHoaDraft(): NhanVatTuHangHoaDraftLine[] | null {
   }
 }
 
-export function setNhanVatTuHangHoaDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
+export function setGhiNhanDoanhThuDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
     if (typeof localStorage !== 'undefined') {
       const toSave = lines.map((l) => {
@@ -410,7 +408,7 @@ export function setNhanVatTuHangHoaDraft(lines: Array<Record<string, string> & {
   }
 }
 
-export function clearNhanVatTuHangHoaDraft(): void {
+export function clearGhiNhanDoanhThuDraft(): void {
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY_DRAFT)
@@ -422,8 +420,8 @@ export function clearNhanVatTuHangHoaDraft(): void {
 }
 
 const _initial = loadFromStorage()
-let _donList: NhanVatTuHangHoaRecord[] = _initial.don
-let _chiTietList: NhanVatTuHangHoaChiTiet[] = _initial.chiTiet
+let _donList: GhiNhanDoanhThuRecord[] = _initial.don
+let _chiTietList: GhiNhanDoanhThuChiTiet[] = _initial.chiTiet
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -475,13 +473,13 @@ export const KY_OPTIONS = [
 
 export type KyValue = (typeof KY_OPTIONS)[number]['value']
 
-export interface NhanVatTuHangHoaFilter {
+export interface GhiNhanDoanhThuFilter {
   ky: KyValue
   tu: string
   den: string
 }
 
-export function nhanVatTuHangHoaGetAll(filter: NhanVatTuHangHoaFilter): NhanVatTuHangHoaRecord[] {
+export function ghiNhanDoanhThuGetAll(filter: GhiNhanDoanhThuFilter): GhiNhanDoanhThuRecord[] {
   const { tu, den } = filter
   if (!tu || !den) return [..._donList]
   return _donList.filter((d) => {
@@ -490,15 +488,15 @@ export function nhanVatTuHangHoaGetAll(filter: NhanVatTuHangHoaFilter): NhanVatT
   })
 }
 
-export function nhanVatTuHangHoaGetChiTiet(donId: string): NhanVatTuHangHoaChiTiet[] {
+export function ghiNhanDoanhThuGetChiTiet(donId: string): GhiNhanDoanhThuChiTiet[] {
   return _chiTietList.filter((c) => c.don_hang_mua_id === donId)
 }
 
 /** Ghép payload PUT từ bản ghi + chi tiết (hủy bỏ / phục hồi tình trạng). */
-export function nhanVatTuHangHoaBuildCreatePayloadFromRecord(
-  row: NhanVatTuHangHoaRecord,
-  ct: NhanVatTuHangHoaChiTiet[]
-): NhanVatTuHangHoaCreatePayload {
+export function ghiNhanDoanhThuBuildCreatePayloadFromRecord(
+  row: GhiNhanDoanhThuRecord,
+  ct: GhiNhanDoanhThuChiTiet[]
+): GhiNhanDoanhThuCreatePayload {
   return {
     tinh_trang: row.tinh_trang,
     ngay_don_hang: row.ngay_don_hang,
@@ -562,15 +560,15 @@ export function nhanVatTuHangHoaBuildCreatePayloadFromRecord(
   }
 }
 
-export function nhanVatTuHangHoaDelete(donId: string): void {
+export function ghiNhanDoanhThuDelete(donId: string): void {
   _donList = _donList.filter((d) => d.id !== donId)
   _chiTietList = _chiTietList.filter((c) => c.don_hang_mua_id !== donId)
   saveToStorage()
 }
 
-export function nhanVatTuHangHoaPost(payload: NhanVatTuHangHoaCreatePayload): NhanVatTuHangHoaRecord {
+export function ghiNhanDoanhThuPost(payload: GhiNhanDoanhThuCreatePayload): GhiNhanDoanhThuRecord {
   const id = `nvthh${Date.now()}`
-  const don: NhanVatTuHangHoaRecord = {
+  const don: GhiNhanDoanhThuRecord = {
     id,
     tinh_trang: payload.tinh_trang,
     ngay_don_hang: payload.ngay_don_hang,
@@ -648,11 +646,10 @@ export function nhanVatTuHangHoaPost(payload: NhanVatTuHangHoaCreatePayload): Nh
   if (shouldEmitDongBoDhmTuPhieuNvthh(payload.tinh_trang)) {
     emitYeuCauDongBoDaNhanHangDonMua(payload.doi_chieu_don_mua_id)
   }
-  emitYeuCauDongBoDaNhanHangDonMua(payload.doi_chieu_don_mua_id)
   return don
 }
 
-export function nhanVatTuHangHoaPut(donId: string, payload: NhanVatTuHangHoaCreatePayload): void {
+export function ghiNhanDoanhThuPut(donId: string, payload: GhiNhanDoanhThuCreatePayload): void {
   const idx = _donList.findIndex((d) => d.id === donId)
   if (idx < 0) return
   _donList[idx] = {
@@ -733,16 +730,15 @@ export function nhanVatTuHangHoaPut(donId: string, payload: NhanVatTuHangHoaCrea
   if (shouldEmitDongBoDhmTuPhieuNvthh(payload.tinh_trang)) {
     emitYeuCauDongBoDaNhanHangDonMua(payload.doi_chieu_don_mua_id)
   }
-  emitYeuCauDongBoDaNhanHangDonMua(payload.doi_chieu_don_mua_id)
 }
 
-export function getDefaultNhanVatTuHangHoaFilter(): NhanVatTuHangHoaFilter {
+export function getDefaultGhiNhanDoanhThuFilter(): GhiNhanDoanhThuFilter {
   const ky = 'thang-nay' as KyValue
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
 
-export function nhanVatTuHangHoaSoDonHangTiepTheo(): string {
+export function ghiNhanDoanhThuSoDonHangTiepTheo(): string {
   const year = getCurrentYear()
   let maxSo = 0
   for (const d of _donList) {

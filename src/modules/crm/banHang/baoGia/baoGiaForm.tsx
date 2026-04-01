@@ -26,7 +26,6 @@ import { vi } from 'date-fns/locale'
 import 'react-datepicker/dist/react-datepicker.css'
 import {
   LOOKUP_CONTROL_HEIGHT,
-  LOOKUP_CHEVRON_WIDTH,
   lookupInputWithChevronStyle,
   lookupChevronOverlayStyle,
   lookupActionButtonStyle,
@@ -39,8 +38,7 @@ import { vatTuHangHoaGetForBanHang } from '../../../kho/khoHang/vatTuHangHoaApi'
 import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { vietTatTenNganHang } from '../../../../utils/nganHangDisplay'
-import { mau_bgkhongdongia, mau_bgcodongia } from './baoGiaGridMau'
-import { loadKhoListFromStorage, saveKhoListToStorage, type KhoStorageItem } from '../../../kho/khoHang/khoStorage'
+import { mau_bgkhongdongia, mau_bgcodongia, mau_bgcodongia_khong_vat } from './baoGiaGridMau'
 import {
   formatSoNguyenInput,
   formatNumberDisplay,
@@ -54,6 +52,7 @@ import {
   parseFloatVN,
   parseNumber,
 } from '../../../../utils/numberFormat'
+import { dvtLaMetVuong } from '../../../../utils/dvtLaMetVuong'
 import {
   COL_DD_GH,
   buildDvtOptionsForVthh,
@@ -79,9 +78,11 @@ import {
   type BaoGiaRecord,
   type BaoGiaChiTiet,
   type BaoGiaAttachmentItem,
-  TINH_TRANG_BAO_GIA,
   TINH_TRANG_BAO_GIA_DA_GUI_KHACH,
+  baoGiaBiKhoaChinhSuaTheoTinhTrang,
+  HTQL_BAO_GIA_RELOAD_EVENT,
 } from './baoGiaApi'
+import { HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import {
   nhanVatTuHangHoaGetAll,
   getDefaultNhanVatTuHangHoaFilter,
@@ -96,24 +97,25 @@ import {
   setNhanVatTuHangHoaDraft,
   clearNhanVatTuHangHoaDraft,
   type NhanVatTuHangHoaRecord,
-} from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
-import type { NhanVatTuHangHoaApi } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
-import { NhanVatTuHangHoaApiProvider } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
-import { NhanVatTuHangHoaFormModal } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
+} from '../../muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+import type { NhanVatTuHangHoaApi } from '../../muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
+import { NhanVatTuHangHoaApiProvider } from '../../muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
+import { NhanVatTuHangHoaFormModal } from '../../muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
 import {
   BaoGiaDinhKemModal,
   chuanHoaDuongDanDinhKemBaoGia,
   partMccForPath,
   type BaoGiaDinhKemPendingRow,
 } from './baoGiaDinhKemModal'
+import { layLichSuBanChoKhach, coLichSuBan } from './lichSuBanHangKhach'
 import { useBaoGiaApi } from './baoGiaApiContext'
 import { TINH_TRANG_NVTHH_DA_NHAP_KHO } from './baoGiaApi'
 import { setUnsavedChanges } from '../../../../context/unsavedChanges'
 import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { HTQL_FORM_ERROR_BORDER, htqlFocusAndScrollIntoView } from '../../../../utils/formValidationFocus'
+import { preserveTimeWhenCalendarDayChanges } from '../../../../utils/reactDatepickerPreserveTime'
 import { ThemDieuKhoanThanhToanModal } from '../../shared/themDieuKhoanThanhToanModal'
-import { ThemKhoModal } from '../../../kho/khoHang/themKhoModal'
 import { hinhThucGetAll, type HinhThucRecord } from '../../shared/hinhThucApi'
 import { getBanksVietnam, type BankItem } from '../../shared/banksApi'
 import { ThemHinhThucModal } from '../../shared/themHinhThucModal'
@@ -298,8 +300,9 @@ function NvthhChungTuDateTimeRow({
             {...htqlDatePickerPopperTop}
             selected={selected}
             onChange={(d: Date | null) => {
-              if (d && ngayDonHang && d.getTime() < ngayDonHang.getTime()) return
-              onChange(d)
+              const merged = preserveTimeWhenCalendarDayChanges(d, selected)
+              if (merged && ngayDonHang && merged.getTime() < ngayDonHang.getTime()) return
+              onChange(merged)
             }}
             open={pickerOpen}
             onClickOutside={() => setPickerOpen(false)}
@@ -629,6 +632,7 @@ export interface BaoGiaFormProps {
   onSaved?: () => void
   /** Kéo form (giống form Vật tư hàng hóa) */
   onHeaderPointerDown?: (e: React.MouseEvent) => void
+  headerDragStyle?: React.CSSProperties
   dragging?: boolean
   /** Thu nhỏ form (chỉ còn thanh tiêu đề) */
   onMinimize?: () => void
@@ -656,9 +660,6 @@ export interface BaoGiaFormProps {
   viewOnlyLocked?: boolean
 }
 
-/** [YC30] Trạng thái báo giá - 5 options mới */
-const TINH_TRANG_OPTIONS_FORM = TINH_TRANG_BAO_GIA.map(tt => ({ value: tt, label: tt }))
-
 /** Phiếu NVTHH: hiển thị «Đã nhập kho» thay cho cùng giá trị đồng bộ BG «Đã nhận hàng». */
 function normalizeTinhTrangPhieuNvthhForForm(tinh: string | undefined, laPhieuNhan: boolean): string {
   const t = (tinh ?? '').trim()
@@ -679,7 +680,16 @@ const THUE_SUAT_GTGT_OPTIONS = [
 
 /** Cột ĐĐGH — hằng COL_DD_GH từ utils/donHangMuaCalculations (utils chung) */
 const mauBgCoDonGiaDisplay = [...mau_bgcodongia, COL_DD_GH, 'Ghi chú'] as const
+const mauBgCoDonGiaKhongVatDisplay = [...mau_bgcodongia_khong_vat, COL_DD_GH, 'Ghi chú'] as const
 const mauBgKhongDonGiaDisplay = [...mau_bgkhongdongia, COL_DD_GH] as const
+
+/** Bản ghi cũ không có `ap_dung_vat_gtgt` → coi như có VAT; form thêm mới không có bản ghi → mặc định không VAT (YC44). */
+function deriveApDungVatGtgtTuBanGhi(r: BaoGiaRecord | Partial<BaoGiaRecord> | null | undefined): boolean {
+  if (r == null) return false
+  const v = (r as BaoGiaRecord).ap_dung_vat_gtgt
+  if (typeof v === 'boolean') return v
+  return true
+}
 
 /** [YC37] Một dòng trống theo mẫu — Lượng mặc định 1. */
 function createEmptyBaoGiaLine(mau: 'codongia' | 'khongdongia'): BaoGiaGridLineRow {
@@ -703,6 +713,7 @@ function chiTietToBaoGiaLines(ct: BaoGiaChiTiet[]): BaoGiaGridLineRow[] {
     delete row['Tên VTHH']
     delete row['ĐG mua']
     row[BAO_GIA_COL_TEN_SPHH] = ten
+    row['Nội dung'] = (c as BaoGiaChiTiet).noi_dung ?? ''
     row['Đơn giá'] = dg
     if (c) {
       if (c.chieu_dai != null && Number(c.chieu_dai) > 0) row['mD'] = formatSoThapPhan(String(c.chieu_dai), 4)
@@ -714,20 +725,19 @@ function chiTietToBaoGiaLines(ct: BaoGiaChiTiet[]): BaoGiaGridLineRow[] {
   })
 }
 
-/** Thứ tự ô Địa điểm GH: luôn **kho nhập** trước **tên công trình** (form phiếu NVTHH: hai trường cùng một hàng sau «Kho nhập»). */
+/** Thứ tự ô Địa điểm GH theo hình thức (đã bỏ trường Kho nhập — mỗi slot tương ứng một dòng ĐĐGH / địa chỉ). */
 function buildHinhThucDiaDiemOrder(
   hinhThucSelectedIds: string[],
   hinhThucList: { id: string; ten: string }[]
-): { type: 'ten_cong_trinh' | 'kho_nhap' }[] {
-  const khoSlots: { type: 'kho_nhap' }[] = []
-  const ctSlots: { type: 'ten_cong_trinh' }[] = []
+): { type: 'dia_chi_dd' }[] {
+  const slots: { type: 'dia_chi_dd' }[] = []
   for (const id of hinhThucSelectedIds) {
     const h = hinhThucList.find((x) => x.id === id)
     if (!h?.ten) continue
-    if (/không nhập kho|khong nhap kho/i.test(h.ten)) ctSlots.push({ type: 'ten_cong_trinh' })
-    else if (/nhập kho|nhap kho/i.test(h.ten) && !/không|khong/i.test(h.ten)) khoSlots.push({ type: 'kho_nhap' })
+    if (/không nhập kho|khong nhap kho/i.test(h.ten)) slots.push({ type: 'dia_chi_dd' })
+    else if (/nhập kho|nhap kho/i.test(h.ten) && !/không|khong/i.test(h.ten)) slots.push({ type: 'dia_chi_dd' })
   }
-  return [...khoSlots, ...ctSlots]
+  return slots
 }
 
 /**
@@ -736,15 +746,14 @@ function buildHinhThucDiaDiemOrder(
  * - Bản ghi cũ chỉ có `nhap_kho` nhưng còn tên/địa chỉ CT → bật thêm hình thức không nhập kho.
  */
 function deriveHinhThucSelectedIdsFromRecord(
-  d: Partial<BaoGiaRecord> & { hinh_thuc?: string; kho_nhap_id?: string; ten_cong_trinh?: string; dia_chi_cong_trinh?: string } | null | undefined
+  d: Partial<BaoGiaRecord> & { hinh_thuc?: string; dia_chi_cong_trinh?: string } | null | undefined
 ): string[] {
   if (!d) return []
   const all = hinhThucGetAll()
   const htKho = all.find((x) => /nhập kho|nhap kho/i.test(x.ten) && !/không|khong/i.test(x.ten))
   const htCt = all.find((x) => /không nhập kho|khong nhap kho/i.test(x.ten))
   const mode = (d.hinh_thuc ?? '').trim()
-  const coCt = Boolean((d.ten_cong_trinh ?? '').trim() || (d.dia_chi_cong_trinh ?? '').trim())
-  const coKhoId = Boolean((d.kho_nhap_id ?? '').trim())
+  const coCt = Boolean((d.dia_chi_cong_trinh ?? '').trim())
   const ids: string[] = []
   if (mode === 'ca_hai') {
     if (htKho) ids.push(htKho.id)
@@ -755,7 +764,6 @@ function deriveHinhThucSelectedIdsFromRecord(
     if (htKho) ids.push(htKho.id)
     if (coCt && htCt && !ids.includes(htCt.id)) ids.push(htCt.id)
   } else {
-    if (coKhoId && htKho) ids.push(htKho.id)
     if (coCt && htCt && !ids.includes(htCt.id)) ids.push(htCt.id)
     if (ids.length === 0 && htKho) ids.push(htKho.id)
   }
@@ -783,6 +791,11 @@ function getDiaDiemGhOptions(list: string[], effectiveFirst: string): { idx: num
   return opts
 }
 
+/** Tab Khách hàng: «Người liên hệ» lưu `ho_va_ten_lien_he`; đồng bộ ưu tiên trước `nguoi_lien_he`. */
+function tenNguoiLienHeTuDanhBaKh(kh: KhachHangRecord): string {
+  return (kh.ho_va_ten_lien_he ?? kh.nguoi_lien_he ?? '').trim()
+}
+
 /** Hiển thị ĐVT theo nguyên tắc ĐVT chính: ky_hieu || ten_dvt, không hiển thị mã */
 function dvtHienThiLabel(
   value: string | null | undefined,
@@ -796,9 +809,10 @@ function dvtHienThiLabel(
 
 /** Độ rộng cột cố định (rule mau_gia: STT, Mã, Tên, ĐVT, Kích thước, Số lượng giữ nguyên khi chuyển mẫu). */
 const COL_WIDTH_STT = 36
-const COL_WIDTH_MA = 78
-const COL_WIDTH_TEN = 232
-const COL_WIDTH_DVT = 88
+const COL_WIDTH_MA = 88
+const COL_WIDTH_TEN = 220
+const COL_WIDTH_NOI_DUNG = 208
+const COL_WIDTH_DVT = 76
 const COL_WIDTH_CHIEU_DAI = 68
 const COL_WIDTH_CHIEU_RONG = 68
 const COL_WIDTH_LUONG = 68
@@ -810,12 +824,13 @@ const OFFSET_TRAI_COT_MA_SPHH = COL_WIDTH_ACTION + COL_WIDTH_STT + 5
 function colWidthStyle(col: string, ghiChuFill?: boolean): React.CSSProperties {
   if (col === 'Mã') return { width: COL_WIDTH_MA, minWidth: COL_WIDTH_MA, maxWidth: COL_WIDTH_MA }
   if (col === BAO_GIA_COL_TEN_SPHH) return { width: COL_WIDTH_TEN, minWidth: COL_WIDTH_TEN, maxWidth: COL_WIDTH_TEN }
+  if (col === 'Nội dung') return { width: COL_WIDTH_NOI_DUNG, minWidth: COL_WIDTH_NOI_DUNG, maxWidth: COL_WIDTH_NOI_DUNG }
   if (col === 'ĐVT') return { width: COL_WIDTH_DVT, minWidth: COL_WIDTH_DVT, maxWidth: COL_WIDTH_DVT }
   if (col === 'mD') return { width: COL_WIDTH_CHIEU_DAI, minWidth: COL_WIDTH_CHIEU_DAI, maxWidth: COL_WIDTH_CHIEU_DAI }
   if (col === 'mR') return { width: COL_WIDTH_CHIEU_RONG, minWidth: COL_WIDTH_CHIEU_RONG, maxWidth: COL_WIDTH_CHIEU_RONG }
   if (col === 'Lượng') return { width: COL_WIDTH_LUONG, minWidth: COL_WIDTH_LUONG, maxWidth: COL_WIDTH_LUONG }
   if (col === 'Số lượng') return { width: COL_WIDTH_SO_LUONG, minWidth: COL_WIDTH_SO_LUONG, maxWidth: COL_WIDTH_SO_LUONG }
-  if (col === 'Ghi chú') return ghiChuFill ? { width: '100%', minWidth: 96 } : { width: 160, minWidth: 96 }
+  if (col === 'Ghi chú') return ghiChuFill ? { width: '100%', minWidth: 72 } : { width: 104, minWidth: 72 }
   if (col === 'Đơn giá') return { width: 100, minWidth: 88 }
   if (col === 'Thành tiền') return { width: 100, minWidth: 88 }
   if (col === '% thuế GTGT') return { width: 78, minWidth: 78, maxWidth: 78 }
@@ -829,7 +844,7 @@ const STICKY_Z_TH_TOP = 5
 const STICKY_Z_TH_CORNER = 6
 const STICKY_Z_TD_LEFT = 4
 
-type StickyTraiKind = 'action' | 'stt' | 'ma' | 'ten' | 'dvt'
+type StickyTraiKind = 'action' | 'stt' | 'ma' | 'ten' | 'noi_dung' | 'dvt'
 
 function gridStickyTraiPx(kind: StickyTraiKind): number {
   switch (kind) {
@@ -841,14 +856,17 @@ function gridStickyTraiPx(kind: StickyTraiKind): number {
       return COL_WIDTH_ACTION + COL_WIDTH_STT
     case 'ten':
       return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA
-    case 'dvt':
+    case 'noi_dung':
       return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN
+    case 'dvt':
+      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_NOI_DUNG
   }
 }
 
 function cotChiTietLaCotTraiCoDinh(col: string): StickyTraiKind | null {
   if (col === 'Mã') return 'ma'
   if (col === BAO_GIA_COL_TEN_SPHH) return 'ten'
+  if (col === 'Nội dung') return 'noi_dung'
   if (col === 'ĐVT') return 'dvt'
   return null
 }
@@ -1041,7 +1059,7 @@ function mauCoDonGiaLines(): BaoGiaGridLineRow[] {
   return [createEmptyBaoGiaLine('codongia')]
 }
 
-export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, readOnly = false, initialDon, initialChiTiet, prefillDon, prefillChiTiet, onMinimize, onMaximize, onSavedAndView: _onSavedAndView, formTitle: _formTitle, soDonLabel: soDonLabelProp, phieuNhanTuBaoGia = false, phieuNhanThemMoiTuDanhSach = false, viewOnlyLocked = false }: BaoGiaFormProps) {
+export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragStyle, dragging, readOnly = false, initialDon, initialChiTiet, prefillDon, prefillChiTiet, onMinimize, onMaximize, onSavedAndView: _onSavedAndView, formTitle: _formTitle, soDonLabel: soDonLabelProp, phieuNhanTuBaoGia = false, phieuNhanThemMoiTuDanhSach = false, viewOnlyLocked = false }: BaoGiaFormProps) {
   const api = useBaoGiaApi()
   const toastApi = useToastOptional()
   const soDonLabel = soDonLabelProp ?? 'Mã BG'
@@ -1055,7 +1073,9 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     (initialDon.tinh_trang === TINH_TRANG_BAO_GIA_DA_GUI_KHACH ||
       initialDon.tinh_trang === TINH_TRANG_NVTHH_DA_NHAP_KHO)
   const donHuyBoChiXem = initialDon != null && initialDon.tinh_trang === 'Hủy bỏ'
-  const effectiveReadOnly = (readOnly && !editingFromView) || donDaNhanHangXem || donHuyBoChiXem || viewOnlyLocked
+  const khoaSauTaoGd = initialDon != null && baoGiaBiKhoaChinhSuaTheoTinhTrang(initialDon.tinh_trang ?? '')
+  const effectiveReadOnly =
+    (readOnly && !editingFromView) || donDaNhanHangXem || donHuyBoChiXem || viewOnlyLocked || khoaSauTaoGd
   /** Chi tiết VTHH chỉ đọc khi form ở chế độ xem (readOnly). */
   const chiTietReadOnly = effectiveReadOnly
   /** Phiếu nhận từ BG: không thêm/xóa dòng; chỉ sửa cột Số lượng — trừ khi «Thêm mới» từ danh sách (không prefill BG). */
@@ -1066,6 +1086,20 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     return ''
   })
   const [khachHangId, setKhachHangId] = useState<number | null>(null)
+  const [lichSuMoRong, setLichSuMoRong] = useState<Record<string, boolean>>({})
+  const [lichSuTick, setLichSuTick] = useState(0)
+
+  useEffect(() => {
+    const bump = () => setLichSuTick((t) => t + 1)
+    window.addEventListener(HTQL_BAO_GIA_RELOAD_EVENT, bump)
+    window.addEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, bump)
+    window.addEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    return () => {
+      window.removeEventListener(HTQL_BAO_GIA_RELOAD_EVENT, bump)
+      window.removeEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, bump)
+      window.removeEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    }
+  }, [])
   /** Mã KH (ma_kh) — dùng đặt tên file đính kèm theo rule hệ thống. */
   const [khachHangMa, setKhachHangMa] = useState('')
   const khPartDinhKem = useMemo(() => partMccForPath(khachHangMa), [khachHangMa])
@@ -1143,19 +1177,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     const h = hinhThucList.find((x) => x.id === id)
     return h?.ten ? /không nhập kho|khong nhap kho/i.test(h.ten) : false
   })
-  const [khoDropdownOpen, setKhoDropdownOpen] = useState(false)
-  const [khoSearchKeyword, setKhoSearchKeyword] = useState('')
-  const [khoDropdownRect, setKhoDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
-  const refKhoWrap = useRef<HTMLDivElement>(null)
-  const [khoNhapId, setKhoNhapId] = useState(() => {
-    const h = (initialDon ?? prefillDon) as { kho_nhap_id?: string } | null | undefined
-    return h?.kho_nhap_id ?? ''
-  })
-  const [tenCongTrinh, setTenCongTrinh] = useState(() => {
-    const h = (initialDon ?? prefillDon) as { ten_cong_trinh?: string } | null | undefined
-    return h?.ten_cong_trinh ?? ''
-  })
-  const [khoList, setKhoList] = useState<KhoStorageItem[]>(() => loadKhoListFromStorage())
   const [diaDiemGiaoHangList, setDiaDiemGiaoHangList] = useState<string[]>(() => {
     const raw = (initialDon ?? prefillDon) as { dia_diem_giao_hang?: string } | null | undefined
     const s = raw?.dia_diem_giao_hang ?? ''
@@ -1202,7 +1223,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     const raw = isViewMode && initialDon ? initialDon.tinh_trang : prefillDon?.tinh_trang
     return normalizeTinhTrangPhieuNvthhForForm(raw, laPhieuNhanNvthh)
   })
-  const [tgNhanHangPickerOpen, setTgNhanHangPickerOpen] = useState(false)
   const [tgNhapPickerOpen, setTgNhapPickerOpen] = useState(false)
   const [phieuChiNgayPickerOpen, setPhieuChiNgayPickerOpen] = useState(false)
   const [ngayHoaDonPickerOpen, setNgayHoaDonPickerOpen] = useState(false)
@@ -1231,14 +1251,15 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
   const [tlCkInput, setTlCkInput] = useState(() => {
     const r = (initialDon ?? prefillDon) as BaoGiaRecord | undefined
     const v = r?.tl_ck
-    if (v != null && typeof v === 'number' && Number.isFinite(v)) return formatSoThapPhan(v, 3)
-    return '0,000'
+    if (v != null && typeof v === 'number' && Number.isFinite(v)) return v === 0 ? '0' : formatSoThapPhan(v, 3)
+    return '0'
   })
   const [tienCkInput, setTienCkInput] = useState(() => {
     const r = (initialDon ?? prefillDon) as BaoGiaRecord | undefined
     const v = r?.tien_ck
     return v != null && typeof v === 'number' && Number.isFinite(v) ? formatSoTienHienThi(v) : formatSoTienHienThi(0)
   })
+  const [apDungVatGtgt, setApDungVatGtgt] = useState(() => deriveApDungVatGtgtTuBanGhi((initialDon ?? prefillDon) as BaoGiaRecord | null))
   const chietKhauLastEditRef = useRef<'tl' | 'tien' | null>(null)
   const tlCkInputRef = useRef('')
   const tienCkInputRef = useRef('')
@@ -1288,7 +1309,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
   const [hinhThucDropdownOpen, setHinhThucDropdownOpen] = useState(false)
   const [hinhThucDropdownRect, setHinhThucDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const refHinhThucWrap = useRef<HTMLDivElement>(null)
-  const [showThemKhoModal, setShowThemKhoModal] = useState(false)
   const [deleteDiaDiemModal, setDeleteDiaDiemModal] = useState<{ index: number; content: string } | null>(null)
   const [activeDiaDiemIndex, setActiveDiaDiemIndex] = useState<number | null>(null)
   const [diaChiCongTrinh, setDiaChiCongTrinh] = useState(() => {
@@ -1412,6 +1432,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
   const editingEnrichedRef = useRef(false)
   const prefillEnrichedRef = useRef(false)
   const didSetSoDonRef = useRef(false)
+  /** Báo giá thường: mặc định Hiệu lực đến = ngày tạo + 7 (một lần). */
+  const didSetHieuLucDefaultRef = useRef(false)
   const didPrefillRef = useRef(false)
   const [valErrKey, setValErrKey] = useState<string | null>(null)
   const refTgNhanBGInput = useRef<HTMLInputElement>(null)
@@ -1435,16 +1457,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     (): React.CSSProperties => ({ ...fieldRow, marginBottom: phieuNhanTuBaoGia ? 0 : FIELD_ROW_GAP }),
     [phieuNhanTuBaoGia]
   )
-
-  /** Phiếu NVTHH — ô chọn kho: rộng theo nhãn dài nhất trong danh sách (ít dư khoảng trắng). */
-  const khoNhapPickWidthFromListMaxPx = useMemo(() => {
-    let longest = '-- Chọn --'
-    for (const k of khoList) {
-      const L = (k.label ?? '').trim()
-      if (L.length > longest.length) longest = L
-    }
-    return Math.ceil(longest.length * 7.2) + LOOKUP_CHEVRON_WIDTH + 52
-  }, [khoList])
 
   const phieuChiStkInputCh = useMemo(() => {
     const a = phieuChiTaiKhoanChi.trim().length
@@ -1567,6 +1579,19 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     setDanhSachDKTT(loadDieuKhoanThanhToanKh())
   }, [])
 
+  useEffect(() => {
+    if (initialDon != null || phieuNhanTuBaoGia) return
+    if (didSetHieuLucDefaultRef.current) return
+    if (!ngayDonHang) return
+    if (ngayGiaoHang != null) {
+      didSetHieuLucDefaultRef.current = true
+      return
+    }
+    const base = new Date(ngayDonHang.getFullYear(), ngayDonHang.getMonth(), ngayDonHang.getDate())
+    setNgayGiaoHang(addDays(base, 7))
+    didSetHieuLucDefaultRef.current = true
+  }, [initialDon, phieuNhanTuBaoGia, ngayDonHang, ngayGiaoHang])
+
   /** Đánh dấu form đang nhập dở để cảnh báo khi refresh (F5). Clean khi đóng hoặc lưu. */
   useEffect(() => {
     if (!effectiveReadOnly) setUnsavedChanges(true)
@@ -1618,8 +1643,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       const ext = prefillDon as BaoGiaRecord
       if (ext.phieu_chi_ngay != null) setPhieuChiNgay(parseIsoToDate(ext.phieu_chi_ngay))
       setHinhThucSelectedIds(deriveHinhThucSelectedIdsFromRecord(ext))
-      if (ext.kho_nhap_id != null) setKhoNhapId(ext.kho_nhap_id)
-      if (ext.ten_cong_trinh != null) setTenCongTrinh(ext.ten_cong_trinh)
       if (ext.dia_chi_cong_trinh != null) setDiaChiCongTrinh(ext.dia_chi_cong_trinh)
       if (prefillDon.attachments?.length) {
         setAttachments(prefillDon.attachments.map((a) => ({ ...a })))
@@ -1629,7 +1652,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         if (pd.ten_nguoi_lien_he != null) setTenNguoiLienHe(String(pd.ten_nguoi_lien_he))
         if (pd.so_dien_thoai_lien_he != null) setSoDienThoaiLienHe(String(pd.so_dien_thoai_lien_he))
         if (pd.so_dien_thoai != null) setSoDienThoaiCaNhan(String(pd.so_dien_thoai))
-        if (pd.tl_ck != null && typeof pd.tl_ck === 'number') setTlCkInput(formatSoThapPhan(pd.tl_ck, 3))
+        if (pd.tl_ck != null && typeof pd.tl_ck === 'number')
+          setTlCkInput(pd.tl_ck === 0 ? '0' : formatSoThapPhan(pd.tl_ck, 3))
         if (pd.tien_ck != null && typeof pd.tien_ck === 'number') setTienCkInput(formatSoTienHienThi(pd.tien_ck))
       }
       // so_bao_gia: luôn dùng số tự sinh của báo giá / phiếu nhận
@@ -1639,10 +1663,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       setLines(chiTietToBaoGiaLines(prefillChiTiet))
     }
   }, [isViewMode, prefillDon, prefillChiTiet, laPhieuNhanNvthh, phieuNhanTuBaoGia])
-
-  useEffect(() => {
-    setKhoList(loadKhoListFromStorage())
-  }, [])
 
   useEffect(() => {
     if (hinhThucDropdownOpen && refHinhThucWrap.current) {
@@ -1695,8 +1715,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       setDiaChi(bg.dia_chi ?? '')
       setNguoiGiaoHang(bg.nguoi_giao_hang ?? '')
       setHinhThucSelectedIds(deriveHinhThucSelectedIdsFromRecord(bg))
-      setKhoNhapId((bg as BaoGiaRecord & { kho_nhap_id?: string }).kho_nhap_id ?? '')
-      setTenCongTrinh((bg as BaoGiaRecord & { ten_cong_trinh?: string }).ten_cong_trinh ?? '')
       setDiaChiCongTrinh((bg as BaoGiaRecord & { dia_chi_cong_trinh?: string }).dia_chi_cong_trinh ?? '')
       setMaSoThue(bg.ma_so_thue ?? '')
       setDienGiai(bg.dien_giai ?? '')
@@ -1753,7 +1771,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     setTgNhapPickerOpen(false)
     setPhieuChiNgayPickerOpen(false)
     setNgayHoaDonPickerOpen(false)
-    setTgNhanHangPickerOpen(false)
   }, [phieuNhanTabChung, phieuNhanTuBaoGia])
 
   /** Đồng bộ id + mã KH từ danh bạ (tên / chuỗi «mã - tên» cũ). Phiếu: chuẩn về chỉ tên khi khớp. */
@@ -1775,8 +1792,15 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       setKhachHangId(found.id)
       setKhachHangMa((found.ma_kh ?? '').trim())
       if (laPhieuNhanNvthh) setKhachHangDisplay((found.ten_kh || '').trim())
+      if (found.loai_kh === 'to_chuc') {
+        const saved = (initialDon ?? prefillDon) as BaoGiaRecord | undefined
+        if (!saved?.ten_nguoi_lien_he?.trim()) {
+          setTenNguoiLienHe(tenNguoiLienHeTuDanhBaKh(found))
+          setSoDienThoaiLienHe(soDienThoaiUuTienTuKhachHang(found))
+        }
+      }
     }
-  }, [initialDon?.khach_hang, prefillDon?.khach_hang, khList, laPhieuNhanNvthh])
+  }, [initialDon?.khach_hang, prefillDon?.khach_hang, khList, laPhieuNhanNvthh, initialDon, prefillDon])
 
   /** Đổi đơn (id): nạp file đính kèm từ bản ghi và chuẩn hóa `name`/`virtual_path` theo Mã BG + KH hiện tại (dữ liệu cũ có thể còn `KH_unknown` trong tên file). */
   useEffect(() => {
@@ -1823,14 +1847,17 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
   /** Khi chuyển sang xem đơn khác (initialDon/initialChiTiet đổi) mà form vẫn mở: đồng bộ toàn bộ state từ props để hiển thị đúng đơn mới. */
   useEffect(() => {
     if (!readOnly || initialDon == null) return
-    const d = initialDon as BaoGiaRecord & { hinh_thuc?: string; kho_nhap_id?: string; ten_cong_trinh?: string; dia_chi_cong_trinh?: string }
+    const d = initialDon as BaoGiaRecord & { hinh_thuc?: string; dia_chi_cong_trinh?: string }
+    setApDungVatGtgt(deriveApDungVatGtgtTuBanGhi(initialDon))
     setTenNguoiLienHe((initialDon.ten_nguoi_lien_he ?? '').trim())
     setSoDienThoaiLienHe((initialDon.so_dien_thoai_lien_he ?? '').trim())
     setSoDienThoaiCaNhan((initialDon.so_dien_thoai ?? '').trim())
     setTlCkInput(
       initialDon.tl_ck != null && typeof initialDon.tl_ck === 'number' && Number.isFinite(initialDon.tl_ck)
-        ? formatSoThapPhan(initialDon.tl_ck, 3)
-        : '0,000',
+        ? initialDon.tl_ck === 0
+          ? '0'
+          : formatSoThapPhan(initialDon.tl_ck, 3)
+        : '0',
     )
     setTienCkInput(
       initialDon.tien_ck != null && typeof initialDon.tien_ck === 'number' && Number.isFinite(initialDon.tien_ck)
@@ -1846,8 +1873,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     setDieuKhoanTT(initialDon.dieu_khoan_tt ?? '')
     setSoNgayDuocNo(initialDon.so_ngay_duoc_no ?? '0')
     setHinhThucSelectedIds(deriveHinhThucSelectedIdsFromRecord(d))
-    setKhoNhapId(d.kho_nhap_id ?? '')
-    setTenCongTrinh(d.ten_cong_trinh ?? '')
     setDiaChiCongTrinh(d.dia_chi_cong_trinh ?? '')
     const dgh = (initialDon.dia_diem_giao_hang ?? '').trim()
     setDiaDiemGiaoHangList(dgh ? dgh.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) : [''])
@@ -1933,30 +1958,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     return () => window.removeEventListener('mousedown', onMouseDown)
   }, [khDropdownOpen])
 
-  useEffect(() => {
-    if (khoDropdownOpen && refKhoWrap.current) {
-      const r = refKhoWrap.current.getBoundingClientRect()
-      setKhoDropdownRect({
-        top: r.bottom,
-        left: r.left,
-        width: phieuNhanTuBaoGia ? r.width : Math.max(r.width, 200),
-      })
-    } else {
-      setKhoDropdownRect(null)
-    }
-  }, [khoDropdownOpen, phieuNhanTuBaoGia])
-
-  useEffect(() => {
-    if (!khoDropdownOpen) return
-    const onMouseDown = (e: MouseEvent) => {
-      if (refKhoWrap.current?.contains(e.target as Node)) return
-      if ((e.target as HTMLElement).closest('[data-kho-dropdown]')) return
-      setKhoDropdownOpen(false)
-    }
-    window.addEventListener('mousedown', onMouseDown)
-    return () => window.removeEventListener('mousedown', onMouseDown)
-  }, [khoDropdownOpen])
-
   useLayoutEffect(() => {
     if (activeDiaDiemIndex != null && diaDiemSuggestions.length > 0 && refDiaDiemGiaoHangWrap.current) {
       const r = refDiaDiemGiaoHangWrap.current.getBoundingClientRect()
@@ -1986,20 +1987,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     return () => window.removeEventListener('mousedown', onMouseDown)
   }, [activeDiaDiemIndex])
 
-  /** Đồng bộ Địa điểm GH từ hình thức: địa chỉ kho / địa chỉ công trình theo thứ tự chọn hình thức (nhập vào các ô ĐĐGH, không còn ô riêng “Địa chỉ công trình”). */
+  /** Đồng bộ Địa điểm GH từ hình thức (địa chỉ công trình theo thứ tự slot). */
   useEffect(() => {
     if (effectiveReadOnly) return
     const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
     const addrs: string[] = []
-    for (const { type } of order) {
-      if (type === 'kho_nhap' && khoNhapId) {
-        const kho = khoList.find((k) => k.id === khoNhapId)
-        if (kho?.dia_chi?.trim()) addrs.push(kho.dia_chi.trim())
-        else addrs.push('')
-      } else if (type === 'ten_cong_trinh') {
-        /** Không trim: trim trong effect xóa dấu cách đang gõ trong ô ĐĐGH / địa chỉ công trình. */
-        addrs.push(diaChiCongTrinh ?? '')
-      }
+    for (const _ of order) {
+      addrs.push(diaChiCongTrinh ?? '')
     }
     if (addrs.length > 0) {
       setDiaDiemGiaoHangList((prev) => {
@@ -2011,7 +2005,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         return merged.length > 0 ? merged : ['']
       })
     }
-  }, [effectiveReadOnly, hinhThucSelectedIds, khoNhapId, diaChiCongTrinh, khoList, hinhThucList])
+  }, [effectiveReadOnly, hinhThucSelectedIds, diaChiCongTrinh, hinhThucList])
 
   useEffect(() => {
     let cancelled = false
@@ -2056,7 +2050,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       return n
     })
     const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-    if (order[index]?.type === 'ten_cong_trinh') setDiaChiCongTrinh(value)
+    if (order[index]?.type === 'dia_chi_dd') setDiaChiCongTrinh(value)
     setActiveDiaDiemIndex(index)
     if (diaDiemDebounceRef.current) clearTimeout(diaDiemDebounceRef.current)
     if (!value.trim()) {
@@ -2078,7 +2072,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       return n
     })
     const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-    if (order[index]?.type === 'ten_cong_trinh') setDiaChiCongTrinh(addr)
+    if (order[index]?.type === 'dia_chi_dd') setDiaChiCongTrinh(addr)
     setDiaDiemSuggestions([])
   }, [hinhThucSelectedIds, hinhThucList])
 
@@ -2095,7 +2089,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       setSoDienThoaiLienHe('')
     } else {
       setMaSoThue(kh.ma_so_thue || '')
-      setTenNguoiLienHe((kh.nguoi_lien_he ?? '').trim())
+      setTenNguoiLienHe(tenNguoiLienHeTuDanhBaKh(kh))
       setSoDienThoaiLienHe(sdtUuTien)
       setSoDienThoaiCaNhan('')
     }
@@ -2182,6 +2176,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
 
   /** [YC30] Tính Số lượng từ Kích thước nếu VTHH có công thức */
   const calculateSoLuongFromKichThuoc = (line: BaoGiaGridLineRow): string => {
+    const dvtRaw = (line['ĐVT'] ?? '').trim()
+    if (!dvtLaMetVuong(dvtRaw, dvtList)) return line['Số lượng'] ?? ''
     const vthh = line._vthh
     if (!vthh?.cong_thuc_tinh_so_luong) return line['Số lượng'] ?? ''
     const formula = vthh.cong_thuc_tinh_so_luong.toLowerCase()
@@ -2213,7 +2209,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
     row._vthh = vthh
     const isCodongia = initialDon != null || mauHienTai === 'codongia'
     if (isCodongia) {
-      row['% thuế GTGT'] = vthh.thue_suat_gtgt ?? ''
+      if (apDungVatGtgt) row['% thuế GTGT'] = vthh.thue_suat_gtgt ?? ''
+      else row['% thuế GTGT'] = ''
       const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
       row['Đơn giá'] = getDonGiaBanBaoGiaLine(vthh, (row['ĐVT'] ?? '').trim() || (vthh.dvt_chinh ?? ''), sl)
     }
@@ -2250,7 +2247,11 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
   }, [diaDiemGiaoHangList, effectiveDiaDiemFirst])
 
   const buildPayload = (): BaoGiaCreatePayload => {
-    const { tongTienHang, tienThue } = computeDonHangMuaFooterTotals(lines)
+    const coBang =
+      initialDon != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0) || mauHienTai === 'codongia'
+    const apVat = coBang && apDungVatGtgt
+    const { tongTienHang, tienThue: tienThueRaw } = computeDonHangMuaFooterTotals(lines, { apDungVatGtgt: apVat })
+    const tienThue = apVat ? tienThueRaw : 0
     const tienCkTinh = Math.max(0, parseFloatVN(tienCkInput || '0'))
     const ttTongThanhToan = tongTienHang + tienThue - tienCkTinh
     const loaiKhDer = loaiKhachHangHienThi ?? 'doanh_nghiep'
@@ -2263,28 +2264,43 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         const donGia = isCodongia ? parseFloatVN(line['Đơn giá'] ?? '') : 0
         const soLuong = Math.max(0, parseFloatVN(line['Số lượng'] ?? ''))
         const thanhTien = isCodongia ? donGia * soLuong : 0
-        const pt = isCodongia ? parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '') : null
-        const tienThue = pt != null ? (thanhTien * pt) / 100 : 0
-        giaTriDonHang += thanhTien + tienThue
+        const pt = isCodongia && apVat ? parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '') : null
+        const tienThueLine = pt != null ? (thanhTien * pt) / 100 : 0
+        giaTriDonHang += thanhTien + (apVat ? tienThueLine : 0)
         const ddRaw = (line[COL_DD_GH] ?? '').trim()
         let ddIdx = parseInt(ddRaw, 10)
         if (!Number.isFinite(ddIdx) || ddIdx < 0) ddIdx = 0
+        const chieu_dai = parseFloatVN(line['mD'] ?? '') || 0
+        const chieu_rong = parseFloatVN(line['mR'] ?? '') || 0
+        const luongKt = Math.max(0, parseFloatVN(line['Lượng'] ?? '1') || 1)
         return {
           ma_hang: (line['Mã'] ?? '').trim(),
           ten_hang: (line[BAO_GIA_COL_TEN_SPHH] ?? '').trim(),
+          noi_dung: (line['Nội dung'] ?? '').trim(),
           dvt: (line['ĐVT'] ?? '').trim(),
           so_luong: soLuong,
           don_gia: donGia,
           thanh_tien: thanhTien,
           pt_thue_gtgt: pt,
-          tien_thue_gtgt: pt != null ? tienThue : null,
+          tien_thue_gtgt: pt != null ? tienThueLine : null,
           dd_gh_index: ddIdx,
+          chieu_dai,
+          chieu_rong,
+          luong: luongKt,
           ...(isCodongia ? { ghi_chu: (line['Ghi chú'] ?? '').trim() } : {}),
         }
       })
     const diaDiemGiaoHangFull = [effectiveDiaDiemFirst.trim(), ...diaDiemGiaoHangList.slice(1).map((x) => x.trim()).filter(Boolean)].filter(Boolean).join('\n') || effectiveDiaDiemFirst.trim()
     const ngayGiaoHangPayload =
       phieuNhanTuBaoGia ? ngayGiaoHang ?? ngayDonHang : ngayGiaoHang
+    const ngayGiaoHangIso =
+      phieuNhanTuBaoGia
+        ? ngayGiaoHangPayload
+          ? toIsoDateTime(ngayGiaoHangPayload)
+          : null
+        : ngayGiaoHangPayload
+          ? `${toIsoDate(ngayGiaoHangPayload)}T00:00:00`
+          : null
     const payload: BaoGiaCreatePayload = {
       loai_khach_hang: loaiKhDer,
       ten_nguoi_lien_he: !laCaNhan ? tenNguoiLienHe.trim() || undefined : undefined,
@@ -2293,7 +2309,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       tinh_trang: tinhTrang,
       ngay_bao_gia: toIsoDate(ngayDonHang) || toIsoDate(new Date()),
       so_bao_gia: soDonHang.trim() || 'BG',
-      ngay_giao_hang: ngayGiaoHangPayload ? toIsoDateTime(ngayGiaoHangPayload) : null,
+      ngay_giao_hang: ngayGiaoHangIso,
       khach_hang: khachHangDisplay.trim(),
       dia_chi: diaChi.trim(),
       ...(laPhieuNhanNvthh ? { nguoi_giao_hang: nguoiGiaoHang.trim() } : {}),
@@ -2307,6 +2323,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       tong_tien_hang: tongTienHang,
       tong_thue_gtgt: tienThue,
       tong_thanh_toan: ttTongThanhToan,
+      ap_dung_vat_gtgt: apVat,
       tl_ck: (() => {
         const t = parseFloatVN(tlCkInput || '')
         return Number.isFinite(t) && t >= 0 ? t : undefined
@@ -2318,8 +2335,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       chiTiet,
       hinh_thuc:
         hasNhapKho && hasKhongNhapKho ? 'ca_hai' : hasKhongNhapKho && !hasNhapKho ? 'khong_nhap_kho' : 'nhap_kho',
-      kho_nhap_id: hasNhapKho ? khoNhapId || undefined : undefined,
-      ten_cong_trinh: tenCongTrinh.trim() || undefined,
       dia_chi_cong_trinh: diaChiCongTrinh?.trim() || undefined,
       attachments:
         attachments.length > 0
@@ -2390,15 +2405,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
           ? phieuNhanTuBaoGia
             ? 'Vui lòng chọn hoặc nhập báo giá (Nhận hàng từ).'
             : 'Vui lòng chọn hoặc nhập mã báo giá đối chiếu.'
-          : 'Vui lòng nhập Tiêu đề.',
+          : 'Vui lòng nhập Tên báo giá.',
         refTieuDeInput.current,
       )
     }
     if (!khachHangDisplay.trim()) {
       return fail('kh', 'Vui lòng chọn Khách hàng.', refKhWrap.current?.querySelector('input') ?? refKhWrap.current)
     }
-    const tgGiaoHangTenLoi =
-      phieuNhanTuBaoGia && phieuNhanTabChung === 'phieu-chi' ? 'TG chi' : 'TG nhận hàng'
     if (phieuNhanTuBaoGia) {
       if (!ngayGiaoHang) {
         return fail('tg_nhap', 'Vui lòng chọn TG nhập.', refTgNhapNvthhInput.current)
@@ -2413,7 +2426,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         return fail('phieu_chi_ngay', 'Ngày chi không được nhỏ hơn TG tạo.', refPhieuChiNgayInput.current)
       }
     } else if (!ngayGiaoHang) {
-      return fail('tg_nhan', `Vui lòng chọn ${tgGiaoHangTenLoi}.`, refTgNhanBGInput.current)
+      return fail('tg_nhan', 'Vui lòng chọn Hiệu lực đến.', refTgNhanBGInput.current)
     }
     if (!soDonHang.trim()) {
       return fail('so_don', `${soDonLabelHienThi} không được để trống.`, null)
@@ -2430,13 +2443,12 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       const el = document.querySelector(`[data-BG-sl-idx="${badSlIdx}"]`) as HTMLElement | null
       return fail(`so_luong_${badSlIdx}`, 'Số lượng từng dòng VTHH phải lớn hơn 0.', el)
     }
-    if (
-      !phieuNhanTuBaoGia &&
-      ngayGiaoHang &&
-      ngayDonHang &&
-      ngayGiaoHang.getTime() < ngayDonHang.getTime()
-    ) {
-      return fail('tg_nhan', `${tgGiaoHangTenLoi} không được nhỏ hơn TG tạo.`, refTgNhanBGInput.current)
+    if (!phieuNhanTuBaoGia && ngayGiaoHang && ngayDonHang) {
+      const g = new Date(ngayGiaoHang.getFullYear(), ngayGiaoHang.getMonth(), ngayGiaoHang.getDate())
+      const d = new Date(ngayDonHang.getFullYear(), ngayDonHang.getMonth(), ngayDonHang.getDate())
+      if (g.getTime() < d.getTime()) {
+        return fail('tg_nhan', 'Hiệu lực đến không được nhỏ hơn TG tạo.', refTgNhanBGInput.current)
+      }
     }
     setLoi('')
     return true
@@ -2486,7 +2498,20 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
 
   tlCkInputRef.current = tlCkInput
   tienCkInputRef.current = tienCkInput
-  const { tongTienHang, tienThue } = useMemo(() => computeDonHangMuaFooterTotals(lines), [lines])
+  const coBangCoDonGiaTuDau =
+    initialDon != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0)
+  const hienThiFooterTongTien = coBangCoDonGiaTuDau || mauHienTai === 'codongia'
+  const currentColumns = useMemo((): readonly string[] => {
+    if (!hienThiFooterTongTien) return mauBgKhongDonGiaDisplay as readonly string[]
+    return (apDungVatGtgt ? mauBgCoDonGiaDisplay : mauBgCoDonGiaKhongVatDisplay) as readonly string[]
+  }, [hienThiFooterTongTien, apDungVatGtgt])
+  const { tongTienHang, tienThue } = useMemo(
+    () =>
+      computeDonHangMuaFooterTotals(lines, {
+        apDungVatGtgt: hienThiFooterTongTien ? apDungVatGtgt : true,
+      }),
+    [lines, apDungVatGtgt, hienThiFooterTongTien],
+  )
   const tienCkNum = Math.max(0, parseFloatVN(tienCkInput || '0'))
   const tongTienThanhToan = tongTienHang + tienThue - tienCkNum
   const soDong = lines.length
@@ -2525,35 +2550,24 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       .join(', ')
   }, [lines, dvtList])
 
-  const tinhTrangSelectOptions = useMemo(() => {
-    const base = TINH_TRANG_OPTIONS_FORM.map((o) =>
-      laPhieuNhanNvthh && o.value === TINH_TRANG_BAO_GIA_DA_GUI_KHACH
-        ? { value: TINH_TRANG_NVTHH_DA_NHAP_KHO, label: TINH_TRANG_NVTHH_DA_NHAP_KHO }
-        : { value: o.value, label: o.label }
-    )
-    if (tinhTrang && !base.some((o) => o.value === tinhTrang)) {
-      return [...base, { value: tinhTrang, label: tinhTrang }]
-    }
-    return base
-  }, [tinhTrang, laPhieuNhanNvthh])
-
   const phieuNhanLienKetTuDonMua = useMemo(() => {
     if (!initialDon?.id || phieuNhanTuBaoGia) return []
     const all = nhanVatTuHangHoaGetAll({ ...getDefaultNhanVatTuHangHoaFilter(), tu: '', den: '' })
     return all.filter((p) => (p.doi_chieu_don_mua_id ?? '').trim() === initialDon.id)
   }, [initialDon?.id, phieuNhanTuBaoGia])
 
+  const lichSuData = useMemo(() => {
+    if (phieuNhanTuBaoGia) return null
+    return layLichSuBanChoKhach(khachHangDisplay, { excludeBaoGiaId: initialDon?.id })
+  }, [khachHangDisplay, initialDon?.id, phieuNhanTuBaoGia, lichSuTick])
+
+  const showLichSuPanel = !phieuNhanTuBaoGia && coLichSuBan(lichSuData)
+
   const showLienQuanPhieuNhanHang =
     !phieuNhanTuBaoGia &&
     Boolean(initialDon?.id) &&
     tinhTrang === TINH_TRANG_BAO_GIA_DA_GUI_KHACH
 
-  /** Cột hiển thị theo rule mau_gia.mdc — codongia khi đang xem/sửa đơn; khongdongia khi chọn mẫu không đơn giá; luôn kèm cột ĐĐGH. */
-  const coBangCoDonGiaTuDau =
-    initialDon != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0)
-  const currentColumns = (coBangCoDonGiaTuDau ? mauBgCoDonGiaDisplay : mauHienTai === 'codongia' ? mauBgCoDonGiaDisplay : mauBgKhongDonGiaDisplay) as readonly string[]
-  /** Mẫu không đơn giá (thêm mới): ẩn tổng tiền / thuế / thanh toán ở footer. */
-  const hienThiFooterTongTien = coBangCoDonGiaTuDau || mauHienTai === 'codongia'
   const ghiChuLaCotCuoi = currentColumns.length > 0 && currentColumns[currentColumns.length - 1] === 'Ghi chú'
   const ghiChuFill = ghiChuLaCotCuoi
   const tableMinWidth = COL_WIDTH_STT + COL_WIDTH_ACTION + currentColumns.reduce((sum, c) => {
@@ -2568,7 +2582,11 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
       <div style={titleBarWrap}>
         <div
           onMouseDown={onHeaderPointerDown}
-          style={{ ...titleBarDrag, cursor: onHeaderPointerDown && dragging ? 'grabbing' : onHeaderPointerDown ? 'grab' : 'default' }}
+          style={{
+            ...titleBarDrag,
+            ...headerDragStyle,
+            cursor: onHeaderPointerDown && dragging ? 'grabbing' : onHeaderPointerDown ? 'grab' : 'default',
+          }}
         >
           {phieuNhanTuBaoGia
             ? tieuDePhieuNvthhDayDu
@@ -2597,7 +2615,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         </div>
       </div>
       <div style={toolbarWrap}>
-        {readOnly && effectiveReadOnly && !donDaNhanHangXem && !donHuyBoChiXem && !viewOnlyLocked && (
+        {readOnly && effectiveReadOnly && !donDaNhanHangXem && !donHuyBoChiXem && !viewOnlyLocked && !khoaSauTaoGd && (
           <button type="button" style={toolbarBtnAccent} onClick={() => setEditingFromView(true)}><Pencil size={14} /> Sửa</button>
         )}
         {!effectiveReadOnly && (
@@ -2609,7 +2627,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
               ref={refDinhKemBtn}
               type="button"
               style={toolbarBtn}
-              title="Đính kèm thiết kế (dktk)"
+              title={dktkPendingUploadRows.length > 0 ? 'Đang đọc file đính kèm vào bộ nhớ…' : 'Đính kèm thiết kế (dktk)'}
               onClick={() => {
                 setShowDinhKemModal((o) => {
                   const next = !o
@@ -2618,13 +2636,12 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                 })
               }}
             >
-              <Paperclip size={14} /> Đính kèm thiết kế
               {dktkPendingUploadRows.length > 0 ? (
-                <span style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, color: 'var(--accent)' }}>
-                  <Loader2 size={12} className="htql-spin" aria-hidden />
-                  Đang upload…
-                </span>
-              ) : null}
+                <Loader2 size={14} className="htql-spin" aria-hidden />
+              ) : (
+                <Paperclip size={14} aria-hidden />
+              )}
+              Đính kèm thiết kế
             </button>
             {attachments.length > 0 && (
               <span style={toolbarDinhKemBadge} aria-label={`${attachments.length} file đính kèm`}>
@@ -2833,7 +2850,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         </Modal>
       )}
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '8px 12px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0, padding: '8px 12px', gap: 0, alignItems: 'stretch' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 0 }}>
         {phieuNhanTuBaoGia && (
           <div
@@ -3031,8 +3049,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
             const thongTinChungFields = (
               <>
             {(!effectiveReadOnly || phieuNhanTuBaoGia || (thamChieu ?? '').trim() !== '') && (
-            <div style={fieldRowDyn}>
-              <label style={labelStyle}>{phieuNhanTuBaoGia ? 'Nhận hàng từ:' : 'Tiêu đề'}</label>
+            <div style={{ ...fieldRowDyn, alignItems: 'center' }}>
+              <label style={labelStyle}>{phieuNhanTuBaoGia ? 'Nhận hàng từ:' : 'Tên báo giá'}</label>
               <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                 {effectiveReadOnly ? (
                   <div
@@ -3102,10 +3120,22 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                         readOnly={false}
                         disabled={false}
                         placeholder={
-                          phieuNhanTuBaoGia ? 'Bấm để chọn đơn Chưa thực hiện…' : 'Nhập tiêu đề'
+                          phieuNhanTuBaoGia ? 'Bấm để chọn đơn Chưa thực hiện…' : 'Nhập tên báo giá'
                         }
                       />
                     </div>
+                  </div>
+                )}
+                {hienThiFooterTongTien && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, cursor: effectiveReadOnly ? 'default' : 'pointer', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                      <input type="checkbox" checked={apDungVatGtgt} disabled={effectiveReadOnly} onChange={() => setApDungVatGtgt(true)} />
+                      Có VAT
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, cursor: effectiveReadOnly ? 'default' : 'pointer', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                      <input type="checkbox" checked={!apDungVatGtgt} disabled={effectiveReadOnly} onChange={() => setApDungVatGtgt(false)} />
+                      Không VAT
+                    </label>
                   </div>
                 )}
               </div>
@@ -3470,304 +3500,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
               </div>
             </div>
             )}
-            {(hasKhongNhapKho || hasNhapKho) && (
-              phieuNhanTuBaoGia ? (
-                <>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                    width: '100%',
-                    minWidth: 0,
-                  }}
-                >
-                  {(() => {
-                    const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-                    const coKho = order.some((o) => o.type === 'kho_nhap')
-                    const coTenCt = order.some((o) => o.type === 'ten_cong_trinh')
-                    const khoLabelForWidth = (khoDropdownOpen ? khoSearchKeyword : khoNhapId ? (khoList.find((k) => k.id === khoNhapId)?.label ?? '') : '').trim()
-                    const khoTypingPx =
-                      Math.ceil((khoLabelForWidth || '-- Chọn --').length * 7.2) + LOOKUP_CHEVRON_WIDTH + 52
-                    const khoFitPx = Math.min(Math.max(Math.max(khoNhapPickWidthFromListMaxPx, khoTypingPx), 96), 520)
-                    const khoPick = (
-                      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', flex: '0 0 auto', flexShrink: 0 }}>
-                        <div
-                          ref={refKhoWrap}
-                          style={{
-                            display: 'flex',
-                            gap: 2,
-                            alignItems: 'center',
-                            position: 'relative',
-                            height: LOOKUP_CONTROL_HEIGHT,
-                            minHeight: LOOKUP_CONTROL_HEIGHT,
-                            borderRadius: 4,
-                            boxSizing: 'border-box',
-                            width: khoFitPx,
-                            minWidth: khoFitPx,
-                            maxWidth: khoFitPx,
-                            flexShrink: 0,
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT, width: '100%' }}>
-                            <input
-                              style={{
-                                ...inputStyle,
-                                ...lookupInputWithChevronStyle,
-                                width: '100%',
-                                minWidth: 0,
-                                maxWidth: '100%',
-                                boxSizing: 'border-box',
-                                cursor: effectiveReadOnly ? 'default' : 'pointer',
-                                height: LOOKUP_CONTROL_HEIGHT,
-                                minHeight: LOOKUP_CONTROL_HEIGHT,
-                              }}
-                              value={
-                                khoDropdownOpen
-                                  ? khoSearchKeyword
-                                  : khoNhapId
-                                    ? (khoList.find((k) => k.id === khoNhapId)?.label ?? '')
-                                    : ''
-                              }
-                              onChange={(e) => {
-                                if (effectiveReadOnly) return
-                                setKhoSearchKeyword(e.target.value)
-                                if (!khoDropdownOpen) setKhoDropdownOpen(true)
-                              }}
-                              onFocus={(e) => {
-                                if (effectiveReadOnly) return
-                                setKhoSearchKeyword(khoNhapId ? (khoList.find((k) => k.id === khoNhapId)?.label ?? '') : '')
-                                setKhoDropdownOpen(true)
-                                e.currentTarget.select()
-                              }}
-                              onClick={(e) => { if (!effectiveReadOnly) e.currentTarget.select() }}
-                              placeholder="-- Chọn --"
-                              readOnly={effectiveReadOnly}
-                              disabled={effectiveReadOnly}
-                            />
-                            <span style={lookupChevronOverlayStyle} aria-hidden><ChevronDown size={12} style={{ color: 'var(--accent-text)' }} /></span>
-                          </div>
-                          {!effectiveReadOnly && (
-                            <button type="button" style={lookupActionButtonStyle} title="Thêm kho mới" onClick={() => setShowThemKhoModal(true)} aria-label="Thêm kho"><Plus size={12} /></button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                    const hangKhoTenCt = (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          alignItems: 'center',
-                          gap: 8,
-                          width: '100%',
-                          minWidth: 0,
-                        }}
-                      >
-                        <label style={{ ...labelStyle, minWidth: 90, flexShrink: 0 }}>Kho nhập</label>
-                        {khoPick}
-                        <label style={{ ...labelStyle, minWidth: 90, flexShrink: 0 }}>Tên công trình</label>
-                        <input
-                          style={{ ...inputStyle, flex: '1 1 200px', minWidth: 140, maxWidth: '100%', boxSizing: 'border-box' }}
-                          value={tenCongTrinh}
-                          onChange={(e) => setTenCongTrinh(e.target.value)}
-                          readOnly={effectiveReadOnly}
-                          disabled={effectiveReadOnly}
-                          placeholder="Nhập tên công trình — địa chỉ nhập tại Địa điểm GH tương ứng"
-                          title="Địa chỉ công trình nhập tại dòng Địa điểm GH theo thứ tự hình thức"
-                        />
-                      </div>
-                    )
-                    if (coKho && coTenCt) return hangKhoTenCt
-                    if (coKho) {
-                      return (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0, flexWrap: 'wrap' }}>
-                          <label style={{ ...labelStyle, minWidth: 90, flexShrink: 0 }}>Kho nhập</label>
-                          {khoPick}
-                        </div>
-                      )
-                    }
-                    if (coTenCt) {
-                      return (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0, flexWrap: 'wrap' }}>
-                          <label style={{ ...labelStyle, minWidth: 90, flexShrink: 0 }}>Tên công trình</label>
-                          <input
-                            style={{ ...inputStyle, flex: 1, minWidth: 120, maxWidth: '100%', boxSizing: 'border-box' }}
-                            value={tenCongTrinh}
-                            onChange={(e) => setTenCongTrinh(e.target.value)}
-                            readOnly={effectiveReadOnly}
-                            disabled={effectiveReadOnly}
-                            placeholder="Nhập tên công trình — địa chỉ nhập tại Địa điểm GH tương ứng"
-                            title="Địa chỉ công trình nhập tại dòng Địa điểm GH theo thứ tự hình thức"
-                          />
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
-                </div>
-                  {khoDropdownOpen && khoDropdownRect && (
-                    <div
-                      data-kho-dropdown
-                      style={{
-                        position: 'fixed',
-                        top: khoDropdownRect.top,
-                        left: khoDropdownRect.left,
-                        width: khoDropdownRect.width,
-                        maxHeight: 220,
-                        overflowY: 'auto',
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 4,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        zIndex: 1050,
-                      }}
-                    >
-                      {khoList
-                        .filter((k) => matchSearchKeyword(k.label, khoSearchKeyword))
-                        .slice(0, 100)
-                        .map((k) => (
-                          <div
-                            key={k.id}
-                            role="option"
-                            tabIndex={0}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: 11,
-                              cursor: 'pointer',
-                              color: 'var(--text-primary)',
-                              borderBottom: '1px solid var(--border)',
-                            }}
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              setKhoNhapId(k.id)
-                              setKhoSearchKeyword(k.label)
-                              setKhoDropdownOpen(false)
-                            }}
-                          >
-                            {k.label}
-                          </div>
-                        ))}
-                      {khoList.filter((k) => matchSearchKeyword(k.label, khoSearchKeyword)).length === 0 && (
-                        <div style={{ padding: '10px', fontSize: 11, color: 'var(--text-muted)' }}>Không tìm thấy kho phù hợp.</div>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ ...fieldRowDyn, flexWrap: 'wrap', gap: 8 }}>
-                  {(() => {
-                    const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-                    return order.map(({ type }, idxHt) =>
-                      type === 'ten_cong_trinh' ? (
-                        <div key={`ht-ten-${idxHt}`} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 200px', minWidth: 0 }}>
-                          <label style={{ ...labelStyle, minWidth: 90 }}>Tên công trình</label>
-                          <input style={{ ...inputStyle, flex: 1, minWidth: 0 }} value={tenCongTrinh} onChange={(e) => setTenCongTrinh(e.target.value)} readOnly={effectiveReadOnly} disabled={effectiveReadOnly} placeholder="Nhập tên công trình — địa chỉ nhập tại Địa điểm GH tương ứng" title="Địa chỉ công trình nhập tại dòng Địa điểm GH theo thứ tự hình thức" />
-                        </div>
-                      ) : (
-                        <div key={`ht-kho-${idxHt}`} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                          <label style={{ ...labelStyle, minWidth: 90 }}>Kho nhập</label>
-                          <div
-                            ref={refKhoWrap}
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              display: 'flex',
-                              gap: 2,
-                              alignItems: 'center',
-                              position: 'relative',
-                              height: LOOKUP_CONTROL_HEIGHT,
-                              minHeight: LOOKUP_CONTROL_HEIGHT,
-                              borderRadius: 4,
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}>
-                              <input
-                                style={{ ...inputStyle, ...lookupInputWithChevronStyle, flex: 1, minWidth: 0, cursor: effectiveReadOnly ? 'default' : 'pointer', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}
-                                value={
-                                  khoDropdownOpen
-                                    ? khoSearchKeyword
-                                    : khoNhapId
-                                      ? (khoList.find((k) => k.id === khoNhapId)?.label ?? '')
-                                      : ''
-                                }
-                                onChange={(e) => {
-                                  if (effectiveReadOnly) return
-                                  setKhoSearchKeyword(e.target.value)
-                                  if (!khoDropdownOpen) setKhoDropdownOpen(true)
-                                }}
-                                onFocus={(e) => {
-                                  if (effectiveReadOnly) return
-                                  setKhoSearchKeyword(khoNhapId ? (khoList.find((k) => k.id === khoNhapId)?.label ?? '') : '')
-                                  setKhoDropdownOpen(true)
-                                  e.currentTarget.select()
-                                }}
-                                onClick={(e) => { if (!effectiveReadOnly) e.currentTarget.select() }}
-                                placeholder="-- Chọn --"
-                                readOnly={effectiveReadOnly}
-                                disabled={effectiveReadOnly}
-                              />
-                              <span style={lookupChevronOverlayStyle} aria-hidden><ChevronDown size={12} style={{ color: 'var(--accent-text)' }} /></span>
-                            </div>
-                            {!effectiveReadOnly && (
-                              <button type="button" style={lookupActionButtonStyle} title="Thêm kho mới" onClick={() => setShowThemKhoModal(true)} aria-label="Thêm kho"><Plus size={12} /></button>
-                            )}
-                          </div>
-                          {khoDropdownOpen && khoDropdownRect && (
-                            <div
-                              data-kho-dropdown
-                              style={{
-                                position: 'fixed',
-                                top: khoDropdownRect.top,
-                                left: khoDropdownRect.left,
-                                width: khoDropdownRect.width,
-                                maxHeight: 220,
-                                overflowY: 'auto',
-                                background: 'var(--bg-primary)',
-                                border: '1px solid var(--border-strong)',
-                                borderRadius: 4,
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                zIndex: 1050,
-                              }}
-                            >
-                              {khoList
-                                .filter((k) => matchSearchKeyword(k.label, khoSearchKeyword))
-                                .slice(0, 100)
-                                .map((k) => (
-                                  <div
-                                    key={k.id}
-                                    role="option"
-                                    tabIndex={0}
-                                    style={{
-                                      padding: '6px 10px',
-                                      fontSize: 11,
-                                      cursor: 'pointer',
-                                      color: 'var(--text-primary)',
-                                      borderBottom: '1px solid var(--border)',
-                                    }}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault()
-                                      setKhoNhapId(k.id)
-                                      setKhoSearchKeyword(k.label)
-                                      setKhoDropdownOpen(false)
-                                    }}
-                                  >
-                                    {k.label}
-                                  </div>
-                                ))}
-                              {khoList.filter((k) => matchSearchKeyword(k.label, khoSearchKeyword)).length === 0 && (
-                                <div style={{ padding: '10px', fontSize: 11, color: 'var(--text-muted)' }}>Không tìm thấy kho phù hợp.</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    )
-                  })()}
-                </div>
-              )
-            )}
             <div style={fieldRowDyn}>
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {(() => {
@@ -3775,16 +3507,14 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                   return diaDiemGiaoHangList.map((addr, i) => {
                     const slotType = diaDiemSlotOrder[i]?.type
                     const placeholder =
-                      slotType === 'kho_nhap'
-                        ? `Địa chỉ kho nhập (ĐĐGH ${i + 1})`
-                        : slotType === 'ten_cong_trinh'
-                          ? `Địa chỉ công trình (ĐĐGH ${i + 1})`
-                          : i === 0
-                            ? 'Nhập địa chỉ (gợi ý VN)'
-                            : `Địa điểm GH ${i + 1}`
+                      slotType === 'dia_chi_dd'
+                        ? `Địa chỉ (ĐNH ${i + 1})`
+                        : i === 0
+                          ? 'Nhập địa chỉ (gợi ý VN)'
+                          : `Địa điểm NH ${i + 1}`
                     return (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
-                    <label style={{ ...labelStyle, minWidth: 90, paddingTop: phieuNhanTuBaoGia ? 2 : 4 }}>Địa điểm GH {i + 1}</label>
+                    <label style={{ ...labelStyle, minWidth: 90, paddingTop: phieuNhanTuBaoGia ? 2 : 4 }}>Địa điểm NH {i + 1}</label>
                     <div
                       ref={i === activeDiaDiemIndex ? refDiaDiemGiaoHangWrap : undefined}
                       style={{ position: 'relative', flex: 1, minWidth: 0 }}
@@ -3842,7 +3572,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                     }}
                     style={{ alignSelf: 'flex-start', marginLeft: 98, marginTop: phieuNhanTuBaoGia ? 0 : undefined, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', fontSize: 10, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                   >
-                    <Plus size={12} /> Thêm địa điểm GH
+                    <Plus size={12} /> Địa điểm NH
                   </button>
                 )}
               </div>
@@ -4433,19 +4163,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                 <div style={fieldRowDyn}>
                   <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
                   <div style={nvthhChungTuValueCellWrap}>
-                    <select
-                      className="htql-don-hang-select"
-                      style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right' }}
+                    <input
+                      className="misa-input-solo"
+                      style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
                       value={tinhTrang}
-                      onChange={(e) => setTinhTrang(e.target.value)}
-                      disabled={effectiveReadOnly}
-                    >
-                      {tinhTrangSelectOptions.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      readOnly
+                      tabIndex={-1}
+                    />
                   </div>
                 </div>
               </>
@@ -4486,19 +4210,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                       <div style={fieldRowDyn}>
                         <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
                         <div style={nvthhChungTuValueCellWrap}>
-                          <select
-                            className="htql-don-hang-select"
-                            style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right' }}
+                          <input
+                            className="misa-input-solo"
+                            style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
                             value={tinhTrang}
-                            onChange={(e) => setTinhTrang(e.target.value)}
-                            disabled={effectiveReadOnly}
-                          >
-                            {tinhTrangSelectOptions.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
+                            readOnly
+                            tabIndex={-1}
+                          />
                         </div>
                       </div>
                     </>
@@ -4559,19 +4277,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                       <div style={fieldRowDyn}>
                         <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
                         <div style={nvthhChungTuValueCellWrap}>
-                          <select
-                            className="htql-don-hang-select"
-                            style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right' }}
+                          <input
+                            className="misa-input-solo"
+                            style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
                             value={tinhTrang}
-                            onChange={(e) => setTinhTrang(e.target.value)}
-                            disabled={effectiveReadOnly}
-                          >
-                            {tinhTrangSelectOptions.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
+                            readOnly
+                            tabIndex={-1}
+                          />
                         </div>
                       </div>
                     </>
@@ -4610,19 +4322,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                     <div style={fieldRowDyn}>
                       <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <select
-                          className="htql-don-hang-select"
-                          style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right' }}
+                        <input
+                          className="misa-input-solo"
+                          style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
                           value={tinhTrang}
-                          onChange={(e) => setTinhTrang(e.target.value)}
-                          disabled={effectiveReadOnly}
-                        >
-                          {tinhTrangSelectOptions.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
+                          readOnly
+                          tabIndex={-1}
+                        />
                       </div>
                     </div>
                     <div style={fieldRowDyn}>
@@ -4638,58 +4344,30 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                             {...htqlDatePickerPopperTop}
                             selected={ngayGiaoHang}
                             onChange={(d: Date | null) => {
-                              if (d && ngayDonHang && d.getTime() < ngayDonHang.getTime()) return
-                              setNgayGiaoHang(d)
-                              if (d && valErrKey === 'tg_nhan') setValErrKey(null)
+                              const day = d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null
+                              if (day && ngayDonHang) {
+                                const nd = new Date(ngayDonHang.getFullYear(), ngayDonHang.getMonth(), ngayDonHang.getDate())
+                                if (day.getTime() < nd.getTime()) return
+                              }
+                              setNgayGiaoHang(day)
+                              if (day && valErrKey === 'tg_nhan') setValErrKey(null)
                             }}
-                            open={tgNhanHangPickerOpen}
-                            onClickOutside={() => setTgNhanHangPickerOpen(false)}
-                            shouldCloseOnSelect={false}
-                            dateFormat="HH:mm dd/MM/yyyy"
+                            shouldCloseOnSelect
+                            dateFormat="dd/MM/yyyy"
                             locale="vi"
                             showMonthDropdown
                             showYearDropdown
-                            showTimeSelect
-                            timeFormat="HH:mm"
-                            timeIntervals={30}
-                            timeCaption="Thời gian"
-                            minDate={ngayDonHang ?? undefined}
-                            minTime={ngayDonHang && ngayGiaoHang && ngayGiaoHang.getFullYear() === ngayDonHang.getFullYear() && ngayGiaoHang.getMonth() === ngayDonHang.getMonth() && ngayGiaoHang.getDate() === ngayDonHang.getDate() ? ngayDonHang : setHours(setMinutes(new Date(), 0), 7)}
-                            maxTime={setHours(setMinutes(new Date(), 0), 19)}
-                            filterTime={(time) => {
-                              const hour = new Date(time).getHours()
-                              if (hour < 7 || hour > 19) return false
-                              if (!ngayDonHang) return true
-                              const tDay = new Date(time.getFullYear(), time.getMonth(), time.getDate())
-                              const nDay = new Date(ngayDonHang.getFullYear(), ngayDonHang.getMonth(), ngayDonHang.getDate())
-                              if (tDay.getTime() !== nDay.getTime()) return true
-                              return time.getHours() * 60 + time.getMinutes() >= ngayDonHang.getHours() * 60 + ngayDonHang.getMinutes()
-                            }}
+                            minDate={
+                              ngayDonHang
+                                ? new Date(ngayDonHang.getFullYear(), ngayDonHang.getMonth(), ngayDonHang.getDate())
+                                : undefined
+                            }
                             yearDropdownItemNumber={80}
                             scrollableYearDropdown
-                            placeholderText="HH:mm dd/mm/yyyy"
-                            className="htql-datepicker-don-hang-box-full htql-datepicker-tg-nhan-input"
-                            calendarClassName="htql-datepicker-tg-nhan htql-datepicker-calendar"
-                            customInput={
-                              <DatePickerTgNhanInput
-                                ref={refTgNhanBGInput}
-                                onOpen={() => {
-                                  if (!ngayGiaoHang) {
-                                    const now = new Date()
-                                    const min = now.getHours() * 60 + now.getMinutes()
-                                    if (min < 7 * 60 || min >= 19 * 60) {
-                                      let d = addDays(now, 1)
-                                      d = setHours(setMinutes(d, 0), 7)
-                                      if (ngayDonHang && d.getTime() < ngayDonHang.getTime()) {
-                                        d = setHours(setMinutes(ngayDonHang as Date, 0), 7)
-                                      }
-                                      setNgayGiaoHang(d)
-                                    }
-                                  }
-                                  setTgNhanHangPickerOpen(true)
-                                }}
-                              />
-                            }
+                            placeholderText="dd/mm/yyyy"
+                            className="htql-datepicker-don-hang-box-full htql-datepicker-nvthh-band"
+                            calendarClassName="htql-datepicker-ngay htql-datepicker-calendar"
+                            customInput={<DatePickerReadOnlyTriggerInput ref={refTgNhanBGInput} />}
                             renderCustomHeader={(p) => <DatePickerCustomHeader {...p} />}
                             disabled={effectiveReadOnly}
                           />
@@ -4990,7 +4668,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                                       if (isCodongia) {
                                         const sl = Math.max(0, parseFloatVN(nextRow['Số lượng'] ?? '')) || 1
                                         nextRow['Đơn giá'] = getDonGiaBanBaoGiaLine(item, (nextRow['ĐVT'] ?? '').trim() || (item.dvt_chinh ?? ''), sl)
-                                        nextRow['% thuế GTGT'] = item.thue_suat_gtgt ?? ''
+                                        nextRow['% thuế GTGT'] = apDungVatGtgt ? (item.thue_suat_gtgt ?? '') : ''
                                       }
                                     }
                                     r[idx] = nextRow
@@ -5034,6 +4712,20 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                               </div>
                             ) : col === BAO_GIA_COL_TEN_SPHH ? (
                               <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }} value={line[col] ?? ''} />
+                            ) : col === 'Nội dung' ? (
+                              <input
+                                className="misa-input-solo"
+                                style={{ ...inputStyle, width: '100%', border: '1px solid transparent', minHeight: 22, height: 22 }}
+                                value={line['Nội dung'] ?? ''}
+                                readOnly={showColAsReadOnly}
+                                disabled={showColAsReadOnly}
+                                tabIndex={showColAsReadOnly ? -1 : undefined}
+                                onChange={(e) => {
+                                  const r = [...lines]
+                                  r[idx] = { ...r[idx], 'Nội dung': e.target.value } as unknown as BaoGiaGridLineRow
+                                  setLines(r)
+                                }}
+                              />
                             ) : col === 'ĐVT' ? (
                               (() => {
                                 const opts = line._dvtOptions
@@ -5049,8 +4741,9 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                                         const row = r[idx] as BaoGiaGridLineRow
                                         const newDvt = e.target.value
                                         const updates = { ...row, 'ĐVT': newDvt } as unknown as BaoGiaGridLineRow
+                                        updates['Số lượng'] = calculateSoLuongFromKichThuoc(updates)
                                         if ((initialDon != null || mauHienTai === 'codongia') && row._vthh) {
-                                          const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
+                                          const sl = Math.max(0, parseFloatVN(updates['Số lượng'] ?? '')) || 1
                                           updates['Đơn giá'] = getDonGiaBanBaoGiaLine(row._vthh, newDvt, sl)
                                         }
                                         r[idx] = updates
@@ -5331,92 +5024,270 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
         <div style={{ ...footerWrap, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Tổng chủng loại VT: {soDong}</span>
-            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Tổng kiện hàng: {tongSoKienHangText}</span>
+            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Tổng số lượng: {tongSoKienHangText}</span>
           </div>
           {hienThiFooterTongTien && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <span style={footerSummaryItem}>Tổng tiền hàng: <span style={footerSummaryValue}>{formatNumberDisplay(tongTienHang, 0)}</span></span>
-                <label style={{ ...footerSummaryItem, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  TLCK (%)
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="misa-input-solo"
-                    style={{
-                      width: 72,
-                      height: 22,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textAlign: 'right',
-                      fontVariantNumeric: 'tabular-nums',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      padding: '0 6px',
-                    }}
-                    value={tlCkInput}
-                    onChange={(e) => {
-                      chietKhauLastEditRef.current = 'tl'
-                      const next = formatTlCkBaoGiaInput(e.target.value)
-                      setTlCkInput(next)
-                      const tl = parseFloatVN(next)
-                      const hang = tongTienHang
-                      if (Number.isFinite(tl) && tl >= 0 && hang > 0) setTienCkInput(formatSoTienHienThi((hang * tl) / 100))
-                    }}
-                    onBlur={() => {
-                      const norm = chuanHoaTlCkBaoGiaSauBlur(tlCkInput)
-                      setTlCkInput(norm)
-                      const hang = tongTienHang
-                      const tl = parseFloatVN(norm)
-                      if (Number.isFinite(tl) && tl >= 0 && hang > 0) setTienCkInput(formatSoTienHienThi((hang * tl) / 100))
-                    }}
-                    readOnly={effectiveReadOnly}
-                    disabled={effectiveReadOnly}
-                  />
-                </label>
-                <label style={{ ...footerSummaryItem, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  Tiền CK
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="misa-input-solo"
-                    style={{
-                      width: 120,
-                      height: 22,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textAlign: 'right',
-                      fontVariantNumeric: 'tabular-nums',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      padding: '0 6px',
-                    }}
-                    value={tienCkInput}
-                    onChange={(e) => {
-                      chietKhauLastEditRef.current = 'tien'
-                      const raw = formatSoTien(e.target.value)
-                      setTienCkInput(raw)
-                      const tc = parseFloatVN(raw)
-                      const hang = tongTienHang
-                      if (Number.isFinite(tc) && tc >= 0 && hang > 0) setTlCkInput(formatSoThapPhan((tc * 100) / hang, 3))
-                    }}
-                    onBlur={() => {
-                      const tc = parseFloatVN(tienCkInput)
-                      const hang = tongTienHang
-                      if (Number.isFinite(tc) && tc >= 0 && hang > 0) setTlCkInput(formatSoThapPhan((tc * 100) / hang, 3))
-                    }}
-                    readOnly={effectiveReadOnly}
-                    disabled={effectiveReadOnly}
-                  />
-                </label>
-              </div>
-              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <span style={footerSummaryItem}>Tiền thuế GTGT: <span style={footerSummaryValue}>{formatNumberDisplay(tienThue, 0)}</span></span>
-                <span style={footerSummaryItem}>Tổng tiền thanh toán: <span style={footerSummaryValue}>{formatNumberDisplay(tongTienThanhToan, 0)}</span></span>
-              </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 14,
+                flexWrap: 'nowrap',
+                maxWidth: '100%',
+                overflowX: 'auto',
+                paddingBottom: 2,
+              }}
+            >
+              <span style={{ ...footerSummaryItem, whiteSpace: 'nowrap' }}>
+                Tổng tiền hàng: <span style={footerSummaryValue}>{formatNumberDisplay(tongTienHang, 0)}</span>
+              </span>
+              <label style={{ ...footerSummaryItem, display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                TLCK (%)
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="misa-input-solo"
+                  style={{
+                    width: 72,
+                    height: 22,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textAlign: 'right',
+                    fontVariantNumeric: 'tabular-nums',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: '0 6px',
+                  }}
+                  value={tlCkInput}
+                  onChange={(e) => {
+                    chietKhauLastEditRef.current = 'tl'
+                    const next = formatTlCkBaoGiaInput(e.target.value)
+                    setTlCkInput(next)
+                    const tl = parseFloatVN(next)
+                    const hang = tongTienHang
+                    if (Number.isFinite(tl) && tl >= 0 && hang > 0) setTienCkInput(formatSoTienHienThi((hang * tl) / 100))
+                  }}
+                  onBlur={() => {
+                    const norm = chuanHoaTlCkBaoGiaSauBlur(tlCkInput)
+                    setTlCkInput(norm)
+                    const hang = tongTienHang
+                    const tl = parseFloatVN(norm)
+                    if (Number.isFinite(tl) && tl >= 0 && hang > 0) setTienCkInput(formatSoTienHienThi((hang * tl) / 100))
+                  }}
+                  readOnly={effectiveReadOnly}
+                  disabled={effectiveReadOnly}
+                />
+              </label>
+              <label style={{ ...footerSummaryItem, display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                Tiền CK
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="misa-input-solo"
+                  style={{
+                    width: 120,
+                    height: 22,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textAlign: 'right',
+                    fontVariantNumeric: 'tabular-nums',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: '0 6px',
+                  }}
+                  value={tienCkInput}
+                  onChange={(e) => {
+                    chietKhauLastEditRef.current = 'tien'
+                    const raw = formatSoTien(e.target.value)
+                    setTienCkInput(raw)
+                    const tc = parseFloatVN(raw)
+                    const hang = tongTienHang
+                    if (Number.isFinite(tc) && tc >= 0 && hang > 0) setTlCkInput(formatSoThapPhan((tc * 100) / hang, 3))
+                  }}
+                  onBlur={() => {
+                    const tc = parseFloatVN(tienCkInput)
+                    const hang = tongTienHang
+                    if (Number.isFinite(tc) && tc >= 0 && hang > 0) setTlCkInput(formatSoThapPhan((tc * 100) / hang, 3))
+                  }}
+                  readOnly={effectiveReadOnly}
+                  disabled={effectiveReadOnly}
+                />
+              </label>
+              {apDungVatGtgt && (
+                <span style={{ ...footerSummaryItem, whiteSpace: 'nowrap' }}>
+                  Tiền thuế GTGT: <span style={footerSummaryValue}>{formatNumberDisplay(tienThue, 0)}</span>
+                </span>
+              )}
+              <span style={{ ...footerSummaryItem, whiteSpace: 'nowrap' }}>
+                Tổng tiền thanh toán: <span style={footerSummaryValue}>{formatNumberDisplay(tongTienThanhToan, 0)}</span>
+              </span>
             </div>
           )}
         </div>
+        </div>
+        {showLichSuPanel && lichSuData && (
+          <aside
+            style={{
+              width: 228,
+              minWidth: 200,
+              maxWidth: 260,
+              flexShrink: 0,
+              borderLeft: '1px solid var(--border)',
+              background: 'var(--bg-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '8px 10px',
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--accent)',
+                borderBottom: '1px solid var(--border)',
+                flexShrink: 0,
+              }}
+            >
+              Lịch sử giao dịch
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 8px', fontSize: 10 }}>
+              {([
+                { key: 'bg', title: 'Báo giá', list: lichSuData.baoGia },
+                { key: 'dhb', title: 'Đơn hàng bán', list: lichSuData.donHangBan },
+                { key: 'hd', title: 'Hợp đồng bán', list: lichSuData.hopDong },
+              ] as const).map((sec) =>
+                sec.list.length === 0 ? null : (
+                  <div key={sec.key} style={{ marginBottom: 10 }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{sec.title}</div>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {sec.list.map((row) => {
+                        const idKey = `${sec.key}-${row.id}`
+                        const mo = Boolean(lichSuMoRong[idKey])
+                        return (
+                          <li key={row.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6, marginBottom: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => setLichSuMoRong((prev) => ({ ...prev, [idKey]: !mo }))}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                width: '100%',
+                                fontSize: 10,
+                                fontWeight: 600,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: '14px minmax(0,1fr) auto',
+                                  alignItems: 'start',
+                                  columnGap: 8,
+                                  rowGap: 2,
+                                }}
+                              >
+                                <span style={{ color: 'var(--accent)', paddingTop: 1 }}>{mo ? '▼' : '▶'}</span>
+                                <span
+                                  style={{
+                                    color: 'var(--accent)',
+                                    fontWeight: 600,
+                                    textAlign: 'left',
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {row.tenHienThi}
+                                </span>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    alignItems: 'baseline',
+                                    justifyContent: 'flex-end',
+                                    gap: 6,
+                                    minWidth: 0,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>TT</span>
+                                  <span
+                                    style={{
+                                      fontWeight: 800,
+                                      color: 'var(--text-primary)',
+                                      fontVariantNumeric: 'tabular-nums',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {formatNumberDisplay(row.tongThanhToan, 0)}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                            {mo && (
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  paddingLeft: 22,
+                                  color: 'var(--text-primary)',
+                                  lineHeight: 1.5,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 4,
+                                }}
+                              >
+                                {row.chiTiet.slice(0, 20).map((ct, i) => (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: 'minmax(0,1fr) 40px 40px 68px',
+                                      columnGap: 6,
+                                      alignItems: 'center',
+                                      fontVariantNumeric: 'tabular-nums',
+                                      fontSize: 10,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        color: 'var(--text-primary)',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        minWidth: 0,
+                                      }}
+                                      title={ct.ten_hang}
+                                    >
+                                      {ct.ten_hang}
+                                    </span>
+                                    <span style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                                      {dvtHienThiLabel(ct.dvt, dvtList)}
+                                    </span>
+                                    <span style={{ textAlign: 'right' }}>SL {formatSoTienHienThi(ct.so_luong)}</span>
+                                    <span style={{ textAlign: 'right', fontWeight: 600 }}>
+                                      {formatNumberDisplay(ct.don_gia, 0)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )
+              )}
+            </div>
+          </aside>
+        )}
       </div>
 
       <div style={hintBar}>F9 - Thêm nhanh, F3 - Tìm nhanh</div>
@@ -5465,7 +5336,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
                 const currentRowIdx = vthhDropdownRowIndex
                 const searchText = (lines[currentRowIdx]?.['Mã'] ?? '').trim()
                 // Loại trừ mã đã chọn ở các dòng khác
-                let available = vatTuList.filter((item) => !lines.some((row, i) => i !== currentRowIdx && row['Mã'] === item.ma))
+                let available = vatTuList.slice()
                 // Khi đã chọn rồi bấm xổ xuống lại: không hiển thị lại mã đang chọn ở dòng này, chỉ hiển thị các lựa chọn khác để đổi
                 const currentRowMa = (lines[currentRowIdx]?.['Mã'] ?? '').trim()
                 if (currentRowMa) {
@@ -5606,23 +5477,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, dragging, re
             }
             setDieuKhoanTT(item.ten)
             setSoNgayDuocNo(String(item.so_ngay_duoc_no))
-          }}
-        />
-      )}
-
-      {showThemKhoModal && (
-        <ThemKhoModal
-          existingItems={khoList}
-          onClose={() => setShowThemKhoModal(false)}
-          onSave={(item) => {
-            const next = [...khoList]
-            if (!next.some((k) => k.id === item.id)) {
-              next.push(item)
-              saveKhoListToStorage(next)
-              setKhoList(next)
-              setKhoNhapId(item.id)
-            }
-            setShowThemKhoModal(false)
           }}
         />
       )}

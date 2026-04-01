@@ -22,14 +22,14 @@ const BaoGia = lazy(() => import('../modules/crm/banHang/baoGia/baoGia').then((m
 const DonHangBan = lazy(() => import('../modules/crm/banHang/donHangBan/donHangBan').then((m) => ({ default: m.DonHangBan })))
 const KhachHang = lazy(() => import('../modules/crm/banHang/khachHang/khachHang').then((m) => ({ default: m.KhachHang })))
 const HoaDonBan = lazy(() => import('../modules/crm/banHang/hoaDon/hoaDonBan').then((m) => ({ default: m.HoaDonBan })))
-const HopDongBan = lazy(() => import('../modules/crm/banHang/hopDong/hopDongBan').then((m) => ({ default: m.HopDongBan })))
+const HopDongBan = lazy(() => import('../modules/crm/banHang/hopDongBan/hopDongBan').then((m) => ({ default: m.HopDongBan })))
 const CongNoKhachHang = lazy(() => import('../modules/crm/banHang/congNo/congNoKhachHang').then((m) => ({ default: m.CongNoKhachHang })))
 const TraLaiHang = lazy(() => import('../modules/crm/banHang/traLai/traLaiHang').then((m) => ({ default: m.TraLaiHang })))
 
 // CRM - Mua hàng
 const DonHangMua = lazy(() => import('../modules/crm/muaHang/donHangMua/donHangMua').then((m) => ({ default: m.DonHangMua })))
 const NhaCungCap = lazy(() => import('../modules/crm/muaHang/nhaCungCap/nhaCungCap').then((m) => ({ default: m.NhaCungCap })))
-const NhanVatTuHangHoa = lazy(() => import('../modules/kho/nhanVatTuHangHoa/nhanVatTuHangHoa').then((m) => ({ default: m.NhanVatTuHangHoa })))
+const NhanVatTuHangHoa = lazy(() => import('../modules/crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoa').then((m) => ({ default: m.NhanVatTuHangHoa })))
 const HopDongMua = lazy(() => import('../modules/crm/muaHang/hopDongMua/hopDongMua').then((m) => ({ default: m.HopDongMua })))
 const TraLaiHangMua = lazy(() => import('../modules/crm/muaHang/traLaiHangMua/traLaiHangMua').then((m) => ({ default: m.TraLaiHangMua })))
 const TraTienNcc = lazy(() => import('../modules/crm/muaHang/traTienNcc/traTienNcc').then((m) => ({ default: m.TraTienNcc })))
@@ -37,6 +37,16 @@ const NhanHoaDon = lazy(() => import('../modules/crm/muaHang/nhanHoaDon/nhanHoaD
 const GiamGiaHangMua = lazy(() => import('../modules/crm/muaHang/giamGiaHangMua/giamGiaHangMua').then((m) => ({ default: m.GiamGiaHangMua })))
 
 // Tài chính
+const TaiChinh = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.TaiChinh })))
+const ThuTien = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.ThuTien })))
+const ChiTien = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.ChiTien })))
+const ThuChiTien = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.ThuChiTien })))
+const KiemKeQuy = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.KiemKeQuy })))
+const SoChiTietTienMat = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.SoChiTietTienMat })))
+const BaoCaoTaiChinh = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.BaoCaoTaiChinh })))
+const TyGiaXuatQuy = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.TyGiaXuatQuy })))
+const SoTienGuiNganHang = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.SoTienGuiNganHang })))
+const TaiKhoanNganHang = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.TaiKhoanNganHang })))
 const Quy = lazy(() => import('../modules/quy').then((m) => ({ default: m.Quy })))
 const NganHang = lazy(() => import('../modules/nganhang').then((m) => ({ default: m.NganHang })))
 const ThuQuy = lazy(() => import('../modules/thuquy').then((m) => ({ default: m.ThuQuy })))
@@ -89,6 +99,16 @@ const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> 
   giamGiaHangMua: GiamGiaHangMua,
   
   // Tài chính
+  taiChinh: TaiChinh,
+  thuTien: ThuTien,
+  chiTien: ChiTien,
+  thuChiTien: ThuChiTien,
+  kiemKeQuy: KiemKeQuy,
+  soChiTietTienMat: SoChiTietTienMat,
+  baoCaoTaiChinh: BaoCaoTaiChinh,
+  tyGiaXuatQuy: TyGiaXuatQuy,
+  soTienGuiNganHang: SoTienGuiNganHang,
+  taiKhoanNganHang: TaiKhoanNganHang,
   quy: Quy,
   nganHang: NganHang,
   thuQuy: ThuQuy,

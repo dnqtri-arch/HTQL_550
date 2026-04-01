@@ -89,16 +89,17 @@ import {
   clearNhanVatTuHangHoaDraft,
   TINH_TRANG_NVTHH_DA_NHAP_KHO,
   type NhanVatTuHangHoaRecord,
-} from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
-import type { NhanVatTuHangHoaApi } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
-import { NhanVatTuHangHoaApiProvider } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
-import { NhanVatTuHangHoaFormModal } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
+} from '../nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+import type { NhanVatTuHangHoaApi } from '../nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
+import { NhanVatTuHangHoaApiProvider } from '../nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
+import { NhanVatTuHangHoaFormModal } from '../nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
 import { DonHangMuaDinhKemModal, chuanHoaDuongDanDinhKemDonHangMua, partMccForPath } from './donHangMuaDinhKemModal'
 import { DonHangMuaApiProvider, useDonHangMuaApi, type DonHangMuaApi } from './donHangMuaApiContext'
 import { setUnsavedChanges } from '../../../../context/unsavedChanges'
 import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { HTQL_FORM_ERROR_BORDER, htqlFocusAndScrollIntoView } from '../../../../utils/formValidationFocus'
+import { preserveTimeWhenCalendarDayChanges } from '../../../../utils/reactDatepickerPreserveTime'
 import { ThemDieuKhoanThanhToanModal } from '../../shared/themDieuKhoanThanhToanModal'
 import { ThemKhoModal } from '../../../kho/khoHang/themKhoModal'
 import { hinhThucGetAll, type HinhThucRecord } from '../../shared/hinhThucApi'
@@ -282,8 +283,9 @@ function NvthhChungTuDateTimeRow({
             {...htqlDatePickerPopperTop}
             selected={selected}
             onChange={(d: Date | null) => {
-              if (d && ngayDonHang && d.getTime() < ngayDonHang.getTime()) return
-              onChange(d)
+              const merged = preserveTimeWhenCalendarDayChanges(d, selected)
+              if (merged && ngayDonHang && merged.getTime() < ngayDonHang.getTime()) return
+              onChange(merged)
             }}
             open={pickerOpen}
             onClickOutside={() => setPickerOpen(false)}
@@ -4452,9 +4454,10 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                             {...htqlDatePickerPopperTop}
                             selected={ngayGiaoHang}
                             onChange={(d: Date | null) => {
-                              if (d && ngayDonHang && d.getTime() < ngayDonHang.getTime()) return
-                              setNgayGiaoHang(d)
-                              if (d && valErrKey === 'tg_nhan') setValErrKey(null)
+                              const merged = preserveTimeWhenCalendarDayChanges(d, ngayGiaoHang)
+                              if (merged && ngayDonHang && merged.getTime() < ngayDonHang.getTime()) return
+                              setNgayGiaoHang(merged)
+                              if (merged && valErrKey === 'tg_nhan') setValErrKey(null)
                             }}
                             open={tgNhanHangPickerOpen}
                             onClickOutside={() => setTgNhanHangPickerOpen(false)}
@@ -5052,7 +5055,10 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                 const currentRowIdx = vthhDropdownRowIndex
                 const searchText = (lines[currentRowIdx]?.['Mã'] ?? '').trim()
                 // Loại trừ mã đã chọn ở các dòng khác
-                let available = vatTuList.filter((item) => !lines.some((row, i) => i !== currentRowIdx && row['Mã'] === item.ma))
+                let available = vatTuList.filter(
+                  (item) =>
+                    !item.vt_chinh && !lines.some((row, i) => i !== currentRowIdx && row['Mã'] === item.ma),
+                )
                 // Khi đã chọn rồi bấm xổ xuống lại: không hiển thị lại mã đang chọn ở dòng này, chỉ hiển thị các lựa chọn khác để đổi
                 const currentRowMa = (lines[currentRowIdx]?.['Mã'] ?? '').trim()
                 if (currentRowMa) {

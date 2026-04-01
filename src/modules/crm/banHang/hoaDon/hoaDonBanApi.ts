@@ -13,9 +13,8 @@ import type {
   BanHangKyValue,
   DonHangBanRecord,
   DonHangBanChiTiet,
-  HopDongBanRecord,
-  HopDongBanChiTiet,
 } from '../../../../types/banHang'
+import type { HopDongBanChungTuRecord, HopDongBanChungTuChiTiet } from '../../../../types/hopDongBanChungTu'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 
 export type { HoaDonBanRecord, HoaDonBanChiTiet, HoaDonBanCreatePayload, BanHangKyValue, PhieuThuKhachHangRecord }
@@ -320,8 +319,8 @@ export function hoaDonBanTuDonHangBan(
 
 /** Tạo hóa đơn từ Hợp đồng bán */
 export function hoaDonBanTuHopDongBan(
-  hdb: HopDongBanRecord,
-  ct: HopDongBanChiTiet[],
+  hdb: HopDongBanChungTuRecord,
+  ct: HopDongBanChungTuChiTiet[],
   soHd: string,
   ngayHd: string,
 ): HoaDonBanCreatePayload {

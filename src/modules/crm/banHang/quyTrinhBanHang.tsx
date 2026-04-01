@@ -6,7 +6,7 @@
  * DUY NHẤT 1 mũi tên (nét đứt) ở cuối chỉ vào "Báo cáo phân tích".
  *
  * Cặp vị trí (trên/dưới backbone):
- *   Col 0: Đơn hàng bán (trên)   | Hợp đồng HD nguyên tắc (dưới)
+ *   Col 0: Đơn hàng bán (trên)   | Hợp đồng bán (dưới)
  *   Col 1: Ghi nhận doanh thu (trên) | Xuất hóa đơn (dưới)
  *   Col 2: Trả lại hàng bán (trên)  | Giảm giá hàng bán (dưới)
  *   Col 3: Thu tiền khách hàng (trên) [không có cặp dưới]
@@ -296,7 +296,7 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
 
               {renderNode('ghinhanhdt', 'Ghi nhận', 'doanh thu',
                 Receipt, CLR.blue,
-                COLX[1], ROW1Y, nav('hoadon'))}
+                COLX[1], ROW1Y, nav('ghinhandoanhthu'))}
 
               {renderNode('tralai', 'Trả lại hàng bán', undefined,
                 RotateCcw, CLR.red,
@@ -307,7 +307,7 @@ export function QuyTrinhBanHang({ onNavigate }: QuyTrinhBanHangProps) {
                 COLX[3], ROW1Y, nav('congno'))}
 
               {/* ROW 2 — dưới backbone (3 node, cặp với col 0, 1, 2) */}
-              {renderNode('hopdong', 'Hợp đồng', 'HD nguyên tắc',
+              {renderNode('hopdong', 'Hợp đồng bán', undefined,
                 FileSignature, CLR.purple,
                 COLX[0], ROW2Y, nav('hopdong'))}
 

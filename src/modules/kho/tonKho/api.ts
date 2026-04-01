@@ -4,7 +4,7 @@ import {
   nhanVatTuHangHoaGetChiTiet,
   TINH_TRANG_NVTHH_DA_NHAP_KHO,
   getDefaultNhanVatTuHangHoaFilter,
-} from '../nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+} from '../../crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 
 /* ─────────────────────────────────────────────────────────────────────────
    Stub: xuất kho — đọc từ localStorage key htql_xuatkho_items
@@ -107,6 +107,18 @@ function getInventoryReport(filter?: Partial<KhoVthhFilter>): KhoVthh[] {
   }
 
   return result.sort((a, b) => a.mavthh.localeCompare(b.mavthh))
+}
+
+/** Map mã VTHH (uppercase) → tồn cuối kỳ từ báo cáo tồn kho (nhập − xuất). */
+export function tonKhoCuoikyTheoMaVthh(filter?: Partial<KhoVthhFilter>): Map<string, { so_luong: number; gia_tri: number }> {
+  const report = getInventoryReport(filter)
+  const m = new Map<string, { so_luong: number; gia_tri: number }>()
+  for (const r of report) {
+    const ma = (r.mavthh ?? '').trim().toUpperCase()
+    if (!ma) continue
+    m.set(ma, { so_luong: r.cuoiky.soluong, gia_tri: r.cuoiky.giatri })
+  }
+  return m
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

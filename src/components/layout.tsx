@@ -2,13 +2,11 @@ import { useState, useCallback, useEffect } from 'react'
 import { AppContext, type AppContextValue } from '../context/appContext'
 import { getUnsavedChanges } from '../context/unsavedChanges'
 import { Sidebar } from './sidebar'
-import { TabBar } from './tabBar'
 import { ModuleRouter } from './moduleRouter'
 import { AppHeader } from './appHeader'
 import { AppFooter } from './appFooter'
 import { MODULE_GROUPS } from '../config/sidebarConfig'
 import type { ModuleId } from '../config/sidebarConfig'
-import type { TabItem } from './tabBar'
 
 let tabCounter = 0
 function generateTabId() {
@@ -17,8 +15,13 @@ function generateTabId() {
 
 function getModuleLabel(moduleId: ModuleId): string {
   for (const group of MODULE_GROUPS) {
-    const found = group.items.find((i) => i.id === moduleId)
-    if (found) return found.label
+    for (const item of group.items) {
+      if (item.children?.length) {
+        const ch = item.children.find((c) => c.id === moduleId)
+        if (ch) return ch.label
+      }
+      if (item.id === moduleId && !item.children?.length) return item.label
+    }
   }
   return moduleId
 }
@@ -53,8 +56,10 @@ const contentStyles: React.CSSProperties = {
 
 const STORAGE_KEY_LAYOUT = 'htql550_layout_restore'
 
+type LayoutTab = { id: string; moduleId: ModuleId; label: string }
+
 export function Layout() {
-  const [tabs, setTabs] = useState<TabItem[]>([])
+  const [tabs, setTabs] = useState<LayoutTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [activeModuleId, setActiveModuleId] = useState<ModuleId | null>(null)
   const [hasRestored, setHasRestored] = useState(false)
@@ -68,7 +73,7 @@ export function Layout() {
         setActiveModuleId(moduleId)
         return prev
       }
-      const newTab: TabItem = {
+      const newTab: LayoutTab = {
         id: generateTabId(),
         moduleId,
         label,
@@ -82,27 +87,6 @@ export function Layout() {
   const handleSelectModule = useCallback((id: ModuleId) => {
     openOrFocusTab(id)
   }, [openOrFocusTab])
-
-  const handleSelectTab = useCallback((id: string) => {
-    const tab = tabs.find((t) => t.id === id)
-    if (tab) {
-      setActiveTabId(id)
-      setActiveModuleId(tab.moduleId)
-    }
-  }, [tabs])
-
-  const handleCloseTab = useCallback((id: string) => {
-    setTabs((prev) => {
-      const next = prev.filter((t) => t.id !== id)
-      if (activeTabId === id) {
-        const idx = prev.findIndex((t) => t.id === id)
-        const newActive = next[idx] ?? next[idx - 1]
-        setActiveTabId(newActive?.id ?? null)
-        setActiveModuleId(newActive?.moduleId ?? null)
-      }
-      return next
-    })
-  }, [activeTabId])
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
   const displayModuleId = activeTab?.moduleId ?? activeModuleId
@@ -118,7 +102,7 @@ export function Layout() {
         const openModuleIds = data.openModuleIds
         const savedActive = data.activeModuleId
         if (Array.isArray(openModuleIds) && openModuleIds.length > 0) {
-          const newTabs: TabItem[] = openModuleIds.map((moduleId) => ({
+          const newTabs: LayoutTab[] = openModuleIds.map((moduleId) => ({
             id: generateTabId(),
             moduleId,
             label: getModuleLabel(moduleId),
@@ -174,12 +158,6 @@ export function Layout() {
       <Sidebar activeModuleId={activeModuleId} onSelectModule={handleSelectModule} />
       <main style={mainStyles}>
         <AppHeader />
-        <TabBar
-          tabs={tabs}
-          activeTabId={activeTabId}
-          onSelectTab={handleSelectTab}
-          onCloseTab={handleCloseTab}
-        />
         <div style={contentStyles}>
           {displayModuleId ? (
             <ModuleRouter moduleId={displayModuleId} />
@@ -204,7 +182,7 @@ function WelcomeScreen({ onSelectModule }: { onSelectModule: (id: ModuleId) => v
         Chào mừng đến HTQL_550
       </h2>
       <p style={{ color: 'var(--text-muted)', marginBottom: '12px', fontSize: '11px' }}>
-        Chọn một phân hệ ở menu bên trái để mở trong tab mới. Bạn có thể mở nhiều tab và chuyển đổi mà không mất dữ liệu.
+        Chọn một phân hệ ở menu bên trái để làm việc. Dùng menu để chuyển giữa các màn hình nghiệp vụ.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
         {welcomeItems.map((item) => (

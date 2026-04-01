@@ -1,0 +1,100 @@
+/* CSS module for Báo giá detail view */
+
+.detailTabBar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color, #d1d5db);
+  background: var(--bg-secondary, #f9fafb);
+  padding: 0;
+}
+
+.detailTab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary, #6b7280);
+  transition: all 0.15s ease;
+}
+
+.detailTab:hover {
+  background: var(--hover-bg, #f3f4f6);
+  color: var(--text-primary, #111827);
+}
+
+.detailTabActive {
+  padding: 8px 16px;
+  background: white;
+  border: none;
+  border-bottom: 2px solid var(--primary-color, #3b82f6);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--primary-color, #3b82f6);
+  font-weight: 500;
+}
+
+.detailTabPanel {
+  padding: 16px;
+  background: white;
+}
+
+.lienQuanPhieuNhanTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.lienQuanPhieuNhanLink {
+  display: block;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--link-color, #2563eb);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.lienQuanPhieuNhanLink:hover {
+  background: var(--hover-bg, #eff6ff);
+  text-decoration: underline;
+}
+
+/* [YC30+YC32] Lưới chi tiết VTHH — zebra stripes + hover effects */
+.chiTietDataRow > td {
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+}
+
+/* Zebra stripes - dòng chẵn nhẹ hơn */
+.chiTietDataRow:nth-child(even) > td {
+  background-color: rgba(107, 114, 128, 0.03);
+}
+
+/* Hover effects - ghi đè zebra stripes */
+.chiTietDataRow:hover > td,
+.chiTietDataRow:focus-within > td {
+  background-color: rgba(230, 126, 34, 0.06) !important;
+  border-top-color: rgba(230, 126, 34, 0.24) !important;
+  border-bottom-color: rgba(230, 126, 34, 0.24) !important;
+}
+@supports (background-color: color-mix(in srgb, white, black)) {
+  .chiTietDataRow:hover > td,
+  .chiTietDataRow:focus-within > td {
+    background-color: color-mix(in srgb, var(--row-selected-bg) 48%, var(--bg-secondary)) !important;
+  }
+}
+
+/* Viền ô nhập trong dòng đang hover / đang focus */
+.chiTietDataRow:hover :global(.misa-input-solo),
+.chiTietDataRow:focus-within :global(.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}
+.chiTietDataRow:hover :global(select.misa-input-solo),
+.chiTietDataRow:focus-within :global(select.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}

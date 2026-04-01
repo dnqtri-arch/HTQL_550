@@ -152,7 +152,7 @@ export function ThemNhomVTHHModal({
     >
       <div ref={containerRef} style={{ ...box, ...containerStyle }} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
         <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
-          <span>Thêm Nhóm vật tư, hàng hóa, dịch vụ</span>
+          <span>Thêm nhóm Vật tư, hàng hóa</span>
           <button
             type="button"
             onClick={onClose}
@@ -226,7 +226,7 @@ export function ThemNhomVTHHModal({
           </div>
 
           <div style={{ marginBottom: 8, fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
-            Danh sách vật tư, hàng hóa, dịch vụ
+            Danh sách Vật tư, hàng hóa
           </div>
           <div
             style={{

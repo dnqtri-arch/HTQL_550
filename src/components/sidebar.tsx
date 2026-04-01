@@ -84,6 +84,7 @@ export function Sidebar({ activeModuleId, onSelectModule }: SidebarProps) {
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({
     banHang: true,
     muaHang: true,
+    taiChinh: true,
   })
 
   const toggleGroup = (groupId: string) => {

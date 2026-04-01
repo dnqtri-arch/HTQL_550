@@ -35,7 +35,10 @@ import {
   MUA_HANG_MODAL_FOOTER_DONG_Y,
   MUA_HANG_MODAL_TITLE_XOA,
 } from '../../../../components/muaHangXoaModalBody'
-import { HTQL_MUA_HANG_TAB_EVENT } from '../muaHangTabEvent'
+import {
+  HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT,
+  HTQL_DHM_LIST_REFRESH_EVENT,
+} from '../muaHangTabEvent'
 import { DonHangMuaApiProvider, useDonHangMuaApi, type DonHangMuaApi } from './donHangMuaApiContext'
 import { Modal } from '../../../../components/common/modal'
 import {
@@ -52,10 +55,14 @@ import {
   setNhanVatTuHangHoaDraft,
   clearNhanVatTuHangHoaDraft,
   type NhanVatTuHangHoaRecord,
-} from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
-import type { NhanVatTuHangHoaApi } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
-import { NhanVatTuHangHoaApiProvider } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
-import { NhanVatTuHangHoaFormModal } from '../../../kho/nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
+} from '../nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+import type { NhanVatTuHangHoaApi } from '../nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
+import { NhanVatTuHangHoaApiProvider } from '../nhanVatTuHangHoa/nhanVatTuHangHoaApiContext'
+import { NhanVatTuHangHoaFormModal } from '../nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
+import {
+  buildPrefillDonHeaderTuDhm,
+  type NhanVatTuHangHoaPrefillPayload,
+} from '../nhanVatTuHangHoa/nhanVatTuHangHoaPrefill'
 import { DonHangMuaForm } from './donHangMuaForm'
 import type { DonHangMuaAttachmentItem } from './donHangMuaAttachmentTypes'
 import { duongDanHienThi, formatDungLuongHienThi, partMccForPath, rebuildDhmAttachmentStoredFileName, uocLuongByteTuDataUrl } from './donHangMuaDinhKemModal'
@@ -303,8 +310,20 @@ function DonHangMuaContent() {
   const [xoaDonModalRow, setXoaDonModalRow] = useState<DonHangMuaRecord | null>(null)
   const [huyBoModalRow, setHuyBoModalRow] = useState<DonHangMuaRecord | null>(null)
   const [popupXemNvthh, setPopupXemNvthh] = useState<NhanVatTuHangHoaRecord | null>(null)
+  const [prefillNvthhTuDhm, setPrefillNvthhTuDhm] = useState<NhanVatTuHangHoaPrefillPayload | null>(null)
+  const [nvthhModalAddKey, setNvthhModalAddKey] = useState(0)
 
   const loadData = () => setDanhSach(api.getAll(filter))
+
+  useEffect(() => {
+    const refresh = () => setDanhSach(api.getAll(filter))
+    window.addEventListener(HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT, refresh)
+    window.addEventListener(HTQL_DHM_LIST_REFRESH_EVENT, refresh)
+    return () => {
+      window.removeEventListener(HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT, refresh)
+      window.removeEventListener(HTQL_DHM_LIST_REFRESH_EVENT, refresh)
+    }
+  }, [api, filter])
 
   const phieuNhanTheoDonMuaId = useMemo(() => {
     const all = nhanVatTuHangHoaGetAll({ ...getDefaultNhanVatTuHangHoaFilter(), tu: '', den: '' })
@@ -823,6 +842,7 @@ function DonHangMuaContent() {
         const menuLeft = Math.max(PADDING, Math.min(contextMenu.x, w - MENU_MIN_WIDTH - PADDING))
         const menuTop = Math.max(PADDING, Math.min(contextMenu.y, h - MENU_EST_HEIGHT - PADDING))
         const ctxDaNhanHang = contextMenu.row.tinh_trang === TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG
+        const ctxHuyBo = contextMenu.row.tinh_trang === 'Hủy bỏ'
         return (
         <div
           style={{
@@ -833,7 +853,7 @@ function DonHangMuaContent() {
             border: '1px solid var(--border-strong)',
             borderRadius: 4,
             boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-            zIndex: 2000,
+            zIndex: 4000,
             minWidth: MENU_MIN_WIDTH,
             padding: 4,
           }}
@@ -876,24 +896,30 @@ function DonHangMuaContent() {
               padding: '6px 10px',
               border: 'none',
               background: 'transparent',
-              cursor: ctxDaNhanHang ? 'not-allowed' : 'pointer',
+              cursor: ctxDaNhanHang || ctxHuyBo ? 'not-allowed' : 'pointer',
               fontSize: 12,
-              color: ctxDaNhanHang ? 'var(--text-muted)' : 'var(--text-primary)',
+              color: ctxDaNhanHang || ctxHuyBo ? 'var(--text-muted)' : 'var(--text-primary)',
               borderRadius: 3,
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              opacity: ctxDaNhanHang ? 0.6 : 1,
+              opacity: ctxDaNhanHang || ctxHuyBo ? 0.6 : 1,
             }}
             onMouseEnter={(e) => {
-              if (!ctxDaNhanHang) e.currentTarget.style.background = 'var(--row-selected-bg)'
+              if (!ctxDaNhanHang && !ctxHuyBo) e.currentTarget.style.background = 'var(--row-selected-bg)'
             }}
             onMouseLeave={(e) => ((e.currentTarget.style.background = 'transparent'))}
-            disabled={ctxDaNhanHang}
-            title={ctxDaNhanHang ? 'Đơn đã nhận hàng — không xóa được' : undefined}
+            disabled={ctxDaNhanHang || ctxHuyBo}
+            title={
+              ctxHuyBo
+                ? 'Đơn đã hủy — chỉ dùng Phục hồi trong Thao tác'
+                : ctxDaNhanHang
+                  ? 'Đơn đã nhận hàng — không xóa được'
+                  : undefined
+            }
             onClick={() => {
               const row = contextMenu.row
-              if (!row || row.tinh_trang === TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG) return
+              if (!row || row.tinh_trang === TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG || row.tinh_trang === 'Hủy bỏ') return
               setContextMenu((m) => ({ ...m, open: false, row: null }))
               setXoaDonModalRow(row)
             }}
@@ -959,8 +985,9 @@ function DonHangMuaContent() {
               const row = contextMenu.row
               const isHuyBo = !!(row && row.tinh_trang === 'Hủy bỏ')
               const isDaNhanHangRow = !!(row && row.tinh_trang === TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG)
-              const disNhanHang = isHuyBo || isDaNhanHangRow
-              const disHuy = isHuyBo || isDaNhanHangRow
+              const coPhieuNvthh = row ? (phieuNhanTheoDonMuaId.get(row.id)?.length ?? 0) > 0 : false
+              const disNhanHang = isHuyBo || isDaNhanHangRow || coPhieuNvthh
+              const disHuy = isHuyBo || isDaNhanHangRow || coPhieuNvthh
               const disPhucHoi = !isHuyBo || isDaNhanHangRow
               const btnBase = { width: '100%' as const, textAlign: 'left' as const, padding: '6px 10px' as const, border: 'none' as const, borderRadius: 3, display: 'flex' as const, alignItems: 'center' as const, gap: 6 }
               return (
@@ -974,7 +1001,7 @@ function DonHangMuaContent() {
                   border: '1px solid var(--border-strong)',
                   borderRadius: 4,
                   boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                  zIndex: 2001,
+                  zIndex: 4100,
                   minWidth: SUBMENU_WIDTH,
                   padding: 4,
                 }}
@@ -1005,17 +1032,25 @@ function DonHangMuaContent() {
                   onMouseEnter={(e) => { if (!disNhanHang) e.currentTarget.style.background = 'var(--row-selected-bg)' }}
                   onMouseLeave={(e) => ((e.currentTarget.style.background = 'transparent'))}
                   disabled={disNhanHang}
-                  title={disNhanHang ? (isDaNhanHangRow ? 'Đơn đã nhận hàng' : 'Đơn đã hủy') : undefined}
+                  title={
+                    disNhanHang
+                      ? coPhieuNvthh
+                        ? 'Đơn đã có phiếu nhận VTHH — không tạo thêm từ đây'
+                        : isDaNhanHangRow
+                          ? 'Đơn đã nhận hàng'
+                          : 'Đơn đã hủy'
+                      : undefined
+                  }
                   onClick={() => {
                     if (!row || disNhanHang) return
                     setContextMenu((m) => ({ ...m, open: false, row: null }))
                     setThaoTacSubmenuOpen(false)
-                    const chiTietTuDon = api.getChiTiet(row.id)
-                    window.dispatchEvent(
-                      new CustomEvent(HTQL_MUA_HANG_TAB_EVENT, {
-                        detail: { tab: 'nhanvattuhanghoa', nhanHangTuDonMua: { don: row, chiTiet: chiTietTuDon } },
-                      })
-                    )
+                    setPopupXemNvthh(null)
+                    setPrefillNvthhTuDhm({
+                      don: buildPrefillDonHeaderTuDhm(row),
+                      chiTiet: api.getChiTiet(row.id),
+                    })
+                    setNvthhModalAddKey((k) => k + 1)
                   }}
                 >
                   <Package size={14} />
@@ -1034,7 +1069,15 @@ function DonHangMuaContent() {
                   onMouseEnter={(e) => { if (!disHuy) e.currentTarget.style.background = 'var(--row-selected-bg)' }}
                   onMouseLeave={(e) => ((e.currentTarget.style.background = 'transparent'))}
                   disabled={disHuy}
-                  title={disHuy ? (isDaNhanHangRow ? 'Đơn đã nhận hàng' : 'Đơn đã hủy') : undefined}
+                  title={
+                    disHuy
+                      ? coPhieuNvthh
+                        ? 'Đơn đã có phiếu nhận VTHH — không hủy đơn từ đây'
+                        : isDaNhanHangRow
+                          ? 'Đơn đã nhận hàng'
+                          : 'Đơn đã hủy'
+                      : undefined
+                  }
                   onClick={() => {
                     if (!row || disHuy) return
                     setContextMenu((m) => ({ ...m, open: false, row: null }))
@@ -1312,15 +1355,22 @@ function DonHangMuaContent() {
         ReactDOM.createPortal(
           <NhanVatTuHangHoaApiProvider api={apiNvthhPopup}>
             <NhanVatTuHangHoaFormModal
-              open={popupXemNvthh != null}
+              open={popupXemNvthh != null || prefillNvthhTuDhm != null}
               viewDon={popupXemNvthh}
-              addFormKey={0}
-              formPrefillTuDhm={null}
+              addFormKey={nvthhModalAddKey}
+              formPrefillTuDhm={prefillNvthhTuDhm}
               getChiTiet={(id) => nhanVatTuHangHoaGetChiTiet(id) as unknown as DonHangMuaChiTiet[]}
-              onClose={() => setPopupXemNvthh(null)}
-              onSaved={() => setPopupXemNvthh(null)}
+              onClose={() => {
+                setPopupXemNvthh(null)
+                setPrefillNvthhTuDhm(null)
+              }}
+              onSaved={() => {
+                setPopupXemNvthh(null)
+                setPrefillNvthhTuDhm(null)
+                loadData()
+              }}
               onSavedAndView={() => {}}
-              chiXemKhongSua
+              chiXemKhongSua={prefillNvthhTuDhm == null}
               overlayZIndex={5200}
             />
           </NhanVatTuHangHoaApiProvider>,

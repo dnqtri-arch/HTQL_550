@@ -4,7 +4,7 @@ import {
   nhanVatTuHangHoaGetChiTiet,
   TINH_TRANG_NVTHH_DA_NHAP_KHO,
   getDefaultNhanVatTuHangHoaFilter,
-} from '../nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+} from '../../crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 
 /* ── localStorage keys ─────────────────────────────────────────── */
 const LS_PHIEU_XUAT = 'htql_phieu_xuat_kho'

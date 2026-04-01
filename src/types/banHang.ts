@@ -35,6 +35,8 @@ export interface DonHangBanRecord {
   dia_chi?: string
   ma_so_thue?: string
   dien_giai?: string
+  /** Các địa điểm nhận hàng (mỗi dòng một địa điểm), đồng bộ cột ĐĐNH trên lưới chi tiết. */
+  dia_diem_nhan_hang?: string
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
@@ -53,6 +55,8 @@ export interface DonHangBanChiTiet {
   ma_hang: string
   ten_hang: string
   dvt: string
+  /** Chỉ số dòng Địa điểm NH (0 = ĐĐNH 1, …). */
+  dd_nh_index?: number | null
   so_luong: number
   don_gia: number
   thanh_tien: number
@@ -69,6 +73,7 @@ export interface DonHangBanCreatePayload {
   dia_chi?: string
   ma_so_thue?: string
   dien_giai?: string
+  dia_diem_nhan_hang?: string
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
@@ -97,6 +102,9 @@ export interface HopDongBanRecord {
   tinh_trang: HopDongBanTinhTrang
   ghi_chu?: string
   nv_ban_hang?: string
+  /** Liên kết tạo từ báo giá — dùng hoàn tác trạng thái BG khi xóa HĐ (YC51). */
+  bao_gia_id?: string
+  so_bao_gia_goc?: string
 }
 
 export interface HopDongBanChiTiet {
@@ -126,6 +134,8 @@ export interface HopDongBanCreatePayload {
   tinh_trang: HopDongBanTinhTrang
   ghi_chu?: string
   nv_ban_hang?: string
+  bao_gia_id?: string
+  so_bao_gia_goc?: string
   chi_tiet: Omit<HopDongBanChiTiet, 'id' | 'hop_dong_ban_id'>[]
 }
 

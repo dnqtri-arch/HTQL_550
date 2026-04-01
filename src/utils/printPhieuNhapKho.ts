@@ -3,7 +3,7 @@
  * Gọi `inPhieuNhapKho(record, chiTiet)` để mở cửa sổ in.
  */
 
-import type { NhanVatTuHangHoaRecord, NhanVatTuHangHoaChiTiet } from '../modules/kho/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
+import type { NhanVatTuHangHoaRecord, NhanVatTuHangHoaChiTiet } from '../modules/crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 
 function fmt(n: number): string {
   return n.toLocaleString('vi-VN')

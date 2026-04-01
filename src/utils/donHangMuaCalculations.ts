@@ -119,17 +119,21 @@ export function lineDonGiaCell(line: DonHangMuaGridLineRow): string {
   return (line['Đơn giá'] ?? line['ĐG mua'] ?? '') as string
 }
 
-export function computeDonHangMuaFooterTotals(lines: DonHangMuaGridLineRow[]): {
+export function computeDonHangMuaFooterTotals(
+  lines: DonHangMuaGridLineRow[],
+  opts?: { apDungVatGtgt?: boolean }
+): {
   tongTienHang: number
   tienThue: number
   tongTienThanhToan: number
 } {
+  const vatOn = opts?.apDungVatGtgt !== false
   let hang = 0
   let thue = 0
   for (const line of lines) {
     if ((line['Mã'] ?? '').trim() === '') continue
     const thanhTien = parseFloatVN(lineDonGiaCell(line)) * parseFloatVN(line['Số lượng'] ?? '')
-    const pt = parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '')
+    const pt = vatOn ? parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '') : null
     const tienThueDong = pt != null ? (thanhTien * pt) / 100 : 0
     hang += thanhTien
     thue += tienThueDong

@@ -2,7 +2,7 @@
  * API / Mock cho Danh mục Vật tư hàng hóa (schema vattu_hanghoa).
  * Cơ sở dữ liệu dùng chung cho cả hai module:
  * - Kho → Vật tư hàng hóa
- * - Mua hàng → Hàng hóa, dịch vụ
+ * - Mua hàng → Vật tư, hàng hóa
  * (Cùng localStorage key + cache; khi có backend thì cùng REST API.)
  * Khi có backend REST: GET/POST /api/vat-tu-hang-hoa, PUT/DELETE /api/vat-tu-hang-hoa/:id
  * Hình ảnh lưu tại: /ssd_2t/htql_550/thietke/vattu/ (DB chỉ lưu tên file hoặc path tương đối).

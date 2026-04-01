@@ -4,10 +4,11 @@
  * Badge: Chờ xử lý (cam), Đã hoàn kho (xanh lá), Đã trả tiền (xanh), Hủy bỏ (đỏ).
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
 import { Modal } from '../../../../components/common/modal'
+import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
@@ -15,6 +16,8 @@ import { formFooterButtonCancel, formFooterButtonSave } from '../../../../consta
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { hoaDonBanGetAll, getDefaultHoaDonBanFilter } from '../hoaDon/hoaDonBanApi'
 import type { TraLaiHangBanRecord, TraLaiHangBanChiTiet, HoaDonBanRecord } from '../../../../types/banHang'
+import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import styles from '../BanHang.module.css'
 
 // ─── Local storage API ────────────────────────────────────────────────────
@@ -359,6 +362,26 @@ export function TraLaiHang() {
   const [formRecord, setFormRecord] = useState<TraLaiHangBanRecord | null>(null)
   const [xoaModal, setXoaModal] = useState<TraLaiHangBanRecord | null>(null)
   const [formKey, setFormKey] = useState(0)
+  const [dvtList, setDvtList] = useState<DvtListItem[]>([])
+
+  const columnsChiTietTraLai = useMemo((): DataGridColumn<TraLaiHangBanChiTiet>[] => [
+    { key: 'stt', label: 'STT', width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
+    { key: 'ma_hang', label: 'Mã VTHH', width: 88 },
+    { key: 'ten_hang', label: 'Tên VTHH', width: 220 },
+    { key: 'dvt', label: 'ĐVT', width: 60, renderCell: (v) => dvtHienThiLabel(v as string, dvtList) },
+    { key: 'so_luong', label: 'Số lượng', width: 68, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
+    { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+    { key: 'thanh_tien', label: 'Thành tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+  ], [dvtList])
+
+  useEffect(() => {
+    let c = false
+    donViTinhGetAll().then((list) => {
+      if (c || !Array.isArray(list)) return
+      setDvtList(list)
+    })
+    return () => { c = true }
+  }, [])
 
   const loadData = useCallback(() => setDanhSach(tlGetAll()), [])
   useEffect(() => { loadData() }, [loadData])
@@ -402,31 +425,31 @@ export function TraLaiHang() {
             <button type="button" className={styles.detailTabActive}>Chi tiết hàng trả</button>
           </div>
           <div className={styles.detailTabPanel}>
-            <DataGrid<TraLaiHangBanChiTiet> columns={[
-              { key: 'stt', label: 'STT', width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
-              { key: 'ma_hang', label: 'Mã VTHH', width: 88 },
-              { key: 'ten_hang', label: 'Tên VTHH', width: 220 },
-              { key: 'dvt', label: 'ĐVT', width: 60 },
-              { key: 'so_luong', label: 'Số lượng', width: 68, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-              { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-              { key: 'thanh_tien', label: 'Thành tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-            ]} data={chiTiet} keyField="id" stripedRows compact height="100%" />
+            <DataGrid<TraLaiHangBanChiTiet> columns={columnsChiTietTraLai} data={chiTiet} keyField="id" stripedRows compact height="100%" />
           </div>
         </div>
       </div>
 
-      <Modal open={xoaModal != null} onClose={() => setXoaModal(null)} title="Xác nhận xóa" size="sm"
-        footer={<><button type="button" className={styles.modalBtn} onClick={() => setXoaModal(null)}>Hủy bỏ</button>
-          <button type="button" className={styles.modalBtnDanger} onClick={() => {
-            if (!xoaModal) return
-            tlDelete(xoaModal.id); loadData()
-            if (selectedId === xoaModal.id) setSelectedId(null)
-            toast?.showToast(`Đã xóa phiếu ${xoaModal.so_phieu_tra}.`, 'info')
-            setXoaModal(null)
-          }}>Đồng ý xóa</button></>}
-      >
-        {xoaModal && <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)' }}>Xóa phiếu trả lại <strong>{xoaModal.so_phieu_tra}</strong>?<br /><span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span></p>}
-      </Modal>
+      <ConfirmXoaCaptchaModal
+        open={xoaModal != null}
+        onClose={() => setXoaModal(null)}
+        onConfirm={() => {
+          if (!xoaModal) return
+          tlDelete(xoaModal.id)
+          loadData()
+          if (selectedId === xoaModal.id) setSelectedId(null)
+          toast?.showToast(`Đã xóa phiếu ${xoaModal.so_phieu_tra}.`, 'info')
+          setXoaModal(null)
+        }}
+        message={
+          xoaModal ? (
+            <>
+              Xóa phiếu trả lại <strong>{xoaModal.so_phieu_tra}</strong>?<br />
+              <span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span>
+            </>
+          ) : null
+        }
+      />
 
       {showForm && (
         <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>

@@ -23,6 +23,16 @@ export type ModuleId =
   | 'nhanHoaDon'
   | 'giamGiaHangMua'
   // Tài chính
+  | 'taiChinh'
+  | 'thuTien'
+  | 'chiTien'
+  | 'thuChiTien'
+  | 'kiemKeQuy'
+  | 'soChiTietTienMat'
+  | 'baoCaoTaiChinh'
+  | 'tyGiaXuatQuy'
+  | 'soTienGuiNganHang'
+  | 'taiKhoanNganHang'
   | 'quy'
   | 'nganHang'
   | 'thuQuy'
@@ -104,9 +114,26 @@ export const MODULE_GROUPS: Array<{
     id: 'taiChinh',
     label: 'TÀI CHÍNH',
     items: [
-      { id: 'quy', label: 'Quỹ', icon: 'Wallet' },
-      { id: 'nganHang', label: 'Ngân hàng', icon: 'Landmark' },
-      { id: 'thuQuy', label: 'Thủ quỹ', icon: 'UserCircle' },
+      {
+        id: 'taiChinh',
+        label: 'Tài chính',
+        icon: 'Wallet',
+        children: [
+          { id: 'taiChinh', label: 'Quy trình', icon: 'GitBranch' },
+          { id: 'thuTien', label: 'Thu tiền', icon: 'TrendingUp' },
+          { id: 'chiTien', label: 'Chi tiền', icon: 'TrendingDown' },
+          { id: 'thuChiTien', label: 'Thu/chi tiền', icon: 'ArrowLeftRight' },
+          { id: 'kiemKeQuy', label: 'Kiểm kê quỹ', icon: 'ClipboardCheck' },
+          { id: 'soChiTietTienMat', label: 'Sổ chi tiết tiền mặt', icon: 'BookMarked' },
+          { id: 'soTienGuiNganHang', label: 'Sổ chi tiết tài khoản ngân hàng', icon: 'Building2' },
+          { id: 'baoCaoTaiChinh', label: 'Báo cáo', icon: 'BarChart3' },
+          { id: 'quy', label: 'Chuyển tiền', icon: 'Wallet' },
+          { id: 'nganHang', label: 'Ngân hàng', icon: 'Landmark' },
+          { id: 'thuQuy', label: 'Thủ quỹ', icon: 'UserCircle' },
+          { id: 'tyGiaXuatQuy', label: 'Tính tỷ giá xuất quỹ', icon: 'TableProperties' },
+          { id: 'taiKhoanNganHang', label: 'Tài khoản ngân hàng', icon: 'Landmark' },
+        ],
+      },
     ],
   },
   {

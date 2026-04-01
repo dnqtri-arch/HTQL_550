@@ -64,15 +64,24 @@ alwaysApply: false
 - **Tối đa 10 file** / báo giá; defer `alert`/`confirm` như Đơn hàng mua; tiêu đề popover: *Đính kèm thiết kế (dktk)*.
 - **Thời gian trong tên file** (khi chuẩn hóa): ưu tiên **Hiệu lực đến** (`ngay_giao_hang` trên form BG), không thì TG tạo báo giá — cùng hàm `buildBgAttachmentBaseName` / props `ngayGiaoHang`, `ngayBaoGia`.
 - **Đọc file nặng:** `FileReader.readAsDataURL` kèm **`onprogress`** — cập nhật **từng dòng file đang xử lý** (tên + % theo `loaded/total`), không gom một thanh tổng riêng.
-- **Tiến trình & đóng popover:** state pending (`pendingUploadRows` / `onPendingUploadRowsChange`) nên giữ ở **form cha** (`baoGiaForm.tsx`) để khi đóng popover, upload vẫn chạy; nút **Đính kèm thiết kế** hiện *Đang upload…*; mở lại popover vẫn thấy từng file và %.
+- **Tiến trình & đóng popover:** state pending (`pendingUploadRows` / `onPendingUploadRowsChange`) nên giữ ở **form cha** (`baoGiaForm.tsx`) để khi đóng popover, đọc file vẫn chạy; **icon nút** `Paperclip` được **thay bằng** `Loader2` (spin) khi còn pending — **không** thêm dòng chữ *Đang upload…* cạnh nút; `title` nút mô tả trạng thái đợi; mở lại popover vẫn thấy từng file và %.
+- **Popover neo nút:** vị trí `fixed` — **cạnh trái** trùng cạnh trái nút, **top** = `getBoundingClientRect().bottom + 1` (khe 1px, cảm giác liền mạch với nút); `z-index` cao theo chuẩn modal (≥ `4100` nếu trong form modal).
 - **`daDongBoLuuCsdl`:** `true` khi bản ghi đã lưu CSDL và **chưa** đổi đính kèm trên form; `false` khi file mới chỉ nằm trên form — nhãn: *Sẵn sàng lưu vào dữ liệu báo giá — bấm Lưu trên form* / *Đã lưu trong dữ liệu báo giá*. Trong lúc đọc file vào bộ nhớ: *Đang upload…* (theo từng dòng).
 - **Danh sách file (UI):** **một cột dòng** (`flex-direction: column`), mỗi file một **hàng** (`flex` ngang):
-  - **Trái:** ảnh thu nhỏ cố định `THUMB_STRIP × THUMB_STRIP` (bấm mở viewer toàn màn); file ảnh quá lớn hoặc lỗi decode → **icon** (`FileText`), không ép `<img>` data URL nặng (giảm lag).
+  - **Trái:** ảnh thu nhỏ cố định `THUMB_STRIP × THUMB_STRIP` (bấm mở viewer toàn màn); file ảnh quá lớn hoặc lỗi decode → **icon**; không ép `<img>` data URL nặng (giảm lag).
+  - **Icon theo đuôi file (không xem trước ảnh được):** các định dạng như `.tif`/`.tiff`, Corel `.cdr`, `.ai`, `.eps`, `.psd`, v.v. — **không** dùng chung một icon `FileText` mờ nhạt; hiển thị **nhãn/badge hoặc biểu tượng đặc trưng theo phần mở rộng** (vd. chữ «TIF», «CDR», «AI», «PSD» trong ô cố định, màu phân biệt) để nhận diện nhanh trong danh sách và viewer khi không render được thumbnail.
   - **Giữa (flex 1):** tên file (ellipsis); **Dung lượng:** `formatDungLuongHienThi` / `kich_thuoc_byte`; **Thư mục:** `duongDanHienThi(item, soBaoGia, maKhPathPart)`; dòng trạng thái (sẵn sàng lưu / đã lưu / đang upload) — **không** dùng thanh progress giả 100% trên file đã hoàn tất.
   - **Phải (cuối dòng):** nút **Xóa** (`readOnly` không hiện); không đặt Xóa dưới thumbnail.
 - **Hàng công cụ:** chỉ nút **Thêm file…** (tiến trình gắn **theo từng dòng** trong danh sách, không thanh tổng chung).
 - **Banner cảnh báo:** cuối vùng cuộn popover, **sau** danh sách (hoặc sau *Chưa có file…*).
 - **Hiệu năng:** mở popover xem lại nhiều file — tránh render ảnh thumb quá nặng; ưu tiên icon khi vượt ngưỡng byte; viewer toàn màn có loader.
+
+## Đính kèm thiết kế (dktk) — Đơn hàng bán (chứng từ ĐHB)
+
+- **Tên gọi trên form:** **Đính kèm thiết kế** (nút/popover đính kèm trên toolbar `DonHangBanForm.tsx` — cùng họ UI với dktk Báo giá).
+- **Quy tắc định dạng / dung lượng / tối đa file / defer `alert`–`confirm` / viewer / tiến trình:** áp dụng **cùng chuẩn** mục **«Đính kèm thiết kế (dktk) — Báo giá** ở trên (định dạng file, `BG_DINH_KEM_TOI_DA_BYTES` tương đương trong code ĐHB, popover neo nút, v.v.).
+- **Khác biệt tên / path:** virtual path và `build*AttachmentBaseName` dùng **Mã ĐHB** + **phần khách** (`ma_kh` / `KH_unknown`) theo rule trong code `donHangBan*DinhKem*` / `DonHangBanChungTu`, không dùng mã báo giá.
+- **Toolbar:** nhãn nút **Đính kèm thiết kế** (không dùng «Đính kèm chứng từ» cho ĐHB); ô **Mã** mặc định hiển thị **Mã ĐHB**.
 
 ## Payload
 

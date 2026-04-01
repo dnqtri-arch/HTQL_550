@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import {
   FileText,
   Package,
@@ -66,11 +66,23 @@ const BAO_CAO_Y = BACKBONE_Y - NODE_H / 2
 const DIAGRAM_W = BAO_CAO_X + NODE_W + AREA_PAD
 const DIAGRAM_H = ROW2_Y + NODE_H + AREA_PAD
 
-type DanhMucId = 'nha-cung-cap' | 'hang-hoa-dich-vu' | 'dieu-khoan-thanh-toan' | 'hinh-thuc' | 'tien-ich'
+type DanhMucId = 'nha-cung-cap' | 'vat-tu-hang-hoa' | 'dieu-khoan-thanh-toan' | 'hinh-thuc' | 'tien-ich'
+
+/** Màu accent theo node — tăng nhận diện, vẫn hài hòa theme sáng/tối */
+const ACCENT_ROW1 = ['#2563eb', '#059669', '#d97706', '#dc2626'] as const
+const ACCENT_ROW2 = ['#7c3aed', '#0d9488', '#ca8a04'] as const
+const ACCENT_BAO_CAO_NODE = '#4f46e5'
+const ACCENT_DANH_MUC: Record<DanhMucId, string> = {
+  'nha-cung-cap': '#0ea5e9',
+  'vat-tu-hang-hoa': '#16a34a',
+  'dieu-khoan-thanh-toan': '#a855f7',
+  'hinh-thuc': '#ea580c',
+  'tien-ich': '#64748b',
+}
 
 const DANH_MUC: { id: DanhMucId; label: string; Icon: React.ElementType }[] = [
   { id: 'nha-cung-cap', label: 'Nhà cung cấp', Icon: Users },
-  { id: 'hang-hoa-dich-vu', label: 'Hàng hóa, dịch vụ', Icon: ShoppingBag },
+  { id: 'vat-tu-hang-hoa', label: 'Vật tư, hàng hóa', Icon: ShoppingBag },
   { id: 'dieu-khoan-thanh-toan', label: 'DKTT', Icon: FileCheck },
   { id: 'hinh-thuc', label: 'Hình thức', Icon: LayoutList },
   { id: 'tien-ich', label: 'Tiện ích', Icon: Wrench },
@@ -78,14 +90,14 @@ const DANH_MUC: { id: DanhMucId; label: string; Icon: React.ElementType }[] = [
 
 export function QuyTrinhMuaHang({
   onChonNhaCungCap,
-  onChonHangHoaDichVu,
+  onChonVatTuHangHoa,
   onChonDieuKhoanThanhToan,
   onChonHinhThuc,
   onChonTienIch,
   onChonTab,
 }: {
   onChonNhaCungCap: () => void
-  onChonHangHoaDichVu: () => void
+  onChonVatTuHangHoa: () => void
   onChonDieuKhoanThanhToan: () => void
   onChonHinhThuc: () => void
   onChonTienIch: () => void
@@ -108,7 +120,7 @@ export function QuyTrinhMuaHang({
     if (tabId && onChonTab) onChonTab(tabId)
   }
 
-  const nodeStyle = (isHover: boolean): React.CSSProperties => ({
+  const nodeStyle = (isHover: boolean, accent?: string): React.CSSProperties => ({
     position: 'absolute',
     display: 'flex',
     flexDirection: 'column',
@@ -118,12 +130,14 @@ export function QuyTrinhMuaHang({
     width: NODE_W,
     height: NODE_H,
     background: isHover ? DARK.hover : DARK.panel,
-    border: `1px solid ${isHover ? DARK.text : DARK.border}`,
+    border: accent
+      ? `1px solid ${isHover ? accent : `${accent}99`}`
+      : `1px solid ${isHover ? DARK.text : DARK.border}`,
     borderRadius: 6,
     boxSizing: 'border-box',
     cursor: 'pointer',
     transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s',
-    boxShadow: isHover ? `0 0 0 2px ${DARK.border}` : 'none',
+    boxShadow: isHover && accent ? `0 0 0 2px ${accent}55` : isHover ? `0 0 0 2px ${DARK.border}` : accent ? `0 1px 0 0 ${accent}40` : 'none',
   })
 
   return (
@@ -238,17 +252,19 @@ export function QuyTrinhMuaHang({
                   markerEnd="url(#arrow-mh-right)"
                 />
               </svg>
-              {NODES_ROW1.map((n) => (
+              {NODES_ROW1.map((n, idx) => {
+                const accent = ACCENT_ROW1[idx] ?? ACCENT_ROW1[0]
+                return (
                 <button
                   key={n.id}
                   type="button"
-                  style={{ ...nodeStyle(hoverNode === n.id), left: n.x, top: ROW1_Y }}
+                  style={{ ...nodeStyle(hoverNode === n.id, accent), left: n.x, top: ROW1_Y }}
                   onMouseEnter={() => setHoverNode(n.id)}
                   onMouseLeave={() => setHoverNode(null)}
                   onClick={() => handleClickNode(n.id)}
                   title={`Mở: ${n.label}`}
                 >
-                  <n.Icon size={20} color={DARK.textLight} style={{ marginBottom: 4, flexShrink: 0 }} />
+                  <n.Icon size={22} color={accent} style={{ marginBottom: 4, flexShrink: 0 }} strokeWidth={2.25} />
                   <span style={{ fontSize: 10, color: DARK.text, textAlign: 'center', lineHeight: 1.3, width: '100%' }}>
                     {n.label}
                     {n.label2 && (
@@ -259,32 +275,36 @@ export function QuyTrinhMuaHang({
                     )}
                   </span>
                 </button>
-              ))}
-              {NODES_ROW2.map((n) => (
+                )
+              })}
+              {NODES_ROW2.map((n, idx) => {
+                const accent = ACCENT_ROW2[idx] ?? ACCENT_ROW2[0]
+                return (
                 <button
                   key={n.id}
                   type="button"
-                  style={{ ...nodeStyle(hoverNode === n.id), left: n.x, top: ROW2_Y }}
+                  style={{ ...nodeStyle(hoverNode === n.id, accent), left: n.x, top: ROW2_Y }}
                   onMouseEnter={() => setHoverNode(n.id)}
                   onMouseLeave={() => setHoverNode(null)}
                   onClick={() => handleClickNode(n.id)}
                   title={`Mở: ${n.label}`}
                 >
-                  <n.Icon size={20} color={DARK.textLight} style={{ marginBottom: 4, flexShrink: 0 }} />
+                  <n.Icon size={22} color={accent} style={{ marginBottom: 4, flexShrink: 0 }} strokeWidth={2.25} />
                   <span style={{ fontSize: 10, color: DARK.text, textAlign: 'center', lineHeight: 1.3, width: '100%' }}>
                     {n.label}
                   </span>
                 </button>
-              ))}
+                )
+              })}
               <button
                 type="button"
-                style={{ ...nodeStyle(hoverNode === 'bao-cao'), left: BAO_CAO_X, top: BAO_CAO_Y, height: 90 }}
+                style={{ ...nodeStyle(hoverNode === 'bao-cao', ACCENT_BAO_CAO_NODE), left: BAO_CAO_X, top: BAO_CAO_Y, height: 90 }}
                 onMouseEnter={() => setHoverNode('bao-cao')}
                 onMouseLeave={() => setHoverNode(null)}
                 onClick={() => handleClickNode('bao-cao')}
                 title="Mở: Báo cáo phân tích"
               >
-                <BarChart3 size={22} color={DARK.textLight} style={{ marginBottom: 4, flexShrink: 0 }} />
+                <BarChart3 size={24} color={ACCENT_BAO_CAO_NODE} style={{ marginBottom: 4, flexShrink: 0 }} strokeWidth={2.25} />
                 <span style={{ fontSize: 10, color: DARK.text, textAlign: 'center', lineHeight: 1.3 }}>
                   Báo cáo phân tích
                 </span>
@@ -370,14 +390,15 @@ export function QuyTrinhMuaHang({
           const onClick =
             dm.id === 'nha-cung-cap'
               ? onChonNhaCungCap
-              : dm.id === 'hang-hoa-dich-vu'
-                ? onChonHangHoaDichVu
+              : dm.id === 'vat-tu-hang-hoa'
+                ? onChonVatTuHangHoa
                 : dm.id === 'dieu-khoan-thanh-toan'
                   ? onChonDieuKhoanThanhToan
                   : dm.id === 'hinh-thuc'
                     ? onChonHinhThuc
                     : onChonTienIch
           const Icon = dm.Icon
+          const hue = ACCENT_DANH_MUC[dm.id]
           return (
             <button
               key={dm.id}
@@ -391,15 +412,16 @@ export function QuyTrinhMuaHang({
                 justifyContent: 'center',
                 padding: '6px 8px',
                 background: DARK.panel,
-                border: `1px solid ${DARK.border}`,
+                border: `1px solid ${hue}55`,
                 borderRadius: 8,
                 cursor: 'pointer',
-                color: DARK.textLight,
+                color: DARK.text,
                 fontSize: 10,
+                boxShadow: `inset 0 -2px 0 0 ${hue}33`,
               }}
             >
-              <Icon size={22} color={DARK.textLight} style={{ marginBottom: 2 }} />
-              <span style={{ textAlign: 'center' }}>{dm.label}</span>
+              <Icon size={24} color={hue} style={{ marginBottom: 2 }} strokeWidth={2.2} />
+              <span style={{ textAlign: 'center', fontWeight: 600 }}>{dm.label}</span>
             </button>
           )
         })}

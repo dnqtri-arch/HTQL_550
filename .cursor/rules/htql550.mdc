@@ -38,7 +38,7 @@ alwaysApply: true
 src/modules/
 ├── crm/
 │   ├── shared/          # Utilities chung (addressApi, banksApi, modals...)
-│   ├── banHang/         # 8 sub-modules: baoGia, donHangBan, khachHang, hoaDon, hopDong, congNo, traLai, dieuKhoanThanhToan
+│   ├── banHang/         # 8 sub-modules: baoGia, donHangBan, khachHang, hoaDon, hopDongBan, congNo, traLai, dieuKhoanThanhToan
 │   └── muaHang/         # 8 sub-modules: donHangMua, nhaCungCap, hopDongMua, nhanVatTuHangHoa, traLaiHangMua, traTienNcc, nhanHoaDon, giamGiaHangMua
 ├── kho/
 │   ├── khoHang/         # VTHH core, DVT, Kho storage
@@ -77,12 +77,15 @@ src/modules/
 | Phần trăm | `formatPhanTramInput(s)` | `parseFloatVN(s)` |
 
 Hiển thị: phân cách hàng nghìn bằng `.`, thập phân bằng `,`. Ví dụ: `12.345.678,89`.
+**Chữ số sau dấu thập phân (nhập):** `formatSoTien`, `formatSoTuNhienInput`, `formatPhanTramInput` — tối đa **3** chữ số sau `,` (ví dụ `0,123`; tiền/thành tiền thường 0–2 chữ số nhưng cho phép tới 3). `formatTlCkBaoGiaInput` / chuẩn hóa TLCK báo giá cũng **3** chữ số.
 Focus/Blur: ô trống hiển thị 0 → focus xoá 0. Blur: xoá hết thì giữ trống.
 
 ### 2.2 Ngày tháng (react-datepicker)
 
 - Chỉ ngày: `dateFormat="dd/MM/yyyy"`, `shouldCloseOnSelect={true}`.
 - Ngày giờ: `showTimeSelect`, `dateFormat="HH:mm dd/MM/yyyy"`, `timeIntervals={30}`, `shouldCloseOnSelect={false}`.
+- **Giữ giờ khi đổi ngày:** với picker có giờ, khi user chọn **ngày khác** trên lịch **không** reset phần thời gian về 00:00 — merge **giờ/phút** (và giây nếu cần) từ state trước vào ngày mới. Dùng `preserveTimeWhenCalendarDayChanges` từ `src/utils/reactDatepickerPreserveTime.ts` trong `onChange` (nếu cùng ngày calendar với state cũ thì lấy `incoming` đầy đủ để vẫn bắt được khi user chỉnh giờ). **Không** gán `setHours(0,0,0,0)` khi đổi ngày.
+- **Chọn giờ trước, ngày sau:** Khi user chỉnh **khung giờ** trước rồi mới bấm **ngày** trên lịch, vẫn bắt buộc merge qua `preserveTimeWhenCalendarDayChanges(incoming, ngayGiaoHang)` (hoặc state `selected` tương ứng) để giờ đã chọn không bị mất khi đổi ngày.
 - Luôn spread `{...htqlDatePickerPopper}` từ `src/constants/datePickerPlacement.ts`.
 - **Không** đặt `readOnly` trực tiếp trên `<DatePicker />`. Dùng `customInput` với `<input readOnly />`.
 - Trigger ngày trong form: `textAlign: 'right'`, `fontVariantNumeric: 'tabular-nums'`.
@@ -106,7 +109,7 @@ Focus/Blur: ô trống hiển thị 0 → focus xoá 0. Blur: xoá hết thì gi
 
 ### 2.6 DVT (đơn vị tính)
 
-- Lưu trữ: `ma_dvt`. Hiển thị: `ky_hieu || ten_dvt || ma_dvt` → hàm `dvtHienThiLabel(value, dvtList)`.
+- Lưu trữ: `ma_dvt`. **Hiển thị trên toàn dự án** (lưới chi tiết, báo cáo có cột ĐVT, v.v.): `ky_hieu || ten_dvt || ma_dvt` → hàm `dvtHienThiLabel(value, dvtList)` trong `src/utils/dvtHienThiLabel.ts` (nạp `dvtList` qua `donViTinhGetAll` hoặc nguồn tương đương). **Không** chỉ hiển thị thô `ma_dvt` khi đã có danh sách DVT.
 
 ### 2.7 Validation
 
@@ -138,8 +141,11 @@ Nhãn chuẩn: **Lưu**, **Lưu và cắt**, **Lưu và tiếp tục**. Không d
 ### 3.2 Nút Xoá (màn danh sách)
 
 - Icon `Trash2`, label "Xoá"; `disabled` khi chưa chọn dòng.
-- Luồng: `window.confirm` cảnh báo rõ ràng (tên bản ghi + "Thao tác không hoàn tác") → API xoá → cập nhật state.
-- Menu ngữ cảnh Xoá dùng cùng chuẩn xác nhận.
+- Luồng: **Modal xác nhận xóa** (không dùng `window.confirm`) — trong modal hiển thị **một phép tính cộng đơn giản** (hai số nguyên dương nhỏ, ví dụ `7 + 5 = ?`); người dùng nhập **đúng kết quả (tổng)**; chỉ khi **khớp** thì bấm **Đồng ý xóa** mới gọi API xóa (sai → báo lỗi, không xóa). Phải có nút **Làm mới câu hỏi** (tạo phép tính mới) khi khó đọc / muốn đổi câu. Component tham chiếu: `src/components/common/confirmXoaCaptchaModal.tsx`.
+- **Giao diện xác minh (captcha):** khối nhập nằm trong **thẻ** có viền, nền gradient nhẹ, tiêu đề phụ «Xác minh trước khi xóa», phép tính **mono** trong ô nổi, ô nhập tổng gọn (tabular-nums), nút **Làm mới câu hỏi** cạnh phép tính — **gọn, dễ đọc**, không trải dài toàn chiều ngang modal.
+- **Ô nhập:** chỉ **chữ số** (kết quả phép cộng, tối đa 2–3 chữ số tùy phạm vi số); gợi ý `inputMode="numeric"`, `lang="en"`, `autoComplete="off"`, `spellCheck={false}`.
+- Nội dung modal: tên/mã bản ghi + cảnh báo "Thao tác không hoàn tác" (hoặc tương đương).
+- Menu ngữ cảnh Xoá dùng **cùng** modal captcha.
 - Kiểm tra ràng buộc trước khi xoá (ví dụ DVT đang dùng trong VTHH).
 
 ### 3.3 Nút Hủy chứng từ (nghiệp vụ)
@@ -203,6 +209,7 @@ Chuẩn tham chiếu: `src/modules/inventory/kho/VatTuHangHoaForm.tsx`.
 1. Footer 3 nút: import `formFooterButtons.ts`.
 2. Ô dropdown + nút thêm: import `lookupControlStyles.ts`, chiều cao 24px.
 3. Validation: lỗi cùng dòng tiêu đề; focus ô thiếu sau khi set lỗi.
+4. **Form trong modal có thể kéo (drag):** dùng hook `useDraggable` từ `src/hooks/useDraggable.ts` — `containerRef` + `containerStyle` gắn vào **khối vỏ** (hộp form); `onMouseDown` kéo gắn vào **thanh tiêu đề** (handle), truyền xuống form qua prop tương ứng (ví dụ `onHeaderPointerDown`) để người dùng di chuyển cửa sổ nhập liệu.
 
 ### 6.2 Ô Điều khoản TT (form Nhà cung cấp)
 

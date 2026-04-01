@@ -5,10 +5,11 @@
  * Badge: Chưa TT (cam), TT 1 phần (xanh dương), Đã TT (xanh lá), Hủy bỏ (đỏ).
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Eye, X } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
 import { Modal } from '../../../../components/common/modal'
+import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
@@ -30,9 +31,13 @@ import {
   type HoaDonBanChiTiet,
   type BanHangKyValue,
 } from './hoaDonBanApi'
-import { donHangBanGetAll, donHangBanGetChiTiet, getDefaultDonHangBanFilter } from '../donHangBan/donHangBanApi'
-import { hopDongBanGetAll, hopDongBanGetChiTiet, getDefaultHopDongBanFilter } from '../hopDong/hopDongBanApi'
-import type { HoaDonBanCreatePayload, BanHangFilter, DonHangBanRecord, HopDongBanRecord } from '../../../../types/banHang'
+import { donHangBanGetAll, donHangBanGetChiTiet, getDefaultDonHangBanChungTuFilter } from '../donHangBan/donHangBanChungTuApi'
+import { hopDongBanChungTuGetAll, hopDongBanChungTuGetChiTiet } from '../hopDongBan/hopDongBanChungTuApi'
+import type { BanHangFilter, HoaDonBanCreatePayload } from '../../../../types/banHang'
+import type { HopDongBanChungTuRecord } from '../../../../types/hopDongBanChungTu'
+import type { DonHangBanChungTuRecord } from '../../../../types/donHangBanChungTu'
+import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import styles from '../BanHang.module.css'
 
 function Badge({ value }: { value: string }) {
@@ -58,13 +63,13 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10)
 
 function ChonNguonModal({ onClose, onChonDHB, onChonHDB }: {
   onClose: () => void
-  onChonDHB: (r: DonHangBanRecord) => void
-  onChonHDB: (r: HopDongBanRecord) => void
+  onChonDHB: (r: DonHangBanChungTuRecord) => void
+  onChonHDB: (r: HopDongBanChungTuRecord) => void
 }) {
   const [tab, setTab] = useState<'dhb' | 'hdb'>('dhb')
   const [search, setSearch] = useState('')
-  const dhbList = donHangBanGetAll({ ...getDefaultDonHangBanFilter(), tim_kiem: '' })
-  const hdbList = hopDongBanGetAll({ ...getDefaultHopDongBanFilter(), tim_kiem: '' })
+  const dhbList = donHangBanGetAll(getDefaultDonHangBanChungTuFilter())
+  const hdbList = hopDongBanChungTuGetAll({ ky: 'tat-ca', tu: '', den: '' })
   const filteredDhb = search ? dhbList.filter((r) => matchSearchKeyword(`${r.so_don_hang} ${r.khach_hang}`, search)) : dhbList
   const filteredHdb = search ? hdbList.filter((r) => matchSearchKeyword(`${r.so_hop_dong} ${r.khach_hang}`, search)) : hdbList
 
@@ -104,7 +109,7 @@ function ChonNguonModal({ onClose, onChonDHB, onChonHDB }: {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr>
-              {['Số HĐ', 'Ngày hiệu lực', 'Khách hàng', 'Hạn mức', 'Trạng thái'].map((h) => (
+              {['Số HĐ', 'Ngày lập HĐ', 'Khách hàng', 'Tổng thanh toán', 'Trạng thái'].map((h) => (
                 <th key={h} style={{ padding: '5px 8px', background: 'var(--bg-tab)', borderBottom: '1px solid var(--border-strong)', textAlign: 'left', position: 'sticky', top: 0 }}>{h}</th>
               ))}
             </tr></thead>
@@ -115,9 +120,9 @@ function ChonNguonModal({ onClose, onChonDHB, onChonHDB }: {
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
                   <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>{r.so_hop_dong}</td>
-                  <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNgay(r.ngay_hieu_luc)}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNgay(r.ngay_lap_hop_dong)}</td>
                   <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>{r.khach_hang}</td>
-                  <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumberDisplay(r.han_muc_gia_tri, 0)}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumberDisplay(r.tong_thanh_toan, 0)}</td>
                   <td style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>{r.tinh_trang}</td>
                 </tr>
               ))}
@@ -169,7 +174,7 @@ function HoaDonBanForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, 
     setTimeout(() => soRef.current?.focus(), 60)
   }, [])
 
-  const applyDonHangBan = (dhb: DonHangBanRecord) => {
+  const applyDonHangBan = (dhb: DonHangBanChungTuRecord) => {
     setChonNguonOpen(false)
     const ct = donHangBanGetChiTiet(dhb.id)
     setKhachHang(dhb.khach_hang); setDiaChi(dhb.dia_chi ?? ''); setMaSoThue(dhb.ma_so_thue ?? '')
@@ -179,9 +184,9 @@ function HoaDonBanForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, 
     toast?.showToast(`Đã copy từ đơn hàng bán ${dhb.so_don_hang}.`, 'success')
   }
 
-  const applyHopDong = (hdb: HopDongBanRecord) => {
+  const applyHopDong = (hdb: HopDongBanChungTuRecord) => {
     setChonNguonOpen(false)
-    const ct = hopDongBanGetChiTiet(hdb.id)
+    const ct = hopDongBanChungTuGetChiTiet(hdb.id)
     setKhachHang(hdb.khach_hang); setDienGiai(hdb.dien_giai ?? '')
     setHopDongBanId(hdb.id); setSoHopDongGoc(hdb.so_hop_dong)
     setDonHangBanId(''); setSoDonHangGoc('')
@@ -440,6 +445,26 @@ export function HoaDonBan() {
   const [xoaModal, setXoaModal] = useState<HoaDonBanRecord | null>(null)
   const [contextMenu, setContextMenu] = useState<{ open: boolean; x: number; y: number; row: HoaDonBanRecord | null }>({ open: false, x: 0, y: 0, row: null })
   const [formKey, setFormKey] = useState(0)
+  const [dvtList, setDvtList] = useState<DvtListItem[]>([])
+
+  const columnsChiTietHoaDon = useMemo((): DataGridColumn<HoaDonBanChiTiet>[] => [
+    { key: 'stt', label: 'STT', width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
+    { key: 'ma_hang', label: 'Mã VTHH', width: 88 },
+    { key: 'ten_hang', label: 'Tên VTHH', width: 220 },
+    { key: 'dvt', label: 'ĐVT', width: 60, renderCell: (v) => dvtHienThiLabel(v as string, dvtList) },
+    { key: 'so_luong', label: 'Số lượng', width: 68, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
+    { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+    { key: 'thanh_tien', label: 'Thành tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+  ], [dvtList])
+
+  useEffect(() => {
+    let c = false
+    donViTinhGetAll().then((list) => {
+      if (c || !Array.isArray(list)) return
+      setDvtList(list)
+    })
+    return () => { c = true }
+  }, [])
 
   const loadData = useCallback(() => setDanhSach(hoaDonBanGetAll(filter)), [filter])
   useEffect(() => { loadData() }, [loadData])
@@ -500,15 +525,7 @@ export function HoaDonBan() {
             <button type="button" className={styles.detailTabActive}>Chi tiết VTHH</button>
           </div>
           <div className={styles.detailTabPanel}>
-            <DataGrid<HoaDonBanChiTiet> columns={[
-              { key: 'stt', label: 'STT', width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
-              { key: 'ma_hang', label: 'Mã VTHH', width: 88 },
-              { key: 'ten_hang', label: 'Tên VTHH', width: 220 },
-              { key: 'dvt', label: 'ĐVT', width: 60 },
-              { key: 'so_luong', label: 'Số lượng', width: 68, align: 'right', renderCell: (v) => formatSoThapPhan(Number(v), 2) },
-              { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-              { key: 'thanh_tien', label: 'Thành tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-            ]} data={chiTiet} keyField="id" stripedRows compact height="100%" />
+            <DataGrid<HoaDonBanChiTiet> columns={columnsChiTietHoaDon} data={chiTiet} keyField="id" stripedRows compact height="100%" />
           </div>
         </div>
       </div>
@@ -522,18 +539,26 @@ export function HoaDonBan() {
         </div>
       )}
 
-      <Modal open={xoaModal != null} onClose={() => setXoaModal(null)} title="Xác nhận xóa" size="sm"
-        footer={<><button type="button" className={styles.modalBtn} onClick={() => setXoaModal(null)}>Hủy bỏ</button>
-          <button type="button" className={styles.modalBtnDanger} onClick={() => {
-            if (!xoaModal) return
-            hoaDonBanDelete(xoaModal.id); loadData()
-            if (selectedId === xoaModal.id) setSelectedId(null)
-            toast?.showToast(`Đã xóa hóa đơn ${xoaModal.so_hoa_don}.`, 'info')
-            setXoaModal(null)
-          }}>Đồng ý xóa</button></>}
-      >
-        {xoaModal && <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)' }}>Xóa hóa đơn <strong>{xoaModal.so_hoa_don}</strong>?<br /><span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span></p>}
-      </Modal>
+      <ConfirmXoaCaptchaModal
+        open={xoaModal != null}
+        onClose={() => setXoaModal(null)}
+        onConfirm={() => {
+          if (!xoaModal) return
+          hoaDonBanDelete(xoaModal.id)
+          loadData()
+          if (selectedId === xoaModal.id) setSelectedId(null)
+          toast?.showToast(`Đã xóa hóa đơn ${xoaModal.so_hoa_don}.`, 'info')
+          setXoaModal(null)
+        }}
+        message={
+          xoaModal ? (
+            <>
+              Xóa hóa đơn <strong>{xoaModal.so_hoa_don}</strong>?<br />
+              <span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span>
+            </>
+          ) : null
+        }
+      />
 
       {showForm && (
         <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>

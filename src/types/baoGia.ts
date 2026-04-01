@@ -36,6 +36,8 @@ export interface BaoGiaRecord {
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
+  /** `true` = có VAT (cột thuế trên lưới); `false` = không VAT. Bản ghi cũ thiếu trường → coi như `true`. */
+  ap_dung_vat_gtgt?: boolean
   tl_ck?: number | null
   tien_ck?: number | null
   so_dien_thoai?: string
@@ -44,8 +46,6 @@ export interface BaoGiaRecord {
   attachments?: BaoGiaAttachmentItem[]
   /** Hình thức giao hàng / nhập kho (form BG). `ca_hai` = chọn cả nhập kho và không nhập kho. */
   hinh_thuc?: 'nhap_kho' | 'khong_nhap_kho' | 'ca_hai' | string
-  kho_nhap_id?: string
-  ten_cong_trinh?: string
   dia_chi_cong_trinh?: string
   /** Phiếu nhận vật tư hàng hóa (NVTHH) — chứng từ mua hàng (thanh toán). */
   chung_tu_mua_loai_chung_tu?: string
@@ -104,6 +104,8 @@ export interface BaoGiaChiTiet {
   pt_thue_gtgt: number | null
   tien_thue_gtgt: number | null
   lenh_san_xuat: string
+  /** Nội dung dòng (sau Tên SPHH) — cho phép nhiều dòng cùng mã hàng. */
+  noi_dung?: string
   ghi_chu?: string
   dd_gh_index?: number | null
 }
@@ -129,6 +131,7 @@ export interface BaoGiaCreatePayload {
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
+  ap_dung_vat_gtgt?: boolean
   tl_ck?: number | null
   tien_ck?: number | null
   so_dien_thoai?: string
@@ -136,8 +139,6 @@ export interface BaoGiaCreatePayload {
   doi_chieu_don_mua_id?: string
   attachments?: BaoGiaAttachmentItem[]
   hinh_thuc?: 'nhap_kho' | 'khong_nhap_kho' | 'ca_hai' | string
-  kho_nhap_id?: string
-  ten_cong_trinh?: string
   dia_chi_cong_trinh?: string
   chung_tu_mua_loai_chung_tu?: string
   chung_tu_mua_chua_thanh_toan?: boolean
@@ -174,7 +175,11 @@ export interface BaoGiaCreatePayload {
     pt_thue_gtgt: number | null
     tien_thue_gtgt: number | null
     dd_gh_index?: number | null
+    noi_dung?: string
     ghi_chu?: string
+    chieu_dai?: number
+    chieu_rong?: number
+    luong?: number
   }>
 }
 

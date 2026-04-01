@@ -76,22 +76,21 @@ function formatVietnamAddressFromGeocodeComponents(
   const province = get(['administrative_area_level_1'])
 
   const parts: string[] = []
-  if (streetNum || route) {
-    const left = [streetNum ? `Số ${streetNum}` : '', route ? (route.startsWith('Đường') ? route : `Đường ${route}`) : '']
-      .filter(Boolean)
-      .join(', ')
-    if (left) parts.push(left)
+  if (streetNum) {
+    parts.push(`"Số" ${streetNum}`)
+  }
+  if (route) {
+    const r = route.replace(/^Đường\s+/i, '').trim()
+    parts.push(`"Đường" ${r}`)
   }
   if (wardRaw) {
-    let w = wardRaw.replace(/^Phường\s+/i, '').replace(/^Xã\s+/i, '').trim()
-    if (!/^P[\s.]/i.test(w)) w = `P. ${w}`
-    parts.push(w)
+    const w = wardRaw.replace(/^Phường\s+/i, '').replace(/^Xã\s+/i, '').replace(/^P\.\s*/i, '').trim()
+    parts.push(`"Phường" ${w}`)
   }
   const tp = locality || province
   if (tp) {
-    const t = tp.replace(/^Thành phố\s+/i, '').replace(/^Tỉnh\s+/i, '').trim()
-    const label = /^TP[\s.]/i.test(t) ? t : `TP. ${t}`
-    parts.push(label)
+    const t = tp.replace(/^Thành phố\s+/i, '').replace(/^Thành Phố\s+/i, '').replace(/^Tỉnh\s+/i, '').trim()
+    parts.push(`"Thành Phố" ${t}`)
   }
   const s = parts.join(', ').replace(/\s+/g, ' ').trim()
   return s || null

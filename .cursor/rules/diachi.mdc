@@ -24,7 +24,8 @@ alwaysApply: false
 ## 3. Goong — Autocomplete V2 + Geocode (địa chỉ đầy đủ)
 
 - **Autocomplete V2:** `https://rsapi.goong.io/v2/place/autocomplete` — lấy `predictions[]` (có `place_id`, `description`).
-- **Geocode V2 / Geocode:** với mỗi `place_id` (tối đa 8 gợi ý/sốt), gọi `https://rsapi.goong.io/v2/geocode` hoặc dự phòng `https://rsapi.goong.io/geocode` (cùng `api_key`) để có địa chỉ chuẩn (số nhà, đường, phường/xã, tỉnh/TP), ví dụ: *Số 78, Đường Nguyễn Hiền, P. Tân An, TP. Cần Thơ*.
+- **Geocode V2 / Geocode:** với mỗi `place_id` (tối đa 8 gợi ý/sốt), gọi `https://rsapi.goong.io/v2/geocode` hoặc dự phòng `https://rsapi.goong.io/geocode` (cùng `api_key`) để có địa chỉ đầy đủ.
+- **Chuỗi hiển thị từ `address_components`:** hàm `formatVietnamAddressFromGeocodeComponents` ghép theo nhãn trong ngoặc kép + giá trị, ví dụ: `"Số" 78, "Đường" Nguyễn Hiền, "Phường" Tân An, "Thành Phố" Cần Thơ` (số nhà / đường / phường hoặc xã / thành phố hoặc tỉnh — bỏ tiền tố trùng lặp trước khi gắn nhãn).
 - Ưu tiên ghép từ `address_components` (Geocode); nếu không đủ thì dùng `formatted_address` đã `cleanAddressForDisplay`.
 - Không có `place_id` hoặc Geocode lỗi → dùng `description` từ Autocomplete (đã làm sạch).
 

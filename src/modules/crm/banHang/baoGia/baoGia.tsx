@@ -15,7 +15,7 @@ import { DataGrid, type DataGridColumn } from '../../../../components/common/dat
 import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
-import { formatNumberDisplay } from '../../../../utils/numberFormat'
+import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
 import { htqlDatePickerPopperTop } from '../../../../constants/datePickerPlacement'
 import { DatePickerCustomHeader } from '../../../../components/datePickerCustomHeader'
 
@@ -32,14 +32,35 @@ import {
   type BaoGiaFilter,
   baoGiaPost,
   baoGiaPut,
+  baoGiaBiKhoaChinhSuaTheoTinhTrang,
   getBaoGiaDraft,
   setBaoGiaDraft,
   clearBaoGiaDraft,
   baoGiaSoDonHangTiepTheo,
+  baoGiaCapNhatTuMenuTaoGd,
+  TINH_TRANG_BG_DA_CHUYEN_DHB,
+  TINH_TRANG_BG_DA_CHUYEN_HD,
+  TINH_TRANG_BG_KH_KHONG_DONG_Y,
+  TINH_TRANG_BG_MOI_TAO,
+  HTQL_BAO_GIA_RELOAD_EVENT,
 } from './baoGiaApi'
+import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
+import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { BaoGiaApiProvider, type BaoGiaApi } from './baoGiaApiContext'
 import { BaoGiaForm } from './baoGiaForm'
+import { DonHangBanForm } from '../donHangBan/donHangBanForm'
+import { DonHangBanChungTuApiProvider } from '../donHangBan/donHangBanChungTuApiContext'
+import { donHangBanChungTuApiImpl, donHangBanSoDonHangTiepTheo } from '../donHangBan/donHangBanChungTuApi'
+import { buildDonHangBanChungTuPrefillFromBaoGia } from '../donHangBan/baoGiaToDonHangBanChungTuPrefill'
+import { HopDongBanChungTuApiProvider } from '../hopDongBan/hopDongBanChungTuApiContext'
+import { hopDongBanChungTuApiImpl, hopDongBanSoHopDongTiepTheo } from '../hopDongBan/hopDongBanChungTuApi'
+import { buildHopDongBanChungTuPrefillFromBaoGia } from '../hopDongBan/baoGiaToHopDongBanChungTuPrefill'
+import { HopDongBanForm } from '../hopDongBan/hopDongBanForm'
+import type { DonHangBanChungTuChiTiet, DonHangBanChungTuRecord } from '../../../../types/donHangBanChungTu'
+import type { HopDongBanChungTuChiTiet, HopDongBanChungTuRecord } from '../../../../types/hopDongBanChungTu'
 import styles from '../BanHang.module.css'
+import { useDraggable } from '../../../../hooks/useDraggable'
 
 registerLocale('vi', vi)
 
@@ -107,6 +128,8 @@ function BaoGiaBadge({ value }: { value: string }) {
     : value === 'Chờ duyệt'  ? styles.badgeChoDuyet
     : value === 'Hủy bỏ'     ? styles.badgeDaHuy
     : value === 'Đã gửi khách' ? styles.badgeDangThucHien
+    : value === TINH_TRANG_BG_DA_CHUYEN_DHB || value === TINH_TRANG_BG_DA_CHUYEN_HD ? styles.badgeDaChot
+    : value === TINH_TRANG_BG_KH_KHONG_DONG_Y ? styles.badgeDaHuy
     : styles.badgeDefault
   return <span className={cls}>{value}</span>
 }
@@ -117,47 +140,40 @@ function formatNgay(iso: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
 
-// ─── Cột danh sách ───────────────────────────────────────────────────────────
-const columns: DataGridColumn<BaoGiaRecord>[] = [
-  { key: 'so_bao_gia',      label: 'Số BG',       width: 100, align: 'right' },
-  { key: 'ngay_bao_gia',    label: 'Ngày BG',     width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
-  { key: 'ngay_het_han',    label: 'Hết hạn',     width: 76, align: 'right', renderCell: (v) => formatNgay(v as string | null) },
-  { key: 'khach_hang',      label: 'Khách hàng',  width: '28%' },
-  { key: 'dien_giai',       label: 'Diễn giải',   width: '20%' },
-  { key: 'tong_thanh_toan', label: 'Tổng tiền',   width: 110, align: 'right',
-    renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-  { key: 'tinh_trang',      label: 'Trạng thái',  width: 110,
-    renderCell: (v) => <BaoGiaBadge value={String(v)} /> },
-  { key: 'nv_ban_hang',     label: 'NV bán hàng', width: '10%' },
-]
+/** Hiệu lực đến: chỉ ngày (dd/mm/yyyy), bỏ giờ (YC51). */
+function formatHieuLucDen(iso: string | null | undefined): string {
+  if (!iso || !String(iso).trim()) return ''
+  const s = String(iso).trim()
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`
+  const d = new Date(s)
+  if (!Number.isNaN(d.getTime())) {
+    const day = d.getDate()
+    const mo = d.getMonth() + 1
+    const y = d.getFullYear()
+    return `${String(day).padStart(2, '0')}/${String(mo).padStart(2, '0')}/${y}`
+  }
+  return formatNgay(s)
+}
 
-// ─── Cột chi tiết ────────────────────────────────────────────────────────────
-const columnsChiTiet: DataGridColumn<BaoGiaChiTiet>[] = [
-  { key: 'stt',              label: 'STT',             width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
-  { key: 'ma_hang',          label: 'Mã SPHH',         width: 88 },
-  { key: 'ten_hang',         label: 'Tên Sản phẩm, Hàng hóa', width: 200 },
-  { key: 'dvt',              label: 'ĐVT',             width: 52 },
-  { key: 'so_luong',         label: 'Số lượng',        width: 70, align: 'right',
-    renderCell: (v) => formatNumberDisplay(Number(v), 2) },
-  { key: 'don_gia',          label: 'Đơn giá',         width: 100, align: 'right',
+function baoGiaDaChonTaoGd(row: BaoGiaRecord): boolean {
+  const t = (row.tinh_trang ?? '').trim()
+  return t === TINH_TRANG_BG_DA_CHUYEN_DHB || t === TINH_TRANG_BG_DA_CHUYEN_HD || t === TINH_TRANG_BG_KH_KHONG_DONG_Y
+}
+
+// ─── Cột danh sách (Ghi chú cuối bảng) ───────────────────────────────────────
+const columnsBaoGiaList: DataGridColumn<BaoGiaRecord>[] = [
+  { key: 'so_bao_gia', label: 'Mã BG', width: 88, align: 'right' },
+  { key: 'nv_ban_hang', label: 'NV bán hàng', width: '10%' },
+  { key: 'so_chung_tu_cukcuk', label: 'Tên báo giá', width: 140, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
+  { key: 'ngay_bao_gia', label: 'Ngày BG', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
+  { key: 'ngay_giao_hang', label: 'Hiệu lực đến', width: 88, align: 'right', renderCell: (v) => formatHieuLucDen(v as string | null) },
+  { key: 'khach_hang', label: 'Khách hàng', width: '20%' },
+  { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 110, align: 'right',
     renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-  { key: 'thanh_tien',       label: 'Thành tiền',      width: 100, align: 'right',
-    renderCell: (v) => formatNumberDisplay(Math.round(Number(v)), 0) },
-  { key: 'pt_thue_gtgt',     label: '% Thuế GTGT',     width: 70, align: 'right',
-    renderCell: (v) => v != null ? formatNumberDisplay(Number(v), 0) : '' },
-  { key: 'tien_thue_gtgt',   label: 'Tiền thuế GTGT',  width: 100, align: 'right',
-    renderCell: (v) => v != null ? formatNumberDisplay(Math.round(Number(v)), 0) : '' },
-  {
-    key: 'tong_tien',
-    label: 'Tổng tiền',
-    width: 100,
-    align: 'right',
-    renderCell: (_v, row) => {
-      const tong = Math.round((Number(row.thanh_tien) || 0) + (Number(row.tien_thue_gtgt) || 0))
-      return <span style={{ fontWeight: 600, color: '#1e40af' }}>{formatNumberDisplay(tong, 0)}</span>
-    },
-  },
-  { key: 'ghi_chu',          label: 'Ghi chú',         width: 140 },
+  { key: 'tinh_trang', label: 'Tình trạng', width: 118,
+    renderCell: (v) => <BaoGiaBadge value={String(v)} /> },
+  { key: 'dien_giai', label: 'Ghi chú', width: '18%' },
 ]
 
 // ─── [YC23] Phân trang ──────────────────────────────────────────────────────
@@ -208,7 +224,7 @@ const apiBaoGia: BaoGiaApi = {
 }
 
 // ─── Màn hình danh sách Báo giá (Content) ────────────────────────────────────
-function BaoGiaContent() {
+function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string) => void }) {
   const toast = useToastOptional()
   const [filter,      setFilter]      = useState<BaoGiaFilter>(getDefaultBaoGiaFilter)
   const [danhSach,    setDanhSach]    = useState<BaoGiaRecord[]>([])
@@ -229,13 +245,52 @@ function BaoGiaContent() {
   const dropdownTaoGdRef = useRef<HTMLDivElement>(null)
   const hoverTaoGdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoverGuiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hoverCtxSubTaoGdRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const baoGiaFormDrag = useDraggable()
+  const [ctxSubmenuTaoGd, setCtxSubmenuTaoGd] = useState(false)
   const [page, setPage] = useState(1)
+  const [showDonHangTuBaoGia, setShowDonHangTuBaoGia] = useState(false)
+  const [donHangTuBaoGiaKey, setDonHangTuBaoGiaKey] = useState(0)
+  const [donHangTuBaoGiaPrefill, setDonHangTuBaoGiaPrefill] = useState<{
+    prefillDhb: Partial<DonHangBanChungTuRecord>
+    prefillChiTiet: DonHangBanChungTuChiTiet[]
+  } | null>(null)
+  const [showHopDongTuBaoGia, setShowHopDongTuBaoGia] = useState(false)
+  const [hopDongTuBaoGiaKey, setHopDongTuBaoGiaKey] = useState(0)
+  const [hopDongTuBaoGiaPrefill, setHopDongTuBaoGiaPrefill] = useState<{
+    prefillHdbCt: Partial<HopDongBanChungTuRecord>
+    prefillChiTiet: HopDongBanChungTuChiTiet[]
+  } | null>(null)
+  const [dvtList, setDvtList] = useState<DvtListItem[]>([])
+  const [modalLyDoKhKhongDongY, setModalLyDoKhKhongDongY] = useState<BaoGiaRecord | null>(null)
+  const [lyDoKhInput, setLyDoKhInput] = useState('')
+  const [modalPhucHoiBg, setModalPhucHoiBg] = useState<BaoGiaRecord | null>(null)
+  /** Chỉ cập nhật trạng thái BG «Đã chuyển ĐHB/HĐ» sau khi lưu thành công; đóng form không lưu → bỏ qua (YC51). */
+  const pendingCapNhatBaoGiaDhbRef = useRef<string | null>(null)
+  const pendingCapNhatBaoGiaHdbRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    let c = false
+    donViTinhGetAll().then((list) => {
+      if (c || !Array.isArray(list)) return
+      setDvtList(list)
+    })
+    return () => { c = true }
+  }, [])
 
   const loadData = useCallback(() => {
     setDanhSach(baoGiaGetAll(filter))
   }, [filter])
 
   useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    const sync = () => loadData()
+    window.addEventListener(HTQL_BAO_GIA_RELOAD_EVENT, sync)
+    return () => window.removeEventListener(HTQL_BAO_GIA_RELOAD_EVENT, sync)
+  }, [loadData])
+  useEffect(() => {
+    if (!contextMenu.open) setCtxSubmenuTaoGd(false)
+  }, [contextMenu.open])
   useEffect(() => {
     if (selectedId) setChiTiet(baoGiaGetChiTiet(selectedId))
     else setChiTiet([])
@@ -245,7 +300,10 @@ function BaoGiaContent() {
     let result = danhSach
     if (search.trim()) {
       result = result.filter((r) =>
-        matchSearchKeyword(`${r.so_bao_gia} ${r.khach_hang} ${r.dien_giai ?? ''} ${r.tinh_trang}`, search)
+        matchSearchKeyword(
+          `${r.so_bao_gia} ${r.so_chung_tu_cukcuk ?? ''} ${r.khach_hang} ${r.dien_giai ?? ''} ${r.tinh_trang}`,
+          search,
+        )
       )
     }
     return result
@@ -272,6 +330,83 @@ function BaoGiaContent() {
   const tongTien   = useMemo(() => filtered.reduce((s, r) => s + r.tong_thanh_toan, 0), [filtered])
   const selectedRow = useMemo(() => selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null, [selectedId, danhSach])
 
+  const chiTietHienThiCoVat = selectedRow == null || selectedRow.ap_dung_vat_gtgt !== false
+
+  const columnsChiTiet = useMemo((): DataGridColumn<BaoGiaChiTiet>[] => {
+    const coBan: DataGridColumn<BaoGiaChiTiet>[] = [
+      { key: 'stt', label: 'STT', width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
+      { key: 'ma_hang', label: 'Mã SPHH', width: 88 },
+      { key: 'ten_hang', label: 'Tên Sản phẩm, Hàng hóa', width: 180 },
+      { key: 'noi_dung', label: 'Nội dung', width: 140, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
+      { key: 'dvt', label: 'ĐVT', width: 72, renderCell: (v) => dvtHienThiLabel(v as string, dvtList) },
+      { key: 'so_luong', label: 'Số lượng', width: 70, align: 'right',
+        renderCell: (v) => formatNumberDisplay(Number(v), 2) },
+      { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right',
+        renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+      { key: 'thanh_tien', label: 'Thành tiền', width: 100, align: 'right',
+        renderCell: (v) => formatNumberDisplay(Math.round(Number(v)), 0) },
+    ]
+    const cotThue: DataGridColumn<BaoGiaChiTiet>[] = chiTietHienThiCoVat
+      ? [
+          { key: 'pt_thue_gtgt', label: '% Thuế GTGT', width: 70, align: 'right',
+            renderCell: (v) => v != null ? formatNumberDisplay(Number(v), 0) : '' },
+          { key: 'tien_thue_gtgt', label: 'Tiền thuế GTGT', width: 100, align: 'right',
+            renderCell: (v) => v != null ? formatNumberDisplay(Math.round(Number(v)), 0) : '' },
+        ]
+      : []
+    const cotTong: DataGridColumn<BaoGiaChiTiet> = {
+      key: 'tong_tien',
+      label: 'Tổng tiền',
+      width: 100,
+      align: 'right',
+      renderCell: (_v, row) => {
+        const thue = chiTietHienThiCoVat ? (Number(row.tien_thue_gtgt) || 0) : 0
+        const tong = Math.round((Number(row.thanh_tien) || 0) + thue)
+        return <span style={{ fontWeight: 600, color: '#1e40af' }}>{formatNumberDisplay(tong, 0)}</span>
+      },
+    }
+    return [...coBan, ...cotThue, cotTong, { key: 'ghi_chu', label: 'Ghi chú', width: 140 }]
+  }, [dvtList, chiTietHienThiCoVat])
+
+  const chiTietFooterDong = useMemo(() => {
+    if (!selectedRow) return null
+    const maSet = new Set<string>()
+    for (const c of chiTiet) {
+      const m = (c.ma_hang ?? '').trim()
+      if (m) maSet.add(m)
+    }
+    const mapDvt = new Map<string, number>()
+    for (const c of chiTiet) {
+      const m = (c.ma_hang ?? '').trim()
+      if (!m) continue
+      const sl = Number(c.so_luong) || 0
+      if (sl <= 0) continue
+      const lab = dvtHienThiLabel(c.dvt, dvtList)
+      mapDvt.set(lab, (mapDvt.get(lab) ?? 0) + sl)
+    }
+    const tongSlTxt = mapDvt.size === 0
+      ? '—'
+      : Array.from(mapDvt.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
+        .map(([k, v]) => `${formatSoThapPhan(v, 2)} ${k}`)
+        .join(', ')
+    const coVat = selectedRow.ap_dung_vat_gtgt !== false
+    const tlCk = selectedRow.tl_ck != null && Number.isFinite(Number(selectedRow.tl_ck))
+      ? formatSoThapPhan(Number(selectedRow.tl_ck), 3)
+      : '0'
+    const tienCk = formatNumberDisplay(Math.round(Number(selectedRow.tien_ck) || 0), 0)
+    return {
+      chungLoaiVt: maSet.size,
+      tongSoLuongText: tongSlTxt,
+      tongTienHang: formatNumberDisplay(selectedRow.tong_tien_hang ?? 0, 0),
+      tlCk,
+      tienCk,
+      tienThue: formatNumberDisplay(Math.round(selectedRow.tong_thue_gtgt ?? 0), 0),
+      tongThanhToan: formatNumberDisplay(Math.round(selectedRow.tong_thanh_toan ?? 0), 0),
+      coVat,
+    }
+  }, [selectedRow, chiTiet, dvtList])
+
   const moFormThem = () => {
     clearBaoGiaDraft()
     setFormRecord(null)
@@ -290,37 +425,30 @@ function BaoGiaContent() {
     setXoaModalRow(null)
   }
 
-  // [YC23 Mục 8] Lập đơn hàng
-  const lapDonHang = () => {
-    if (!selectedRow) return
-    const ct = baoGiaGetChiTiet(selectedRow.id)
-    const draft = {
-      khach_hang:      selectedRow.khach_hang,
-      dia_chi:         selectedRow.dia_chi,
-      ma_so_thue:      selectedRow.ma_so_thue,
-      dien_giai:       selectedRow.dien_giai ?? '',
-      nv_ban_hang:     selectedRow.nv_ban_hang,
-      bao_gia_ref:     selectedRow.so_bao_gia,
-      bao_gia_id:      selectedRow.id,
-      tong_thanh_toan: selectedRow.tong_thanh_toan,
-      chiTiet: ct.map((c) => ({
-        ma_hang:        c.ma_hang,
-        ten_hang:       c.ten_hang,
-        dvt:            c.dvt,
-        so_luong:       c.so_luong,
-        don_gia:        c.don_gia,
-        thanh_tien:     Math.round(c.thanh_tien),
-        pt_thue_gtgt:   c.pt_thue_gtgt,
-        tien_thue_gtgt: c.tien_thue_gtgt != null ? Math.round(c.tien_thue_gtgt) : null,
-        ghi_chu:        c.ghi_chu,
-      })),
-    }
-    try {
-      localStorage.setItem('htql_don_hang_ban_from_baogia', JSON.stringify(draft))
-      toast?.showToast(`Đã tạo nháp đơn hàng từ ${selectedRow.so_bao_gia}. Chuyển sang tab Đơn hàng bán.`, 'success')
-    } catch {
-      toast?.showToast('Lỗi khi tạo nháp đơn hàng.', 'error')
-    }
+  // [YC23 Mục 8] Lập đơn hàng từ báo giá (toolbar / menu ngữ cảnh)
+  const lapDonHangTuBaoGia = (row: BaoGiaRecord) => {
+    if (baoGiaDaChonTaoGd(row)) return
+    pendingCapNhatBaoGiaDhbRef.current = row.id
+    const ct = baoGiaGetChiTiet(row.id)
+    const so = donHangBanSoDonHangTiepTheo()
+    const { prefillDhb, prefillChiTiet } = buildDonHangBanChungTuPrefillFromBaoGia(row, ct, so)
+    setDonHangTuBaoGiaPrefill({ prefillDhb, prefillChiTiet })
+    setDonHangTuBaoGiaKey((k) => k + 1)
+    setShowDonHangTuBaoGia(true)
+    toast?.showToast(`Đã mở form đơn hàng bán từ ${row.so_bao_gia}.`, 'success')
+  }
+
+  /** Tạo nháp hợp đồng bán (chứng từ đầy đủ) — cập nhật trạng thái BG sau khi Lưu thành công. */
+  const lapHopDongTuBaoGia = (row: BaoGiaRecord) => {
+    if (baoGiaDaChonTaoGd(row)) return
+    pendingCapNhatBaoGiaHdbRef.current = row.id
+    const ct = baoGiaGetChiTiet(row.id)
+    const so = hopDongBanSoHopDongTiepTheo()
+    const { prefillHdbCt, prefillChiTiet } = buildHopDongBanChungTuPrefillFromBaoGia(row, ct, so)
+    setHopDongTuBaoGiaPrefill({ prefillHdbCt, prefillChiTiet })
+    setHopDongTuBaoGiaKey((k) => k + 1)
+    setShowHopDongTuBaoGia(true)
+    toast?.showToast(`Đã mở form hợp đồng bán từ ${row.so_bao_gia}.`, 'success')
   }
 
   return (
@@ -330,8 +458,12 @@ function BaoGiaContent() {
         <button type="button" className={styles.toolbarBtn} onClick={moFormThem}>
           <Plus size={13} /><span>Thêm</span>
         </button>
-        <button type="button" className={styles.toolbarBtnDanger} disabled={!selectedId}
-          onClick={() => selectedRow && setXoaModalRow(selectedRow)}>
+        <button
+          type="button"
+          className={styles.toolbarBtnDanger}
+          disabled={!selectedRow || baoGiaBiKhoaChinhSuaTheoTinhTrang(selectedRow.tinh_trang ?? '')}
+          onClick={() => selectedRow && setXoaModalRow(selectedRow)}
+        >
           <Trash2 size={13} /><span>Xóa</span>
         </button>
         <div ref={dropdownTaoGdRef} className={styles.dropdownWrap} style={{ marginLeft: 0 }}
@@ -351,18 +483,45 @@ function BaoGiaContent() {
           {dropdownTaoGd && (
             <div className={styles.dropdownMenu}>
               <button type="button" className={styles.dropdownItem}
+                disabled={!selectedRow || baoGiaDaChonTaoGd(selectedRow)}
+                style={{ opacity: !selectedRow || baoGiaDaChonTaoGd(selectedRow) ? 0.45 : 1 }}
                 onClick={() => {
-                  lapDonHang()
+                  if (selectedRow && !baoGiaDaChonTaoGd(selectedRow)) lapDonHangTuBaoGia(selectedRow)
                   setDropdownTaoGd(false)
                 }}>
                 <FileText size={13} /> Đơn hàng bán
               </button>
               <button type="button" className={styles.dropdownItem}
+                disabled={!selectedRow || baoGiaDaChonTaoGd(selectedRow)}
+                style={{ opacity: !selectedRow || baoGiaDaChonTaoGd(selectedRow) ? 0.45 : 1 }}
                 onClick={() => {
-                  toast?.showToast('Tính năng Hợp đồng bán đang phát triển.', 'info')
+                  if (selectedRow && !baoGiaDaChonTaoGd(selectedRow)) lapHopDongTuBaoGia(selectedRow)
                   setDropdownTaoGd(false)
                 }}>
                 <FileText size={13} /> Hợp đồng bán
+              </button>
+              <button type="button" className={styles.dropdownItem}
+                disabled={!selectedRow || baoGiaDaChonTaoGd(selectedRow)}
+                style={{ opacity: !selectedRow || baoGiaDaChonTaoGd(selectedRow) ? 0.45 : 1 }}
+                onClick={() => {
+                  if (selectedRow && !baoGiaDaChonTaoGd(selectedRow)) {
+                    setLyDoKhInput('')
+                    setModalLyDoKhKhongDongY(selectedRow)
+                  }
+                  setDropdownTaoGd(false)
+                }}>
+                <FileText size={13} /> KH không đồng ý
+              </button>
+              <button type="button" className={styles.dropdownItem}
+                disabled={!selectedRow || (selectedRow.tinh_trang ?? '').trim() !== TINH_TRANG_BG_KH_KHONG_DONG_Y}
+                style={{ opacity: !selectedRow || (selectedRow.tinh_trang ?? '').trim() !== TINH_TRANG_BG_KH_KHONG_DONG_Y ? 0.45 : 1 }}
+                onClick={() => {
+                  if (selectedRow && (selectedRow.tinh_trang ?? '').trim() === TINH_TRANG_BG_KH_KHONG_DONG_Y) {
+                    setModalPhucHoiBg(selectedRow)
+                  }
+                  setDropdownTaoGd(false)
+                }}>
+                <FileText size={13} /> Phục hồi
               </button>
             </div>
           )}
@@ -502,7 +661,7 @@ function BaoGiaContent() {
           }} />
           <input type="text" className={styles.searchInput}
             style={{ paddingLeft: 32, width: '100%' }}
-            placeholder="Tìm kiếm mã, tên KH, diễn giải..."
+            placeholder="Tìm kiếm mã BG, tên báo giá, KH, ghi chú..."
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
@@ -515,7 +674,7 @@ function BaoGiaContent() {
         <div className={styles.gridWrap} style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflow: 'hidden' }}>
             <DataGrid<BaoGiaRecord>
-              columns={columns}
+              columns={columnsBaoGiaList}
               data={paginated}
               keyField="id"
               stripedRows compact height="100%"
@@ -540,16 +699,46 @@ function BaoGiaContent() {
             <button type="button" className={styles.detailTabActive}>Chi tiết SPHH</button>
           </div>
           <div className={styles.detailTabPanel}>
-            <DataGrid<BaoGiaChiTiet>
-              columns={columnsChiTiet}
-              data={chiTiet}
-              keyField="id"
-              stripedRows compact height="100%"
-              summary={[
-                { label: 'Số dòng',    value: `= ${chiTiet.length}` },
-                { label: 'Thành tiền', value: formatNumberDisplay(chiTiet.reduce((s, c) => s + Math.round(c.thanh_tien), 0), 0) },
-              ]}
-            />
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DataGrid<BaoGiaChiTiet>
+                columns={columnsChiTiet}
+                data={chiTiet}
+                keyField="id"
+                stripedRows compact height="100%"
+              />
+            </div>
+            {chiTietFooterDong && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                  padding: '8px 10px',
+                  fontSize: 11,
+                  borderTop: '1px solid var(--border)',
+                  background: 'var(--bg-tab)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <div style={{ textAlign: 'left', color: 'var(--accent)', fontWeight: 600, lineHeight: 1.5 }}>
+                  <span>Tổng chủng loại vật VT: {chiTietFooterDong.chungLoaiVt}</span>
+                  <span style={{ marginLeft: 16 }}>Tổng số lượng: {chiTietFooterDong.tongSoLuongText}</span>
+                </div>
+                <div style={{ textAlign: 'right', marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'flex-end' }}>
+                  <span>Tổng tiền hàng: <strong>{chiTietFooterDong.tongTienHang}</strong></span>
+                  <span>TLCK (%): <strong>{chiTietFooterDong.tlCk}</strong></span>
+                  <span>Tiền CK: <strong>{chiTietFooterDong.tienCk}</strong></span>
+                  {chiTietFooterDong.coVat && (
+                    <span>Tiền thuế GTGT: <strong>{chiTietFooterDong.tienThue}</strong></span>
+                  )}
+                  <span>Tổng tiền thanh toán: <strong>{chiTietFooterDong.tongThanhToan}</strong></span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -563,9 +752,118 @@ function BaoGiaContent() {
             <Eye size={13} /> Xem
           </button>
           <button type="button" className={styles.contextMenuItem}
-            onClick={() => { moFormSua(contextMenu.row!); setContextMenu((m) => ({ ...m, open: false })) }}>
+            disabled={baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)}
+            style={{
+              opacity: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) ? 0.45 : 1,
+              cursor: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) ? 'default' : 'pointer',
+            }}
+            onClick={() => {
+              if (baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)) return
+              moFormSua(contextMenu.row!)
+              setContextMenu((m) => ({ ...m, open: false }))
+            }}>
             <Plus size={13} /> Sửa
           </button>
+          <hr className={styles.contextMenuSep} />
+          <div
+            style={{ position: 'relative' }}
+            onMouseEnter={() => {
+              if (hoverCtxSubTaoGdRef.current) clearTimeout(hoverCtxSubTaoGdRef.current)
+              hoverCtxSubTaoGdRef.current = setTimeout(() => setCtxSubmenuTaoGd(true), 200)
+            }}
+            onMouseLeave={() => {
+              if (hoverCtxSubTaoGdRef.current) clearTimeout(hoverCtxSubTaoGdRef.current)
+              hoverCtxSubTaoGdRef.current = setTimeout(() => setCtxSubmenuTaoGd(false), 200)
+            }}
+          >
+            <div
+              className={styles.contextMenuItem}
+              style={{ cursor: 'default', justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <FileText size={13} /> Tạo giao dịch
+              </span>
+              <ChevronRight size={12} style={{ flexShrink: 0, opacity: 0.85 }} />
+            </div>
+            {ctxSubmenuTaoGd && contextMenu.row && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '100%',
+                  top: 0,
+                  marginLeft: 4,
+                  minWidth: 188,
+                  zIndex: 4101,
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 4,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
+                  padding: 4,
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className={styles.contextMenuItem}
+                  disabled={baoGiaDaChonTaoGd(contextMenu.row)}
+                  style={{ opacity: baoGiaDaChonTaoGd(contextMenu.row) ? 0.45 : 1 }}
+                  onClick={() => {
+                    if (baoGiaDaChonTaoGd(contextMenu.row!)) return
+                    lapDonHangTuBaoGia(contextMenu.row!)
+                    setCtxSubmenuTaoGd(false)
+                    setContextMenu((m) => ({ ...m, open: false }))
+                  }}
+                >
+                  <FileText size={13} /> Đơn hàng bán
+                </button>
+                <button
+                  type="button"
+                  className={styles.contextMenuItem}
+                  disabled={baoGiaDaChonTaoGd(contextMenu.row)}
+                  style={{ opacity: baoGiaDaChonTaoGd(contextMenu.row) ? 0.45 : 1 }}
+                  onClick={() => {
+                    if (baoGiaDaChonTaoGd(contextMenu.row!)) return
+                    lapHopDongTuBaoGia(contextMenu.row!)
+                    setCtxSubmenuTaoGd(false)
+                    setContextMenu((m) => ({ ...m, open: false }))
+                  }}
+                >
+                  <FileText size={13} /> Hợp đồng bán
+                </button>
+                <button
+                  type="button"
+                  className={styles.contextMenuItem}
+                  disabled={baoGiaDaChonTaoGd(contextMenu.row)}
+                  style={{ opacity: baoGiaDaChonTaoGd(contextMenu.row) ? 0.45 : 1 }}
+                  onClick={() => {
+                    if (baoGiaDaChonTaoGd(contextMenu.row!)) return
+                    setLyDoKhInput('')
+                    setModalLyDoKhKhongDongY(contextMenu.row!)
+                    setCtxSubmenuTaoGd(false)
+                    setContextMenu((m) => ({ ...m, open: false }))
+                  }}
+                >
+                  <FileText size={13} /> KH không đồng ý
+                </button>
+                <button
+                  type="button"
+                  className={styles.contextMenuItem}
+                  disabled={(contextMenu.row!.tinh_trang ?? '').trim() !== TINH_TRANG_BG_KH_KHONG_DONG_Y}
+                  style={{
+                    opacity: (contextMenu.row!.tinh_trang ?? '').trim() !== TINH_TRANG_BG_KH_KHONG_DONG_Y ? 0.45 : 1,
+                  }}
+                  onClick={() => {
+                    if ((contextMenu.row!.tinh_trang ?? '').trim() !== TINH_TRANG_BG_KH_KHONG_DONG_Y) return
+                    setModalPhucHoiBg(contextMenu.row!)
+                    setCtxSubmenuTaoGd(false)
+                    setContextMenu((m) => ({ ...m, open: false }))
+                  }}
+                >
+                  <FileText size={13} /> Phục hồi
+                </button>
+              </div>
+            )}
+          </div>
           <hr className={styles.contextMenuSep} />
           <button type="button" className={styles.contextMenuItem}
             onClick={() => { toast?.showToast('Đã gửi email.', 'success'); setContextMenu((m) => ({ ...m, open: false })) }}>
@@ -576,46 +874,236 @@ function BaoGiaContent() {
             <MessageCircle size={13} /> Gửi Zalo
           </button>
           <hr className={styles.contextMenuSep} />
-          <button type="button" className={styles.contextMenuItem} style={{ color: '#dc2626' }}
-            onClick={() => { setXoaModalRow(contextMenu.row!); setContextMenu((m) => ({ ...m, open: false })) }}>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            style={{
+              color: '#dc2626',
+              opacity: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '') ? 0.45 : 1,
+              cursor: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '') ? 'default' : 'pointer',
+            }}
+            disabled={baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '')}
+            onClick={() => {
+              if (baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '')) return
+              setXoaModalRow(contextMenu.row!)
+              setContextMenu((m) => ({ ...m, open: false }))
+            }}
+          >
             <Trash2 size={13} /> Xóa
           </button>
         </div>
       )}
 
-      {/* Modal xóa */}
-      <Modal open={xoaModalRow != null} onClose={() => setXoaModalRow(null)}
-        title="Xác nhận xóa" size="sm"
+      <ConfirmXoaCaptchaModal
+        open={xoaModalRow != null}
+        onClose={() => setXoaModalRow(null)}
+        onConfirm={() => xoaModalRow && xacNhanXoa(xoaModalRow)}
+        message={
+          xoaModalRow ? (
+            <>
+              Xóa báo giá <strong>{xoaModalRow.so_bao_gia}</strong> — <strong>{xoaModalRow.khach_hang}</strong>?<br />
+              <span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span>
+            </>
+          ) : null
+        }
+      />
+
+      <Modal
+        open={modalLyDoKhKhongDongY != null}
+        onClose={() => setModalLyDoKhKhongDongY(null)}
+        title="KH không đồng ý — lý do"
+        size="md"
         footer={
           <>
-            <button type="button" className={styles.modalBtn} onClick={() => setXoaModalRow(null)}>Hủy bỏ</button>
-            <button type="button" className={styles.modalBtnDanger}
-              onClick={() => xoaModalRow && xacNhanXoa(xoaModalRow)}>Đồng ý xóa</button>
+            <button type="button" className={styles.modalBtn} onClick={() => setModalLyDoKhKhongDongY(null)}>
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              className={styles.modalBtnPrimary}
+              onClick={() => {
+                const r = modalLyDoKhKhongDongY
+                if (!r) return
+                const ly = lyDoKhInput.trim()
+                if (!ly) {
+                  toast?.showToast('Vui lòng nhập lý do.', 'error')
+                  return
+                }
+                baoGiaCapNhatTuMenuTaoGd(r.id, { tinh_trang: TINH_TRANG_BG_KH_KHONG_DONG_Y, dien_giai: ly })
+                loadData()
+                setModalLyDoKhKhongDongY(null)
+                toast?.showToast('Đã cập nhật: KH không đồng ý.', 'success')
+              }}
+            >
+              Lưu
+            </button>
           </>
-        }>
-        {xoaModalRow && (
+        }
+      >
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-secondary)' }}>
+          Nội dung sẽ hiển thị ở cột Ghi chú trên danh sách báo giá.
+        </p>
+        <textarea
+          value={lyDoKhInput}
+          onChange={(e) => setLyDoKhInput(e.target.value)}
+          rows={4}
+          placeholder="Nhập lý do khách hàng không đồng ý…"
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            fontSize: 12,
+            padding: 8,
+            borderRadius: 4,
+            border: '1px solid var(--border)',
+            resize: 'vertical',
+            minHeight: 80,
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={modalPhucHoiBg != null}
+        onClose={() => setModalPhucHoiBg(null)}
+        title="Xác nhận phục hồi"
+        size="sm"
+        footer={
+          <>
+            <button type="button" className={styles.modalBtn} onClick={() => setModalPhucHoiBg(null)}>
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              className={styles.modalBtnDanger}
+              onClick={() => {
+                const r = modalPhucHoiBg
+                if (!r) return
+                baoGiaCapNhatTuMenuTaoGd(r.id, { tinh_trang: TINH_TRANG_BG_MOI_TAO, dien_giai: '' })
+                loadData()
+                setModalPhucHoiBg(null)
+                toast?.showToast('Đã phục hồi báo giá về trạng thái ban đầu.', 'success')
+              }}
+            >
+              Đồng ý
+            </button>
+          </>
+        }
+      >
+        {modalPhucHoiBg && (
           <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6 }}>
-            Xóa báo giá <strong>{xoaModalRow.so_bao_gia}</strong> — <strong>{xoaModalRow.khach_hang}</strong>?<br />
-            <span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span>
+            Phục hồi báo giá <strong>{modalPhucHoiBg.so_bao_gia}</strong> về trạng thái <strong>Mới tạo</strong> và xóa
+            nội dung ghi chú (lý do không đồng ý)?
           </p>
         )}
       </Modal>
 
       {/* Modal form - maskClosable={false} */}
       {showForm && (
-        <div className={styles.modalOverlay}>
+        <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>
           <div
+            ref={baoGiaFormDrag.containerRef}
             className={styles.modalBoxLarge}
-            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            style={{ ...baoGiaFormDrag.containerStyle, height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
           >
             <BaoGiaForm
               key={formKey}
-              readOnly={formMode === 'view'}
+              readOnly={
+                formMode === 'view'
+                || (formRecord != null && baoGiaBiKhoaChinhSuaTheoTinhTrang(formRecord.tinh_trang))
+              }
               initialDon={formMode === 'view' || formMode === 'edit' ? (formRecord ?? undefined) : null}
               initialChiTiet={formRecord ? baoGiaGetChiTiet(formRecord.id) : undefined}
+              onHeaderPointerDown={baoGiaFormDrag.dragHandleProps.onMouseDown}
+              headerDragStyle={baoGiaFormDrag.dragHandleProps.style}
               onClose={() => setShowForm(false)}
               onSaved={() => { setShowForm(false); loadData() }}
             />
+          </div>
+        </div>
+      )}
+
+      {showDonHangTuBaoGia && donHangTuBaoGiaPrefill && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => {
+            pendingCapNhatBaoGiaDhbRef.current = null
+            setShowDonHangTuBaoGia(false)
+            setDonHangTuBaoGiaPrefill(null)
+          }}
+        >
+          <div
+            className={styles.modalBoxLarge}
+            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DonHangBanChungTuApiProvider api={donHangBanChungTuApiImpl}>
+              <DonHangBanForm
+                key={donHangTuBaoGiaKey}
+                readOnly={false}
+                initialDhb={null}
+                prefillDhb={donHangTuBaoGiaPrefill.prefillDhb}
+                prefillChiTiet={donHangTuBaoGiaPrefill.prefillChiTiet}
+                onClose={() => {
+                  pendingCapNhatBaoGiaDhbRef.current = null
+                  setShowDonHangTuBaoGia(false)
+                  setDonHangTuBaoGiaPrefill(null)
+                }}
+                onSaved={() => {
+                  const bgId = pendingCapNhatBaoGiaDhbRef.current
+                  if (bgId) {
+                    baoGiaCapNhatTuMenuTaoGd(bgId, { tinh_trang: TINH_TRANG_BG_DA_CHUYEN_DHB })
+                    pendingCapNhatBaoGiaDhbRef.current = null
+                    loadData()
+                  }
+                  toast?.showToast('Đã lưu đơn hàng bán.', 'success')
+                  setShowDonHangTuBaoGia(false)
+                  setDonHangTuBaoGiaPrefill(null)
+                }}
+              />
+            </DonHangBanChungTuApiProvider>
+          </div>
+        </div>
+      )}
+
+      {showHopDongTuBaoGia && hopDongTuBaoGiaPrefill && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => {
+            pendingCapNhatBaoGiaHdbRef.current = null
+            setShowHopDongTuBaoGia(false)
+            setHopDongTuBaoGiaPrefill(null)
+          }}
+        >
+          <div
+            className={styles.modalBoxLarge}
+            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <HopDongBanChungTuApiProvider api={hopDongBanChungTuApiImpl}>
+              <HopDongBanForm
+                key={hopDongTuBaoGiaKey}
+                readOnly={false}
+                initialHdbCt={null}
+                prefillHdbCt={hopDongTuBaoGiaPrefill.prefillHdbCt}
+                prefillChiTiet={hopDongTuBaoGiaPrefill.prefillChiTiet}
+                onClose={() => {
+                  pendingCapNhatBaoGiaHdbRef.current = null
+                  setShowHopDongTuBaoGia(false)
+                  setHopDongTuBaoGiaPrefill(null)
+                }}
+                onSaved={() => {
+                  const bgId = pendingCapNhatBaoGiaHdbRef.current
+                  if (bgId) {
+                    baoGiaCapNhatTuMenuTaoGd(bgId, { tinh_trang: TINH_TRANG_BG_DA_CHUYEN_HD })
+                    pendingCapNhatBaoGiaHdbRef.current = null
+                    loadData()
+                  }
+                  toast?.showToast('Đã lưu hợp đồng bán.', 'success')
+                  setShowHopDongTuBaoGia(false)
+                  setHopDongTuBaoGiaPrefill(null)
+                }}
+              />
+            </HopDongBanChungTuApiProvider>
           </div>
         </div>
       )}
@@ -624,10 +1112,10 @@ function BaoGiaContent() {
 }
 
 // ─── Export chính với Provider wrapper ────────────────────────────────────────
-export function BaoGia() {
+export function BaoGia({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   return (
     <BaoGiaApiProvider api={apiBaoGia}>
-      <BaoGiaContent />
+      <BaoGiaContent onNavigate={onNavigate} />
     </BaoGiaApiProvider>
   )
 }

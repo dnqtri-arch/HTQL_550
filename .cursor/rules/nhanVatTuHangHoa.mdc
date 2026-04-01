@@ -1,14 +1,14 @@
 ---
 description: Nhận vật tư hàng hóa (NVTHH) — tách form giống pattern Đơn hàng mua
-globs: ["src/modules/kho/nhanVatTuHangHoa/**/*.tsx", "src/modules/kho/nhanVatTuHangHoa/**/*.ts", "src/modules/crm/muaHang/donHangMua/*Form*.tsx"]
+globs: ["src/modules/crm/muaHang/nhanVatTuHangHoa/**/*.tsx", "src/modules/crm/muaHang/nhanVatTuHangHoa/**/*.ts", "src/modules/crm/muaHang/donHangMua/*Form*.tsx"]
 alwaysApply: false
 ---
 
 # Nhận vật tư hàng hóa (NVTHH)
 
-- **Danh sách / toolbar / lọc kỳ:** `src/modules/inventory/nhan-vat-tu-hang-hoa/NhanVatTuHangHoa.tsx` — không nhúng trực tiếp `DonHangMuaForm` trong file này.
+- **Danh sách / toolbar / lọc kỳ:** `src/modules/crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoa.tsx` — không nhúng trực tiếp `DonHangMuaForm` trong file này.
 - **Vỏ modal + kéo / thu nhỏ / phóng to + `DonHangMuaForm`:** `NhanVatTuHangHoaFormModal.tsx` — tab NVTHH thường: `formTitle="Nhận vật tư hàng hóa"`, `soDonLabel="Mã phiếu"`, `doiChieuSource="don_mua_hang"`.
-- **Luồng từ Đơn hàng mua (menu ngữ cảnh → tab Nhận vật tư hàng hóa, id `nhan-vat-tu-hang-hoa`):** chỉ áp cho form mở với prefill từ ĐHM (`phieuNhanTuDonHangMua` trên `DonHangMuaForm` trong `src/modules/purchase/don-hang-mua/DonHangMuaForm.tsx`), **không** áp cho Thêm/Sửa/Xem trong tab NVTHH.
+- **Luồng từ Đơn hàng mua (menu ngữ cảnh → popup NVTHH, không đổi tab):** chỉ áp cho form mở với prefill từ ĐHM (`NhanVatTuHangHoaFormModal` + `formPrefillTuDhm` từ `donHangMua.tsx`), **không** áp cho Thêm/Sửa/Xem trong tab NVTHH.
   - **Thanh tiêu đề (kéo):** chỉ hiển thị tiêu đề nguồn đơn mua (`_tieu_de_nguon_dhm` từ prefill: `so_chung_tu_cukcuk` hoặc fallback `ĐHM {so_don_hang}`), **không** prefix «Nhận vật tư hàng hóa» và **không** ghép hậu tố tên NCC.
   - **Hình thức, kho nhập, tên công trình, Địa điểm GH:** prefill từ ĐHM; **cho phép** chỉnh lại trên form phiếu nhận. Trên `DonHangMuaForm`, thứ tự hiển thị **Kho nhập** luôn **trước** **Tên công trình** (cùng hàng).
   - **Ô địa chỉ / gợi ý VN:** xem rule `goi-y-dia-chi-vn.mdc` — không `.trim()` khi đồng bộ state → ô nhập (tránh mất dấu cách khi gõ).

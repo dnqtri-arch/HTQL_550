@@ -16,16 +16,16 @@ import {
   Paperclip,
   Printer,
 } from 'lucide-react'
-import { taoPhaiTraNguoiBan, tinhHanThanhToan } from '../../finance/congnoncc/api'
-import { inPhieuNhapKho } from '../../../utils/printPhieuNhapKho'
+import { taoPhaiTraNguoiBan, tinhHanThanhToan } from '../../../finance/congnoncc/api'
+import { inPhieuNhapKho } from '../../../../utils/printPhieuNhapKho'
 import DatePicker, { registerLocale } from 'react-datepicker'
 import { vi } from 'date-fns/locale'
 import 'react-datepicker/dist/react-datepicker.css'
-import { DatePickerCustomHeader } from '../../../components/datePickerCustomHeader'
-import { htqlDatePickerPopperTop } from '../../../constants/datePickerPlacement'
+import { DatePickerCustomHeader } from '../../../../components/datePickerCustomHeader'
+import { htqlDatePickerPopperTop } from '../../../../constants/datePickerPlacement'
 
 registerLocale('vi', vi)
-import { DataGrid, type DataGridColumn, type DataGridSortState } from '../../../components/common/dataGrid'
+import { DataGrid, type DataGridColumn, type DataGridSortState } from '../../../../components/common/dataGrid'
 import {
   type NhanVatTuHangHoaRecord,
   type NhanVatTuHangHoaChiTiet,
@@ -46,7 +46,7 @@ import {
   TINH_TRANG_NVTHH_DA_NHAP_KHO,
   type KyValue,
 } from './nhanVatTuHangHoaApi'
-import type { DonHangMuaRecord, DonHangMuaChiTiet } from '../../crm/muaHang/donHangMua/donHangMuaApi'
+import type { DonHangMuaRecord, DonHangMuaChiTiet } from '../donHangMua/donHangMuaApi'
 import {
   donHangMuaGetAll,
   donHangMuaGetChiTiet,
@@ -61,28 +61,28 @@ import {
   setDonHangMuaDraft,
   clearDonHangMuaDraft,
   TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG,
-} from '../../crm/muaHang/donHangMua/donHangMuaApi'
-import type { DonHangMuaApi } from '../../crm/muaHang/donHangMua/donHangMuaApiContext'
-import { DonHangMuaApiProvider } from '../../crm/muaHang/donHangMua/donHangMuaApiContext'
-import { DonHangMuaForm } from '../../crm/muaHang/donHangMua/donHangMuaForm'
+} from '../donHangMua/donHangMuaApi'
+import type { DonHangMuaApi } from '../donHangMua/donHangMuaApiContext'
+import { DonHangMuaApiProvider } from '../donHangMua/donHangMuaApiContext'
+import { DonHangMuaForm } from '../donHangMua/donHangMuaForm'
 import {
   NhanVatTuHangHoaApiProvider,
   useNhanVatTuHangHoaApi,
   type NhanVatTuHangHoaApi,
 } from './nhanVatTuHangHoaApiContext'
-import { Modal } from '../../../components/common/modal'
+import { Modal } from '../../../../components/common/modal'
 import { NhanVatTuHangHoaFormModal } from './nhanVatTuHangHoaFormModal'
 import { buildPrefillDonHeaderTuDhm, type NhanVatTuHangHoaPrefillPayload } from './nhanVatTuHangHoaPrefill'
-import { donViTinhGetAll } from '../khoHang/donViTinhApi'
-import { formatNumberDisplay, formatSoThapPhan } from '../../../utils/numberFormat'
-import { exportCsv } from '../../../utils/exportCsv'
+import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
+import { exportCsv } from '../../../../utils/exportCsv'
 import styles from './NhanVatTuHangHoa.module.css'
 import {
   MuaHangXoaModalBody,
   MUA_HANG_MODAL_FOOTER_HUY,
   MUA_HANG_MODAL_FOOTER_DONG_Y,
   MUA_HANG_MODAL_TITLE_XOA,
-} from '../../../components/muaHangXoaModalBody'
+} from '../../../../components/muaHangXoaModalBody'
 
 function dvtHienThiLabel(
   value: string | null | undefined,

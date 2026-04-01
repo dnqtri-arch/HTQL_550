@@ -4,12 +4,12 @@
  * - Phân cách thập phân: dấu phẩy (,)
  * VD: 1.234.567,89
  *
- * Số tiền (formatSoTien) — quy ước nhập (đồng bộ với .cursor/rules/number-format.mdc):
+ * Số tiền (formatSoTien) — quy ước nhập (đồng bộ `.cursor/rules/htql550.mdc` §2.1):
  * - Chỉ gõ số: chấm (.) = phân tách hàng nghìn. VD: 12345678 → "12.345.678".
  * - Chủ động gõ chấm (.) hoặc phẩy (,): thập phân, hiển thị thành phẩy. VD: "12.345.678" + "." → "12.345.678,"; gõ tiếp "5" → "12.345.678,5".
  * - Chuỗi kết thúc bằng chấm: coi chấm cuối là thập phân → hiển thị phần nguyên + phẩy (cho phép nhập chấm sau số đã format).
  * - Chưa có phẩy thì mọi chấm đều hàng nghìn (tránh "1.234.567"+"8" thành "1.234,56").
- * - Đã có phẩy: dùng findDecimalSeparatorIndex để lấy tối đa 2 chữ số thập phân.
+ * - Đã có phẩy: dùng findDecimalSeparatorIndex để lấy tối đa 3 chữ số thập phân.
  */
 
 export const THOUSANDS_SEP = '.'
@@ -40,7 +40,7 @@ function findDecimalSeparatorIndex(s: string): number {
   if (sepIndices.length === 0) return -1
   const hasRealDecimalPart = (idx: number) => {
     const after = cleaned.slice(idx + 1)
-    return /^\d{1,2}([.,]|$)/.test(after)
+    return /^\d{1,3}([.,]|$)/.test(after)
   }
   for (let j = sepIndices.length - 1; j >= 0; j--) {
     if (hasRealDecimalPart(sepIndices[j])) return sepIndices[j]
@@ -111,7 +111,7 @@ export function formatSoNguyenInput(s: string): string {
 /**
  * Định dạng khi nhập số tự nhiên (có thể có thập phân).
  * Nguyên tắc nhập: phân cách hàng nghìn (.), phân cách thập phân (,), số 0 ở đầu tự động bỏ.
- * Tối đa 2 chữ số thập phân.
+ * Tối đa 3 chữ số thập phân.
  * VD: "01234" -> "1.234" | "1234,5" -> "1.234,5" | "100,88" -> "100,88"
  */
 export function formatSoTuNhienInput(s: string): string {
@@ -149,7 +149,7 @@ export function normalizeKichThuocInput(s: string): string {
   const lastDot = cleaned.lastIndexOf('.')
   if (lastDot < 0) return s
   const after = cleaned.slice(lastDot + 1)
-  if (after.length <= 2 && /^\d+$/.test(after)) {
+  if (after.length <= 3 && /^\d+$/.test(after)) {
     const before = cleaned.slice(0, lastDot)
     return (before ? before.replace(/\./g, '') : '0') + ',' + after
   }
@@ -185,7 +185,7 @@ export function formatPhanTramInput(s: string): string {
   } else {
     intStr = cleaned.slice(0, lastSep).replace(/\./g, '').replace(/,/g, '')
     const decStrRaw = cleaned.slice(lastSep + 1).replace(/\D/g, '')
-    decStr = decStrRaw.slice(0, 2)
+    decStr = decStrRaw.slice(0, 3)
   }
 
   if (!intStr && !decStr) return ''
@@ -196,7 +196,7 @@ export function formatPhanTramInput(s: string): string {
 }
 
 /**
- * TLCK (%) trên form Báo giá — tối đa **3** chữ số thập phân sau dấu phẩy (khác `formatPhanTramInput` 2 số).
+ * TLCK (%) trên form Báo giá — tối đa **3** chữ số thập phân (đồng bộ `formatPhanTramInput` / `formatSoTien`).
  */
 export function formatTlCkBaoGiaInput(s: string): string {
   let cleaned = (s || '').replace(/[^\d.,]/g, '')
@@ -229,10 +229,11 @@ export function formatTlCkBaoGiaInput(s: string): string {
   return formattedInt
 }
 
-/** Chuẩn hóa TLCK sau blur — luôn đủ 3 chữ số thập phân (vd. `0,000`). */
+/** Chuẩn hóa TLCK sau blur — 3 chữ số thập phân; riêng **0** hiển thị một chữ số `0` (mặc định mở form). */
 export function chuanHoaTlCkBaoGiaSauBlur(s: string): string {
   const n = parseFloatVN((s ?? '').trim() || '0')
-  if (!Number.isFinite(n)) return formatSoThapPhan(0, 3)
+  if (!Number.isFinite(n)) return '0'
+  if (n === 0) return '0'
   return formatSoThapPhan(n, 3)
 }
 
@@ -278,7 +279,7 @@ export function formatSoTien(s: string): string {
     const intPart = stripLeadingZeros(onlyDigits)
     return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
   }
-  // Đã có phẩy: tìm vị trí phân cách thập phân (phẩy hoặc chấm), lấy tối đa 2 chữ số sau đó.
+  // Đã có phẩy: tìm vị trí phân cách thập phân (phẩy hoặc chấm), lấy tối đa 3 chữ số sau đó.
   const lastSep = findDecimalSeparatorIndex(cleaned)
   const hasDecimal = lastSep >= 0
 
@@ -291,7 +292,7 @@ export function formatSoTien(s: string): string {
   } else {
     intStr = cleaned.slice(0, lastSep).replace(/\./g, '').replace(/,/g, '')
     const decStrRaw = cleaned.slice(lastSep + 1).replace(/\D/g, '')
-    decStr = decStrRaw.slice(0, 2)
+    decStr = decStrRaw.slice(0, 3)
   }
 
   if (!intStr && !decStr) return ''
@@ -328,7 +329,7 @@ export function formatSoTienHienThi(value: number | string): string {
   const formattedInt = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, THOUSANDS_SEP)
   const prefix = n < 0 ? '-' : ''
   if (!hasDecimal) return prefix + formattedInt
-  const decNum = Math.round(frac * 100) / 100
-  const decStr = decNum.toFixed(2).split('.')[1].replace(/0+$/, '') || '0'
+  const decNum = Math.round(frac * 1000) / 1000
+  const decStr = decNum.toFixed(3).split('.')[1].replace(/0+$/, '') || '0'
   return prefix + formattedInt + DECIMAL_SEP + decStr
 }

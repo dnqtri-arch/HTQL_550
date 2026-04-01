@@ -34,7 +34,6 @@ const H_ROW2 = 22
 
 /* Đường kẻ 1px xuyên suốt */
 const B1 = '1px solid var(--border-strong)'
-
 const BG_EVEN = '#FFFFFF'
 const BG_ODD  = '#F5F5F5'
 const BG_HDR  = '#EEEEEE'
@@ -481,14 +480,23 @@ export function KhoVthhPage() {
                 <th rowSpan={2} style={{ ...thSticky1, left: STICKY_TEN_LEFT, minWidth: COL_TEN, verticalAlign: 'middle', borderRight: B1 }}>Tên VTHH</th>
                 <th rowSpan={2} style={{ ...thSticky1, left: STICKY_DVT_LEFT, textAlign: 'center', verticalAlign: 'middle', borderLeft: B1, borderRight: B1 }}>ĐVT</th>
                 {groups.map(([lbl, clr]) => (
-                  <th key={lbl} colSpan={showGiaTri ? 2 : 1} style={{ ...thGroup, color: clr }}>{lbl}</th>
+                  <th
+                    key={lbl}
+                    colSpan={showGiaTri ? 2 : 1}
+                    style={{ ...thGroup, color: clr, borderLeft: B1, borderRight: B1 }}
+                  >
+                    {lbl}
+                  </th>
                 ))}
               </tr>
               <tr style={{ height: H_ROW2 }}>
                 {Array.from({ length: 4 }).flatMap((_, gi) =>
                   showGiaTri
-                    ? [<th key={`${gi}sl`} style={thSub}>Số lượng</th>, <th key={`${gi}gt`} style={thSub}>Giá trị</th>]
-                    : [<th key={`${gi}sl`} style={thSub}>Số lượng</th>]
+                    ? [
+                        <th key={`${gi}sl`} style={{ ...thSub, borderLeft: B1 }}>Số lượng</th>,
+                        <th key={`${gi}gt`} style={{ ...thSub, borderRight: B1 }}>Giá trị</th>,
+                      ]
+                    : [<th key={`${gi}sl`} style={{ ...thSub, borderLeft: B1, borderRight: B1 }}>Số lượng</th>]
                 )}
               </tr>
             </thead>
@@ -519,14 +527,18 @@ export function KhoVthhPage() {
                     </td>
                     <td style={{ ...tdBase, position: 'sticky', left: STICKY_DVT_LEFT, zIndex: 1, textAlign: 'center', background: bg, borderLeft: B1, borderRight: B1 }}>{tendvt}</td>
 
-                    <td style={tdNum}>{numCell(row.dauky.soluong)}</td>
-                    {showGiaTri && <td style={tdNum}>{numCell(row.dauky.giatri)}</td>}
-                    <td style={tdNum}>{numCell(row.nhapkho.soluong)}</td>
-                    {showGiaTri && <td style={tdNum}>{numCell(row.nhapkho.giatri)}</td>}
-                    <td style={tdNum}>{numCell(row.xuatkho.soluong)}</td>
-                    {showGiaTri && <td style={tdNum}>{numCell(row.xuatkho.giatri)}</td>}
-                    <td style={tdNum}>{numCell(ckSl)}</td>
-                    {showGiaTri && <td style={tdNum} title={`Đơn giá vốn: ${formatSoNguyen(row.giavon)} đ`}>{numCell(ckGt)}</td>}
+                    <td style={{ ...tdNum, borderLeft: B1 }}>{numCell(row.dauky.soluong)}</td>
+                    {showGiaTri && <td style={{ ...tdNum, borderRight: B1 }}>{numCell(row.dauky.giatri)}</td>}
+                    <td style={{ ...tdNum, borderLeft: B1 }}>{numCell(row.nhapkho.soluong)}</td>
+                    {showGiaTri && <td style={{ ...tdNum, borderRight: B1 }}>{numCell(row.nhapkho.giatri)}</td>}
+                    <td style={{ ...tdNum, borderLeft: B1 }}>{numCell(row.xuatkho.soluong)}</td>
+                    {showGiaTri && <td style={{ ...tdNum, borderRight: B1 }}>{numCell(row.xuatkho.giatri)}</td>}
+                    <td style={{ ...tdNum, borderLeft: B1 }}>{numCell(ckSl)}</td>
+                    {showGiaTri && (
+                      <td style={{ ...tdNum, borderRight: B1 }} title={`Đơn giá vốn: ${formatSoNguyen(row.giavon)} đ`}>
+                        {numCell(ckGt)}
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -555,8 +567,28 @@ export function KhoVthhPage() {
                     Tổng cộng ({danhSachHienThi.length} VTHH)
                   </td>
                   {tongRows.flatMap(([sl, gt, clr], gi) => [
-                    <td key={`${gi}sl`} style={{ ...tdNum, background: BG_FTR, fontWeight: 700 }}>{formatSoNguyen(sl)}</td>,
-                    ...(showGiaTri ? [<td key={`${gi}gt`} style={{ ...tdNum, background: BG_FTR, fontWeight: 700, color: clr }}>{formatSoNguyen(gt)}</td>] : []),
+                    <td
+                      key={`${gi}sl`}
+                      style={{
+                        ...tdNum,
+                        background: BG_FTR,
+                        fontWeight: 700,
+                        borderLeft: B1,
+                        ...(showGiaTri ? {} : { borderRight: B1 }),
+                      }}
+                    >
+                      {formatSoNguyen(sl)}
+                    </td>,
+                    ...(showGiaTri
+                      ? [
+                          <td
+                            key={`${gi}gt`}
+                            style={{ ...tdNum, background: BG_FTR, fontWeight: 700, color: clr, borderRight: B1 }}
+                          >
+                            {formatSoNguyen(gt)}
+                          </td>,
+                        ]
+                      : []),
                   ])}
                 </tr>
               </tbody>

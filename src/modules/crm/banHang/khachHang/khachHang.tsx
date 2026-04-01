@@ -25,7 +25,8 @@ import {
   loadDieuKhoanThanhToanKh,
   saveDieuKhoanThanhToanKh,
 } from './khachHangApi'
-import { NhomKhachHangLookupModal } from './nhomKhLookupModal'
+import { NhomKhachHangInlinePicker } from './nhomKhachHangInlinePicker'
+import { ThemNhomKhNccModal } from './themNhomKhNccModal'
 import { ThemDieuKhoanThanhToanModal } from './themDieuKhoanThanhToanModal'
 import { DANH_SACH_QUOC_GIA } from '../../../../constants/countries'
 import { LOOKUP_CONTROL_HEIGHT, lookupInputWithChevronStyle, lookupChevronOverlayStyle, lookupActionButtonStyle } from '../../../../constants/lookupControlStyles'
@@ -433,9 +434,11 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
   const [dangTai, setDangTai] = useState(true)
   const [loaiLoc, setLoaiLoc] = useState<'to_chuc' | 'ca_nhan' | 'ca_hai'>('ca_hai')
   const [nhomLoc, setNhomLoc] = useState('')
-  const [danhSachNhom] = useState<NhomKhachHangItem[]>(() => loadNhomKhachHang())
+  const [danhSachNhom, setDanhSachNhom] = useState<NhomKhachHangItem[]>(() => loadNhomKhachHang())
   const [formTab, setFormTab] = useState<'thong_tin_chung' | 'khac'>('thong_tin_chung')
-  const [showNhomKhachHangLookup, setShowNhomKhachHangLookup] = useState(false)
+  const [openNhomKhDropdown, setOpenNhomKhDropdown] = useState(false)
+  const nhomKhWrapRef = useRef<HTMLDivElement>(null)
+  const [showThemNhomKhModal, setShowThemNhomKhModal] = useState(false)
   const [banksList, setBanksList] = useState<BankItem[]>([])
   const [banksLoading, setBanksLoading] = useState(false)
   const [bankDropdownRow, setBankDropdownRow] = useState<number | null>(null)
@@ -465,6 +468,14 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
   const [errorFieldTrung, setErrorFieldTrung] = useState<KhachHangTrungField | null>(null)
   /** Ô Ngày cấp: chuỗi đang gõ (có tự thêm "/"). Null = đang dùng value từ lịch. */
   const [ngayCapTyping, setNgayCapTyping] = useState<string | null>(null)
+
+  /** Tab Khác — Tổ chức: xưng hô Ông/Anh → Nam; Bà/Chị → Nữ */
+  useEffect(() => {
+    if (form.loai_kh !== 'to_chuc' || formTab !== 'khac') return
+    const x = form.xung_ho
+    if (x === 'Ông' || x === 'Anh') setForm((f) => ({ ...f, gioi_tinh: 'Nam' }))
+    else if (x === 'Bà' || x === 'Chị') setForm((f) => ({ ...f, gioi_tinh: 'Nữ' }))
+  }, [form.xung_ho, form.loai_kh, formTab])
 
   /** Đóng dropdown DKTT (Tổ chức) khi bấm ra ngoài */
   useEffect(() => {
@@ -572,14 +583,14 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
     return () => cancelAnimationFrame(t)
   }, [bankDropdownRow])
 
-  /** Hiển thị tại ô Nhóm khách hàng: chỉ mã (không hiển thị tên) */
+  /** Hiển thị tại ô Nhóm khách hàng: các tên đã chọn */
   const displayNhomKhachHang = useMemo(() => {
     const parts = (form.nhom_kh || '').split(/[;,]/).map((s) => s.trim()).filter(Boolean)
     if (parts.length === 0) return ''
     return parts
-      .map((ten) => {
-        const item = danhSachNhom.find((n) => n.ten === ten)
-        return item ? item.ma : ten
+      .map((tenStored) => {
+        const item = danhSachNhom.find((n) => n.ten === tenStored)
+        return item ? item.ten : tenStored
       })
       .join('; ')
   }, [form.nhom_kh, danhSachNhom])
@@ -1200,19 +1211,42 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Nhóm khách hàng</label>
-                    <div
-                      style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer', height: FORM_FIELD_HEIGHT }}
-                      onClick={() => setShowNhomKhachHangLookup(true)}
-                    >
-                      <input
-                        readOnly
-                        style={{ ...inputStyle, width: '100%', height: '100%', paddingRight: 26, cursor: 'pointer', boxSizing: 'border-box' }}
-                        value={displayNhomKhachHang}
-                        placeholder="Chọn nhóm..."
-                      />
-                      <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
-                        <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
-                      </span>
+                    <div ref={nhomKhWrapRef} style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                      <div
+                        style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer', height: FORM_FIELD_HEIGHT }}
+                        onClick={() => setOpenNhomKhDropdown(true)}
+                      >
+                        <input
+                          readOnly
+                          style={{ ...inputStyle, ...lookupInputWithChevronStyle, width: '100%', height: '100%', cursor: 'pointer', boxSizing: 'border-box' }}
+                          value={displayNhomKhachHang}
+                          placeholder="Chọn nhóm..."
+                          onClick={(e) => { e.stopPropagation(); setOpenNhomKhDropdown(true) }}
+                        />
+                        <span style={lookupChevronOverlayStyle}>
+                          <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
+                        </span>
+                        <NhomKhachHangInlinePicker
+                          open={openNhomKhDropdown}
+                          anchorRef={nhomKhWrapRef}
+                          items={danhSachNhom}
+                          value={form.nhom_kh}
+                          onCommit={(tens) => setForm((f) => ({ ...f, nhom_kh: tens.join('; ') }))}
+                          onOpenChange={setOpenNhomKhDropdown}
+                          onLiveSelectionChange={(tens) => setForm((f) => ({ ...f, nhom_kh: tens.join('; ') }))}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        style={lookupActionButtonStyle}
+                        title="Thêm nhóm khách hàng"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowThemNhomKhModal(true)
+                        }}
+                      >
+                        <Plus size={12} style={{ color: 'var(--accent-text)' }} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1596,9 +1630,42 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
                   </div>
                   <div style={fieldRow}>
                     <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Nhóm khách hàng</label>
-                    <div style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer', height: FORM_FIELD_HEIGHT }} onClick={() => setShowNhomKhachHangLookup(true)}>
-                      <input readOnly style={{ ...inputStyle, width: '100%', height: '100%', paddingRight: 26, cursor: 'pointer', boxSizing: 'border-box' }} value={displayNhomKhachHang} placeholder="Chọn nhóm..." />
-                      <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}><ChevronDown size={12} style={{ color: 'var(--accent-text)' }} /></span>
+                    <div ref={nhomKhWrapRef} style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                      <div
+                        style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer', height: FORM_FIELD_HEIGHT }}
+                        onClick={() => setOpenNhomKhDropdown(true)}
+                      >
+                        <input
+                          readOnly
+                          style={{ ...inputStyle, ...lookupInputWithChevronStyle, width: '100%', height: '100%', cursor: 'pointer', boxSizing: 'border-box' }}
+                          value={displayNhomKhachHang}
+                          placeholder="Chọn nhóm..."
+                          onClick={(e) => { e.stopPropagation(); setOpenNhomKhDropdown(true) }}
+                        />
+                        <span style={lookupChevronOverlayStyle}>
+                          <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
+                        </span>
+                        <NhomKhachHangInlinePicker
+                          open={openNhomKhDropdown}
+                          anchorRef={nhomKhWrapRef}
+                          items={danhSachNhom}
+                          value={form.nhom_kh}
+                          onCommit={(tens) => setForm((f) => ({ ...f, nhom_kh: tens.join('; ') }))}
+                          onOpenChange={setOpenNhomKhDropdown}
+                          onLiveSelectionChange={(tens) => setForm((f) => ({ ...f, nhom_kh: tens.join('; ') }))}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        style={lookupActionButtonStyle}
+                        title="Thêm nhóm khách hàng"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowThemNhomKhModal(true)
+                        }}
+                      >
+                        <Plus size={12} style={{ color: 'var(--accent-text)' }} />
+                      </button>
                     </div>
                   </div>
                   <div style={fieldRow}>
@@ -2000,7 +2067,7 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
                   </div>
                   <div style={fieldRow} />
                   <div style={fieldRow}>
-                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Họ và tên</label>
+                    <label style={{ ...labelStyle, minWidth: labelMinWidth }}>Người liên hệ</label>
                     <input style={{ ...inputStyle, flex: 1, textTransform: 'uppercase' }} value={form.ho_va_ten_lien_he} onChange={(e) => setForm((f) => ({ ...f, ho_va_ten_lien_he: e.target.value.toUpperCase() }))} />
                   </div>
                   <div style={fieldRow}>
@@ -2561,19 +2628,24 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
         </div>
       </Modal>
 
-      {showNhomKhachHangLookup && (
-        <NhomKhachHangLookupModal
-          title="Chọn nhóm KH, NCC"
-          items={loadNhomKhachHang()}
-          value={form.nhom_kh}
-          onSelect={(tens) => {
-            setForm((f) => ({ ...f, nhom_kh: tens.join('; ') }))
-            setShowNhomKhachHangLookup(false)
-          }}
-          onClose={() => setShowNhomKhachHangLookup(false)}
-          onSaveNewGroup={(item) => {
+      {showThemNhomKhModal && (
+        <ThemNhomKhNccModal
+          parentOptions={danhSachNhom}
+          onClose={() => setShowThemNhomKhModal(false)}
+          onSave={(item) => {
             const list = loadNhomKhachHang()
-            if (!list.some((x) => x.ma === item.ma)) saveNhomKhachHang([...list, item])
+            if (!list.some((x) => x.ma === item.ma)) {
+              saveNhomKhachHang([...list, item])
+              setDanhSachNhom(loadNhomKhachHang())
+            }
+            setShowThemNhomKhModal(false)
+          }}
+          onSaveAndAdd={(item) => {
+            const list = loadNhomKhachHang()
+            if (!list.some((x) => x.ma === item.ma)) {
+              saveNhomKhachHang([...list, item])
+              setDanhSachNhom(loadNhomKhachHang())
+            }
           }}
         />
       )}

@@ -218,10 +218,50 @@ function laSvgDataUrl(data: string): boolean {
   return /^data:image\/svg\+xml/i.test(data) || /^data:text\/xml.*svg/i.test(data)
 }
 
-function loaiXemTruocTuData(data: string): 'image' | 'pdf' | 'svg' | 'other' {
-  if (laAnhDataUrl(data)) return 'image'
-  if (laSvgDataUrl(data)) return 'svg'
+function laTiffTheoTenTep(ten: string): boolean {
+  return /\.(tiff?)$/i.test(ten)
+}
+
+/** Icon/badge theo đuôi — TIFF, CDR, AI… không xem thumbnail ảnh được (dinhkem.mdc). */
+function DinhKemBadgeExt({ label, bg, color = '#fff' }: { label: string; bg: string; color?: string }) {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        padding: '4px 6px',
+        borderRadius: 4,
+        background: bg,
+        color,
+        lineHeight: 1,
+        letterSpacing: 0.35,
+        fontFamily: 'var(--font-misa), Tahoma, Arial, sans-serif',
+        userSelect: 'none',
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
+function iconDinhKemTheoTenTep(tenFile: string): React.ReactNode {
+  const m = tenFile.match(/(\.[^./\\]+)$/i)
+  const ext = (m?.[1] ?? '').toLowerCase()
+  if (ext === '.cdr') return <DinhKemBadgeExt label="CDR" bg="#1e7b34" />
+  if (ext === '.ai') return <DinhKemBadgeExt label="AI" bg="#ff7f00" />
+  if (ext === '.eps') return <DinhKemBadgeExt label="EPS" bg="#8b5a2b" />
+  if (ext === '.psd') return <DinhKemBadgeExt label="PSD" bg="#001d26" color="#31a8ff" />
+  if (ext === '.tif' || ext === '.tiff') return <DinhKemBadgeExt label="TIF" bg="#1a5f7a" />
+  if (ext === '.svg') return <DinhKemBadgeExt label="SVG" bg="#7c3aed" />
+  const short = ext.replace(/^\./, '').toUpperCase().slice(0, 5) || 'FILE'
+  return <DinhKemBadgeExt label={short} bg="#475569" />
+}
+
+function loaiXemTruocTuData(data: string, tenFile = ''): 'image' | 'pdf' | 'svg' | 'other' {
+  if (laTiffTheoTenTep(tenFile)) return 'other'
   if (laPdfDataUrl(data)) return 'pdf'
+  if (laSvgDataUrl(data)) return 'svg'
+  if (laAnhDataUrl(data)) return 'image'
   return 'other'
 }
 
@@ -258,13 +298,15 @@ const NGUONG_BYTE_HIEN_THI_ANH_THUMB = 800_000
 function DinhKemThumbAnh({
   src,
   alt,
+  tenTepFallback,
 }: {
   src: string
   alt: string
+  tenTepFallback?: string
 }) {
   const [loi, setLoi] = useState(false)
   if (loi) {
-    return <FileText size={24} style={{ color: 'var(--accent)' }} />
+    return tenTepFallback ? iconDinhKemTheoTenTep(tenTepFallback) : <FileText size={24} style={{ color: 'var(--accent)' }} />
   }
   return (
     <img
@@ -391,9 +433,12 @@ export function BaoGiaDinhKemModal({
     const el = anchorRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    const w = Math.min(640, Math.max(420, window.innerWidth - r.left - 12))
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8))
-    const top = r.bottom + 4
+    const margin = 8
+    /** Neo sát nút Đính kèm (liền mạch): cạnh trái = nút, khe dọc 1px. */
+    const left = Math.max(margin, r.left)
+    const maxW = Math.min(640, window.innerWidth - margin - left)
+    const w = Math.max(320, Math.min(520, Math.max(420, maxW)))
+    const top = r.bottom + 1
     setPos({ top, left, width: w })
   }, [anchorRef])
 
@@ -615,7 +660,7 @@ export function BaoGiaDinhKemModal({
   const dongViewer = () => setViewerIndex(null)
 
   const viewerItem = viewerIndex != null ? attachments[viewerIndex] : null
-  const viewerKind = viewerItem ? loaiXemTruocTuData(viewerItem.data) : null
+  const viewerKind = viewerItem ? loaiXemTruocTuData(viewerItem.data, viewerItem.name) : null
 
   const xoaTai = (idx: number) => {
     if (readOnly) return
@@ -778,8 +823,11 @@ export function BaoGiaDinhKemModal({
               const bytesRaw = item.kich_thuoc_byte ?? uocLuongByteTuDataUrl(item.data)
               const bytes = Number.isFinite(bytesRaw) && bytesRaw > 0 ? bytesRaw : uocLuongByteTuDataUrl(item.data)
               const duongDan = duongDanHienThi(item, soBaoGia, maKhPathPart)
+              const chiIconTheoDuoi = /\.(tiff?|cdr|ai|eps|psd)$/i.test(item.name)
               const anhNhoDuoc =
-                (laAnhDataUrl(item.data) || laSvgDataUrl(item.data)) && bytes < NGUONG_BYTE_HIEN_THI_ANH_THUMB
+                !chiIconTheoDuoi &&
+                (laAnhDataUrl(item.data) || laSvgDataUrl(item.data)) &&
+                bytes < NGUONG_BYTE_HIEN_THI_ANH_THUMB
               const trangThaiLuu = daDongBoLuuCsdl
                 ? 'Đã lưu trong dữ liệu báo giá'
                 : 'Sẵn sàng lưu vào dữ liệu báo giá — bấm Lưu trên form'
@@ -825,13 +873,13 @@ export function BaoGiaDinhKemModal({
                     }}
                   >
                     {anhNhoDuoc && laAnhDataUrl(item.data) ? (
-                      <DinhKemThumbAnh src={item.data} alt="" />
+                      <DinhKemThumbAnh src={item.data} alt="" tenTepFallback={item.name} />
                     ) : anhNhoDuoc && laSvgDataUrl(item.data) ? (
                       <img loading="lazy" decoding="async" src={item.data} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     ) : laPdfDataUrl(item.data) ? (
-                      <FileText size={24} style={{ color: 'var(--accent)' }} />
+                      <FileText size={24} style={{ color: '#b91c1c' }} />
                     ) : (
-                      <FileText size={24} style={{ color: '#2b579a' }} />
+                      iconDinhKemTheoTenTep(item.name)
                     )}
                   </button>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 0 }}>
@@ -1067,9 +1115,22 @@ export function BaoGiaDinhKemModal({
               />
             )}
             {viewerKind === 'other' && (
-              <div style={{ color: '#ccc', fontSize: 12, textAlign: 'center', padding: 24 }}>
-                <FileText size={48} style={{ marginBottom: 8, opacity: 0.7 }} />
-                <p>Không xem trước trực tiếp (AI, EPS, PSD, CDR, TIFF…). File đã lưu trong dữ liệu báo giá.</p>
+              <div
+                style={{
+                  color: '#ccc',
+                  fontSize: 12,
+                  textAlign: 'center',
+                  padding: 24,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 14,
+                }}
+              >
+                <div style={{ transform: 'scale(1.35)', display: 'flex', justifyContent: 'center' }}>{iconDinhKemTheoTenTep(viewerItem.name)}</div>
+                <p style={{ margin: 0, maxWidth: 440, lineHeight: 1.5 }}>
+                  Không xem trước trực tiếp. File đã lưu trong dữ liệu báo giá — mở bằng ứng dụng phù hợp theo loại tệp.
+                </p>
               </div>
             )}
           </div>

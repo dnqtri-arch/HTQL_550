@@ -83,6 +83,7 @@ export function migrateBaoGiaLinesToCoDonGia(
     const row: DonHangMuaGridLineRow = {
       'Mã': line['Mã'] ?? '',
       [BAO_GIA_COL_TEN_SPHH]: raw[BAO_GIA_COL_TEN_SPHH] ?? raw['Tên VTHH'] ?? '',
+      'Nội dung': raw['Nội dung'] ?? '',
       'ĐVT': line['ĐVT'] ?? '',
       'mD': raw['mD'] ?? '',
       'mR': raw['mR'] ?? '',

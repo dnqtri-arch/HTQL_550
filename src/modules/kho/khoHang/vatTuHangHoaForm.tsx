@@ -5,11 +5,13 @@ import { X, ChevronDown, Info, Plus, Trash2, CheckCircle, XCircle, FileCheck, Al
 import type { VatTuHangHoaRecord } from './vatTuHangHoaApi'
 import { formatSoTien, formatSoTienHienThi, parseNumber, parseFloatVN, parseDecimalFlex, formatSoNguyenInput, formatSoTuNhienInput, normalizeKichThuocInput, toStoredNumberString, numberToStoredFormat, isZeroDisplay } from '../../../utils/numberFormat'
 import { matchSearchKeyword } from '../../../utils/stringUtils'
-import { NhomVTHHLookupModal } from './nhomVTHHLookupModal'
+import type { NhomVTHHItem } from './nhomVTHHLookupModal'
 import { ThemDonViTinhModal } from './themDonViTinhModal'
 import { ThemKhoModal } from './themKhoModal'
+import { ThemNhomVTHHModal } from './themNhomVTHHModal'
 import { VatTuHangHoaFormTabNgamDinh, LabelCell } from './vatTuHangHoaFormTabNgamDinh'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
+import { lookupActionButtonStyle } from '../../../constants/lookupControlStyles'
 import './VatTuHangHoaForm.css'
 
 export type FormValues = {
@@ -208,7 +210,7 @@ const TINH_CHAT_OPTIONS = [
   { value: 'Sản phẩm', label: 'Sản phẩm' },
 ]
 
-const NHOM_VTHH_LOOKUP = [
+const NHOM_VTHH_LOOKUP: NhomVTHHItem[] = [
   { id: 'CCDC', ma: 'CCDC', ten: 'Công cụ dụng cụ' },
   { id: 'DV', ma: 'DV', ten: 'Dịch vụ' },
   { id: 'HH', ma: 'HH', ten: 'Hàng hóa' },
@@ -217,6 +219,21 @@ const NHOM_VTHH_LOOKUP = [
   { id: 'TP', ma: 'TP', ten: 'Thành phẩm' },
   { id: 'XEMAY', ma: 'XEMAY', ten: 'Xe hai bánh gắn máy' },
 ]
+
+function parseNhomVthhStored(raw: string | undefined | null): string[] {
+  return (raw ?? '').split(';').map((s) => s.trim()).filter(Boolean)
+}
+
+function nhomVthhStoredToTenHienThi(raw: string | undefined | null, list: NhomVTHHItem[]): string {
+  const ids = parseNhomVthhStored(raw)
+  if (ids.length === 0) return ''
+  return ids
+    .map((id) => {
+      const hit = list.find((x) => x.id === id || x.ma === id)
+      return hit?.ten ?? id
+    })
+    .join(', ')
+}
 
 const KHO_LOOKUP: { id: string; label: string }[] = []
 
@@ -439,6 +456,39 @@ function getEmptyFormValues(dvtList: { id: number; ma_dvt: string; ten_dvt: stri
   }
 }
 
+/** Các mã ĐVT hợp lệ cho dòng định mức NVL: ĐVT chính + đơn vị quy đổi của VTHH đó. */
+function collectDvtMaChoNvlItem(item: VatTuHangHoaRecord | undefined): string[] {
+  if (!item) return []
+  const primary = (item.dvt_chinh ?? '').trim()
+  const extra = (item.don_vi_quy_doi ?? [])
+    .map((d) => (d.dvt ?? '').trim())
+    .filter(Boolean)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const m of [primary, ...extra]) {
+    if (!m || seen.has(m)) continue
+    seen.add(m)
+    out.push(m)
+  }
+  return out
+}
+
+function normalizeDinhMucRowDvt(
+  row: { ma: string; ten: string; dvt: string; so_luong: string; hao_hut: string },
+  nvlOptionsList: VatTuHangHoaRecord[]
+): { ma: string; ten: string; dvt: string; so_luong: string; hao_hut: string } {
+  const item = nvlOptionsList.find((o) => o.ma === row.ma.trim())
+  if (!item) return row
+  const extraDvts = (item.don_vi_quy_doi ?? [])
+    .map((d) => (d.dvt ?? '').trim())
+    .filter(Boolean)
+  if (extraDvts.length === 0) return row
+  const dvtMas = collectDvtMaChoNvlItem(item)
+  const cur = (row.dvt ?? '').trim()
+  if (dvtMas.includes(cur)) return row
+  return { ...row, dvt: (item.dvt_chinh ?? dvtMas[0] ?? '').trim() }
+}
+
 /** Kiểm tra công thức: ngoặc cân bằng, cú pháp toán học hợp lệ, phải có [Lượng]. */
 function validateFormula(formula: string, cachTinh?: string): { valid: boolean; message: string } {
   const s = formula.trim()
@@ -495,15 +545,20 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const [nvlDropdownRect, setNvlDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const nvlDropdownRef = useRef<HTMLDivElement>(null)
   const nvlOptions = useMemo(() => (vatTuList ?? []).filter((r) => r.tinh_chat === 'Vật tư' || r.tinh_chat === 'Vật tư hàng hóa'), [vatTuList])
+
   /** Khi sửa bản ghi có VT cấp cha: checkbox VT cấp cha phải luôn tick và không cho bỏ (disabled); vẫn cho phép chỉnh sửa mọi trường khác và được phép lưu */
   const vtChinhLocked = mode === 'edit' && initialData?.vt_chinh === true
   const inputMaRef = useRef<HTMLInputElement>(null)
   const inputTenRef = useRef<HTMLInputElement>(null)
   const khoNgamDinhRef = useRef<HTMLDivElement>(null)
   const [khoDropdownRect, setKhoDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const nhomVthhRef = useRef<HTMLDivElement>(null)
+  const [nhomDropdownRect, setNhomDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [showThemNhomVTHHModal, setShowThemNhomVTHHModal] = useState(false)
   /** Chỉ số các dòng Đơn vị quy đổi đã nhập Tỉ lệ từ bàn phím (auto-fill từ kích thước không tính). */
   const userEnteredTiLeByIndex = useRef<Set<number>>(new Set())
   const overlayKhoLookupMouseDownRef = useRef(false)
+  const overlayNhomVthhMouseDownRef = useRef(false)
 
   useEffect(() => {
     if (lookupModal === 'kho' && khoNgamDinhRef.current) {
@@ -515,23 +570,41 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   }, [lookupModal])
 
   useEffect(() => {
+    if (lookupModal === 'nhom_vthh' && nhomVthhRef.current) {
+      const r = nhomVthhRef.current.getBoundingClientRect()
+      setNhomDropdownRect({ top: r.bottom, left: r.left, width: Math.max(r.width, 220) })
+    } else {
+      setNhomDropdownRect(null)
+    }
+  }, [lookupModal])
+
+  useEffect(() => {
     const raw = (initialData as { dinh_muc_nvl?: { ma: string; ten: string; dvt: string; so_luong: string; hao_hut: string }[] })?.dinh_muc_nvl
     if (initialData != null) {
       if (Array.isArray(raw) && raw.length > 0) {
-        setDinhMucNvlRows(raw.map((r) => ({
-          ma: r.ma ?? '',
-          ten: r.ten ?? '',
-          dvt: r.dvt ?? '',
-          so_luong: r.so_luong != null && String(r.so_luong).trim() !== '' ? formatSoTuNhienInput(String(r.so_luong)) : '',
-          hao_hut: (r as { hao_hut?: string }).hao_hut != null && String((r as { hao_hut?: string }).hao_hut).trim() !== ''
-          ? formatSoTuNhienInput(String((r as { hao_hut?: string }).hao_hut))
-          : '',
-        })))
+        setDinhMucNvlRows(
+          raw.map((r) =>
+            normalizeDinhMucRowDvt(
+              {
+                ma: r.ma ?? '',
+                ten: r.ten ?? '',
+                dvt: r.dvt ?? '',
+                so_luong:
+                  r.so_luong != null && String(r.so_luong).trim() !== '' ? formatSoTuNhienInput(String(r.so_luong)) : '',
+                hao_hut:
+                  (r as { hao_hut?: string }).hao_hut != null && String((r as { hao_hut?: string }).hao_hut).trim() !== ''
+                    ? formatSoTuNhienInput(String((r as { hao_hut?: string }).hao_hut))
+                    : '',
+              },
+              nvlOptions
+            )
+          )
+        )
       } else {
         setDinhMucNvlRows([])
       }
     }
-  }, [initialData?.id])
+  }, [initialData?.id, nvlOptions])
 
   useEffect(() => {
     const raw = (initialData as { don_vi_quy_doi?: unknown[] })?.don_vi_quy_doi
@@ -1542,23 +1615,48 @@ const kichThuocSuffix = (md: string, mr: string) => {
                 <div style={{ marginLeft: -20 }}>
                   <LabelCell label="Nhóm VTHH" required />
                 </div>
-                <div className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', width: 'calc(100% - 5px)', maxWidth: 'calc(100% - 5px)', minWidth: 0, marginLeft: 10 }}>
-                  <div
-                    className="misa-input-wrap htql-kho-ngam-dinh-no-border"
-                    style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
-                    onClick={() => setLookupModal('nhom_vthh')}
+                <div ref={nhomVthhRef} className="misa-grid-item" style={{ display: 'flex', alignItems: 'center', gap: 4, width: 'calc(100% - 5px)', maxWidth: 'calc(100% - 5px)', minWidth: 0, marginLeft: 10 }}>
+                  <Controller
+                    control={control}
+                    name="nhom_vthh"
+                    rules={{ validate: (v) => ((v ?? '').toString().trim() ? true : 'Nhóm VTHH là bắt buộc') }}
+                    render={({ field, fieldState }) => (
+                      <div
+                        className="misa-input-wrap htql-kho-ngam-dinh-no-border"
+                        style={{ flex: 1, minWidth: 0, position: 'relative', cursor: 'pointer' }}
+                        onClick={() => setLookupModal('nhom_vthh')}
+                        data-nhom-vthh-dropdown=""
+                      >
+                        <input
+                          readOnly
+                          value={nhomVthhStoredToTenHienThi(field.value, nhomVTHHList)}
+                          className="misa-input-solo"
+                          style={{
+                            ...inputStyle,
+                            paddingRight: 26,
+                            cursor: 'pointer',
+                            ...(fieldState.error ? { borderColor: REQUIRED_FIELD_ERROR_BORDER, borderWidth: 2 } : {}),
+                          }}
+                          placeholder="Chọn nhóm..."
+                        />
+                        <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
+                          <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
+                        </span>
+                      </div>
+                    )}
+                  />
+                  <button
+                    type="button"
+                    className="misa-lookup-btn htql-dvt-plus-btn"
+                    style={lookupActionButtonStyle}
+                    title="Thêm nhóm VTHH"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowThemNhomVTHHModal(true)
+                    }}
                   >
-                    <input
-                      {...register('nhom_vthh', { required: 'Nhóm VTHH là bắt buộc' })}
-                      readOnly
-                      className="misa-input-solo"
-                      style={{ ...inputStyle, paddingRight: 26, cursor: 'pointer', ...(errors.nhom_vthh ? { borderColor: REQUIRED_FIELD_ERROR_BORDER, borderWidth: 2 } : {}) }}
-                      placeholder="Chọn nhóm..."
-                    />
-                    <span style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', background: 'var(--accent)', color: 'var(--accent-text)' }}>
-                      <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
-                    </span>
-                  </div>
+                    +
+                  </button>
                 </div>
                 <div style={{ marginLeft: -33 }}>
                   <LabelCell label="Kích thước" />
@@ -2207,6 +2305,34 @@ const kichThuocSuffix = (md: string, mr: string) => {
                             <td style={tdChietKhau}>
                               {(() => {
                                 const item = nvlOptions.find((o) => o.ma === row.ma)
+                                const extraDvts = (item?.don_vi_quy_doi ?? [])
+                                  .map((d) => (d.dvt ?? '').trim())
+                                  .filter(Boolean)
+                                const dvtMas = collectDvtMaChoNvlItem(item)
+                                const showSelect = extraDvts.length > 0 && dvtMas.length > 0
+                                if (showSelect) {
+                                  return (
+                                    <select
+                                      className="misa-input-solo"
+                                      style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}
+                                      value={row.dvt}
+                                      onChange={(e) => {
+                                        const v = e.target.value
+                                        const r = [...dinhMucNvlRows]
+                                        r[idx] = { ...r[idx], dvt: v }
+                                        setDinhMucNvlRows(r)
+                                      }}
+                                    >
+                                      {dvtMas.map((ma) => {
+                                        const d = dvtList.find((x) => x.ma_dvt === ma)
+                                        const label = d ? (d.ky_hieu || d.ten_dvt || ma) : ma
+                                        return (
+                                          <option key={ma} value={ma}>{label}</option>
+                                        )
+                                      })}
+                                    </select>
+                                  )
+                                }
                                 const maDvt = item?.dvt_chinh ?? row.dvt
                                 const d = dvtList.find((x) => x.ma_dvt === maDvt)
                                 const display = d ? (d.ky_hieu || d.ten_dvt) : (maDvt || '')
@@ -2581,16 +2707,96 @@ const kichThuocSuffix = (md: string, mr: string) => {
         />
       )}
       {lookupModal === 'nhom_vthh' && (
-        <NhomVTHHLookupModal
-          title="Chọn nhóm vật tư, hàng hóa, dịch vụ"
-          items={nhomVTHHList}
-          value={getValues('nhom_vthh') ?? ''}
-          onSelect={(ids) => {
-            setValue('nhom_vthh', ids.join(';'))
-            setLookupModal(null)
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 4000 }}
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) overlayNhomVthhMouseDownRef.current = true
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget && overlayNhomVthhMouseDownRef.current) setLookupModal(null)
+              overlayNhomVthhMouseDownRef.current = false
+            }}
+            aria-hidden
+          />
+          {nhomDropdownRect && ReactDOM.createPortal(
+            <div
+              data-nhom-vthh-dropdown=""
+              onMouseDown={() => { overlayNhomVthhMouseDownRef.current = false }}
+              style={{
+                position: 'fixed',
+                top: nhomDropdownRect.top,
+                left: nhomDropdownRect.left,
+                width: nhomDropdownRect.width,
+                maxHeight: 240,
+                overflowY: 'auto',
+                zIndex: 4100,
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {nhomVTHHList.length === 0 ? (
+                <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-muted)' }}>Chưa có nhóm</div>
+              ) : (
+                nhomVTHHList.map((item) => {
+                  const curIds = parseNhomVthhStored(getValues('nhom_vthh'))
+                  const selected = curIds.includes(item.id)
+                  return (
+                    <div
+                      key={item.id}
+                      role="option"
+                      aria-selected={selected}
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const ids = parseNhomVthhStored(getValues('nhom_vthh'))
+                        const next = selected ? ids.filter((x) => x !== item.id) : [...ids, item.id]
+                        setValue('nhom_vthh', next.join(';'), { shouldValidate: true, shouldDirty: true })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return
+                        const ids = parseNhomVthhStored(getValues('nhom_vthh'))
+                        const next = selected ? ids.filter((x) => x !== item.id) : [...ids, item.id]
+                        setValue('nhom_vthh', next.join(';'), { shouldValidate: true, shouldDirty: true })
+                      }}
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: 11,
+                        fontFamily: "var(--font-misa, 'Tahoma', Arial, sans-serif)",
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)',
+                        borderBottom: '1px solid var(--border)',
+                        background: selected ? 'var(--row-selected-bg)' : undefined,
+                      }}
+                    >
+                      {item.ten}
+                    </div>
+                  )
+                })
+              )}
+            </div>,
+            document.body
+          )}
+        </>
+      )}
+      {showThemNhomVTHHModal && (
+        <ThemNhomVTHHModal
+          parentOptions={nhomVTHHList}
+          onClose={() => setShowThemNhomVTHHModal(false)}
+          onSave={(item) => {
+            setNhomVTHHList((prev) => [...prev, item])
+            const cur = parseNhomVthhStored(getValues('nhom_vthh'))
+            setValue('nhom_vthh', [...cur, item.id].join(';'), { shouldValidate: true, shouldDirty: true })
+            setShowThemNhomVTHHModal(false)
           }}
-          onClose={() => setLookupModal(null)}
-          onSaveNewGroup={(item) => setNhomVTHHList((prev) => [...prev, item])}
+          onSaveAndAdd={(item) => {
+            setNhomVTHHList((prev) => [...prev, item])
+            const cur = parseNhomVthhStored(getValues('nhom_vthh'))
+            setValue('nhom_vthh', [...cur, item.id].join(';'), { shouldValidate: true, shouldDirty: true })
+          }}
         />
       )}
 

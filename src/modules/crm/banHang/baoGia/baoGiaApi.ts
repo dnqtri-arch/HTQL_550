@@ -147,6 +147,7 @@ function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: s
     tong_tien_hang: typeof d.tong_tien_hang === 'number' ? d.tong_tien_hang : 0,
     tong_thue_gtgt: typeof d.tong_thue_gtgt === 'number' ? d.tong_thue_gtgt : 0,
     tong_thanh_toan: typeof d.tong_thanh_toan === 'number' ? d.tong_thanh_toan : 0,
+    ap_dung_vat_gtgt: typeof d.ap_dung_vat_gtgt === 'boolean' ? d.ap_dung_vat_gtgt : undefined,
     tl_ck: typeof d.tl_ck === 'number' ? d.tl_ck : undefined,
     tien_ck: typeof d.tien_ck === 'number' ? d.tien_ck : undefined,
     so_dien_thoai: d.so_dien_thoai ?? undefined,
@@ -156,8 +157,6 @@ function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: s
       ? (d as { attachments: BaoGiaAttachmentItem[] }).attachments
       : undefined,
     hinh_thuc: d.hinh_thuc,
-    kho_nhap_id: d.kho_nhap_id,
-    ten_cong_trinh: d.ten_cong_trinh,
     dia_chi_cong_trinh: d.dia_chi_cong_trinh,
     chung_tu_mua_loai_chung_tu: d.chung_tu_mua_loai_chung_tu,
     chung_tu_mua_chua_thanh_toan: d.chung_tu_mua_chua_thanh_toan,
@@ -328,6 +327,74 @@ export const TINH_TRANG_BAO_GIA = [
 
 export const TINH_TRANG_BAO_GIA_DA_GUI_KHACH = 'Đã gửi KH'
 export const TINH_TRANG_NVTHH_DA_NHAP_KHO = 'Đã nhập kho'
+export const TINH_TRANG_BG_DA_CHUYEN_DHB = 'Đã chuyển ĐHB'
+export const TINH_TRANG_BG_DA_CHUYEN_HD = 'Đã chuyển HĐ'
+export const TINH_TRANG_BG_KH_KHONG_DONG_Y = 'KH không đồng ý'
+export const TINH_TRANG_BG_MOI_TAO = 'Mới tạo'
+
+/** Khóa chỉnh sửa form khi đã tạo giao dịch / KH không đồng ý (YC 50). */
+export function baoGiaBiKhoaChinhSuaTheoTinhTrang(tinh_trang: string): boolean {
+  const t = (tinh_trang ?? '').trim()
+  return t === TINH_TRANG_BG_DA_CHUYEN_DHB || t === TINH_TRANG_BG_DA_CHUYEN_HD || t === TINH_TRANG_BG_KH_KHONG_DONG_Y
+}
+
+/** Cập nhật tình trạng (và tùy chọn ghi chú) từ menu Tạo giao dịch — giữ nguyên chi tiết. */
+export function baoGiaCapNhatTuMenuTaoGd(
+  baoGiaId: string,
+  patch: { tinh_trang: string; dien_giai?: string },
+): void {
+  const row = _baoGiaList.find((d) => d.id === baoGiaId)
+  if (!row) return
+  const ct = baoGiaGetChiTiet(baoGiaId)
+  const base = baoGiaBuildCreatePayloadFromRecord(row, ct)
+  baoGiaPut(baoGiaId, {
+    ...base,
+    tinh_trang: patch.tinh_trang,
+    dien_giai: patch.dien_giai !== undefined ? patch.dien_giai : base.dien_giai,
+  })
+}
+
+/** Đồng bộ UI danh sách báo giá khi hoàn tác trạng thái từ module khác (vd. xóa HĐ bán). */
+export const HTQL_BAO_GIA_RELOAD_EVENT = 'htql-bao-gia-reload'
+
+/**
+ * Sau khi xóa ĐHB: nếu không còn đơn hàng bán nào có `bao_gia_id` trùng, hoàn tác báo giá
+ * từ «Đã chuyển ĐHB» → «Mới tạo» (YC51).
+ */
+export function baoGiaHoanTacKhiHetLienKetDonHangBan(
+  baoGiaId: string | null | undefined,
+  cacDonHangBanConLai: { bao_gia_id?: string }[],
+): void {
+  const id = (baoGiaId ?? '').trim()
+  if (!id) return
+  const still = cacDonHangBanConLai.some((d) => (d.bao_gia_id ?? '').trim() === id)
+  if (still) return
+  const row = _baoGiaList.find((r) => r.id === id)
+  if (!row) return
+  if ((row.tinh_trang ?? '').trim() !== TINH_TRANG_BG_DA_CHUYEN_DHB) return
+  baoGiaCapNhatTuMenuTaoGd(id, { tinh_trang: TINH_TRANG_BG_MOI_TAO })
+}
+
+/**
+ * Sau khi xóa HĐ bán: nếu không còn hợp đồng nào có `bao_gia_id` trùng, hoàn tác báo giá
+ * từ «Đã chuyển HĐ» → «Mới tạo» (YC51).
+ */
+export function baoGiaHoanTacKhiHetLienKetHopDongBan(
+  baoGiaId: string | null | undefined,
+  cacHopDongConLai: { bao_gia_id?: string }[],
+): void {
+  const id = (baoGiaId ?? '').trim()
+  if (!id) return
+  const still = cacHopDongConLai.some((d) => (d.bao_gia_id ?? '').trim() === id)
+  if (still) return
+  const row = _baoGiaList.find((r) => r.id === id)
+  if (!row) return
+  if ((row.tinh_trang ?? '').trim() !== TINH_TRANG_BG_DA_CHUYEN_HD) return
+  baoGiaCapNhatTuMenuTaoGd(id, { tinh_trang: TINH_TRANG_BG_MOI_TAO })
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
+  }
+}
 
 /** Ghép payload PUT từ bản ghi + chi tiết (dùng modal hủy/phục hồi và đồng bộ tình trạng). */
 export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGiaChiTiet[]): BaoGiaCreatePayload {
@@ -352,6 +419,7 @@ export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGia
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
     tong_thanh_toan: row.tong_thanh_toan,
+    ap_dung_vat_gtgt: row.ap_dung_vat_gtgt,
     tl_ck: row.tl_ck,
     tien_ck: row.tien_ck,
     so_dien_thoai: row.so_dien_thoai,
@@ -359,8 +427,6 @@ export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGia
     doi_chieu_don_mua_id: row.doi_chieu_don_mua_id,
     attachments: row.attachments?.length ? row.attachments.map((a) => ({ ...a })) : undefined,
     hinh_thuc: row.hinh_thuc,
-    kho_nhap_id: row.kho_nhap_id,
-    ten_cong_trinh: row.ten_cong_trinh,
     dia_chi_cong_trinh: row.dia_chi_cong_trinh,
     chung_tu_mua_loai_chung_tu: row.chung_tu_mua_loai_chung_tu,
     chung_tu_mua_chua_thanh_toan: row.chung_tu_mua_chua_thanh_toan,
@@ -397,7 +463,11 @@ export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGia
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       dd_gh_index: c.dd_gh_index ?? null,
+      noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
+      chieu_dai: c.chieu_dai,
+      chieu_rong: c.chieu_rong,
+      luong: c.luong,
     })),
   }
 }
@@ -415,6 +485,9 @@ export function baoGiaDelete(baoGiaId: string): void {
   _baoGiaList = _baoGiaList.filter((d) => d.id !== baoGiaId)
   _chiTietList = _chiTietList.filter((c) => c.bao_gia_id !== baoGiaId)
   saveToStorage()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
+  }
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
@@ -442,6 +515,7 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
     tong_thanh_toan: payload.tong_thanh_toan,
+    ap_dung_vat_gtgt: payload.ap_dung_vat_gtgt,
     tl_ck: payload.tl_ck,
     tien_ck: payload.tien_ck,
     so_dien_thoai: payload.so_dien_thoai,
@@ -449,8 +523,6 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
     doi_chieu_don_mua_id: payload.doi_chieu_don_mua_id ?? undefined,
     attachments: payload.attachments ? [...payload.attachments] : undefined,
     hinh_thuc: payload.hinh_thuc,
-    kho_nhap_id: payload.kho_nhap_id,
-    ten_cong_trinh: payload.ten_cong_trinh,
     dia_chi_cong_trinh: payload.dia_chi_cong_trinh,
     chung_tu_mua_loai_chung_tu: payload.chung_tu_mua_loai_chung_tu,
     chung_tu_mua_chua_thanh_toan: payload.chung_tu_mua_chua_thanh_toan,
@@ -487,11 +559,11 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
       ten_hang: c.ten_hang,
       ma_quy_cach: '',
       dvt: c.dvt,
-      chieu_dai: 0,
-      chieu_rong: 0,
+      chieu_dai: c.chieu_dai ?? 0,
+      chieu_rong: c.chieu_rong ?? 0,
       chieu_cao: 0,
       ban_kinh: 0,
-      luong: 0,
+      luong: c.luong ?? 0,
       so_luong: c.so_luong,
       so_luong_nhan: 0,
       don_gia: c.don_gia,
@@ -500,6 +572,7 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
       dd_gh_index: c.dd_gh_index ?? null,
+      noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
     })
   })
@@ -533,6 +606,7 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
     tong_thanh_toan: payload.tong_thanh_toan,
+    ap_dung_vat_gtgt: payload.ap_dung_vat_gtgt,
     tl_ck: payload.tl_ck,
     tien_ck: payload.tien_ck,
     so_dien_thoai: payload.so_dien_thoai,
@@ -540,8 +614,6 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
     doi_chieu_don_mua_id: payload.doi_chieu_don_mua_id ?? undefined,
     attachments: payload.attachments ? [...payload.attachments] : undefined,
     hinh_thuc: payload.hinh_thuc,
-    kho_nhap_id: payload.kho_nhap_id,
-    ten_cong_trinh: payload.ten_cong_trinh,
     dia_chi_cong_trinh: payload.dia_chi_cong_trinh,
     chung_tu_mua_loai_chung_tu: payload.chung_tu_mua_loai_chung_tu,
     chung_tu_mua_chua_thanh_toan: payload.chung_tu_mua_chua_thanh_toan,
@@ -578,11 +650,11 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
       ten_hang: c.ten_hang,
       ma_quy_cach: '',
       dvt: c.dvt,
-      chieu_dai: 0,
-      chieu_rong: 0,
+      chieu_dai: c.chieu_dai ?? 0,
+      chieu_rong: c.chieu_rong ?? 0,
       chieu_cao: 0,
       ban_kinh: 0,
-      luong: 0,
+      luong: c.luong ?? 0,
       so_luong: c.so_luong,
       so_luong_nhan: 0,
       don_gia: c.don_gia,
@@ -591,6 +663,7 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
       dd_gh_index: c.dd_gh_index ?? null,
+      noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
     })
   })

@@ -4,7 +4,7 @@ import { VatTuHangHoa } from '../../kho/khoHang/vatTuHangHoa'
 import { QuyTrinhMuaHang } from './quyTrinhMuaHang'
 import { NhaCungCap } from './nhaCungCap/nhaCungCap'
 import { DonHangMua } from './donHangMua/donHangMua'
-import { NhanVatTuHangHoa } from '../../kho/nhanVatTuHangHoa/nhanVatTuHangHoa'
+import { NhanVatTuHangHoa } from './nhanVatTuHangHoa/nhanVatTuHangHoa'
 import {
   type DonHangMuaChiTiet,
   type DonHangMuaRecord,
@@ -23,7 +23,7 @@ import { ThemDieuKhoanThanhToanModal } from '../shared/themDieuKhoanThanhToanMod
 import { HinhThucView } from '../shared/hinhThucView'
 import { Plus } from 'lucide-react'
 
-/** Hàng hóa, dịch vụ (Mua hàng) dùng chung danh mục với Vật tư hàng hóa (Kho) — cùng vatTuHangHoaApi / một cơ sở dữ liệu. */
+/** Vật tư, hàng hóa (Mua hàng) dùng chung danh mục với Kho — cùng vatTuHangHoaApi / một cơ sở dữ liệu. */
 
 function DieuKhoanThanhToanView({ onQuayLai }: { onQuayLai: () => void }) {
   const [danhSach, setDanhSach] = useState<DieuKhoanThanhToanItem[]>(() => loadDieuKhoanThanhToan())
@@ -113,7 +113,7 @@ const TABS_MUA_HANG = [
   { id: 'quy-trinh', label: 'Quy trình' },
 ]
 
-type ViewDanhMuc = 'nha-cung-cap' | 'hang-hoa-dich-vu' | 'dieu-khoan-thanh-toan' | 'hinh-thuc' | 'tien-ich' | null
+type ViewDanhMuc = 'nha-cung-cap' | 'vat-tu-hang-hoa' | 'dieu-khoan-thanh-toan' | 'hinh-thuc' | 'tien-ich' | null
 
 export function MuaHang() {
   const [tabHienTai, setTabHienTai] = useState('quy-trinh')
@@ -163,7 +163,7 @@ export function MuaHang() {
         </div>
       )
     }
-    if (viewDanhMuc === 'hang-hoa-dich-vu') {
+    if (viewDanhMuc === 'vat-tu-hang-hoa') {
       return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <VatTuHangHoa onQuayLai={() => setViewDanhMuc(null)} />
@@ -213,7 +213,7 @@ export function MuaHang() {
       return (
         <QuyTrinhMuaHang
           onChonNhaCungCap={() => setViewDanhMuc('nha-cung-cap')}
-          onChonHangHoaDichVu={() => setViewDanhMuc('hang-hoa-dich-vu')}
+          onChonVatTuHangHoa={() => setViewDanhMuc('vat-tu-hang-hoa')}
           onChonDieuKhoanThanhToan={() => setViewDanhMuc('dieu-khoan-thanh-toan')}
           onChonHinhThuc={() => setViewDanhMuc('hinh-thuc')}
           onChonTienIch={() => setViewDanhMuc('tien-ich')}
@@ -234,8 +234,8 @@ export function MuaHang() {
   const tieuDeDanhMuc =
     viewDanhMuc === 'nha-cung-cap'
       ? 'Nhà cung cấp'
-      : viewDanhMuc === 'hang-hoa-dich-vu'
-        ? 'Hàng hóa, dịch vụ'
+      : viewDanhMuc === 'vat-tu-hang-hoa'
+        ? 'Vật tư, hàng hóa'
         : viewDanhMuc === 'dieu-khoan-thanh-toan'
           ? 'DKTT'
           : viewDanhMuc === 'hinh-thuc'

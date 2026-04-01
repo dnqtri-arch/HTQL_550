@@ -1,6 +1,6 @@
 /**
- * API Hợp đồng bán (Nguyên tắc) — localStorage mock, prefix HDB.
- * Fields: so_hop_dong, han_muc_gia_tri, ngay_hieu_luc, ngay_het_han
+ * API Hợp đồng bán (nguyên tắc) — localStorage mock, tách biệt chứng từ `hopDongBanChungTuApi`.
+ * Cấu trúc song song `donHangBan/donHangBanApi.ts` cho module `hopDongBan/`.
  */
 
 import type {
@@ -10,53 +10,57 @@ import type {
   BanHangFilter,
   BanHangKyValue,
 } from '../../../../types/banHang'
+import type { BaoGiaRecord, BaoGiaChiTiet } from '../../../../types/baoGia'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 
 export type { HopDongBanRecord, HopDongBanChiTiet, HopDongBanCreatePayload, BanHangKyValue }
 
-const STORAGE_KEY_DON = 'htql_hop_dong_ban_list'
-const STORAGE_KEY_CHI_TIET = 'htql_hop_dong_ban_chi_tiet'
+const STORAGE_KEY_HD = 'htql_hop_dong_ban_nguyen_tac_list'
+const STORAGE_KEY_CHI_TIET = 'htql_hop_dong_ban_nguyen_tac_chi_tiet'
 
-const MOCK_HDB: HopDongBanRecord[] = [
+const MOCK_HD: HopDongBanRecord[] = [
   {
-    id: 'hdb1',
-    so_hop_dong: '2026/HDB/1',
-    ngay_ky: '2026-01-15',
-    ngay_hieu_luc: '2026-02-01',
+    id: 'hdbnt1',
+    so_hop_dong: '2026/HDBNT/1',
+    ngay_ky: '2026-03-10',
+    ngay_hieu_luc: '2026-03-15',
     ngay_het_han: '2026-12-31',
     khach_hang: 'Công ty CP Xây dựng XYZ',
-    han_muc_gia_tri: 500000000,
-    gia_tri_da_su_dung: 93500000,
-    dien_giai: 'Hợp đồng cung cấp vật liệu xây dựng năm 2026',
+    han_muc_gia_tri: 500_000_000,
+    gia_tri_da_su_dung: 0,
+    dien_giai: 'Hợp đồng nguyên tắc (mock)',
     tinh_trang: 'Đang hiệu lực',
     nv_ban_hang: 'Trần Thị B',
+    bao_gia_id: 'bg2',
+    so_bao_gia_goc: '2026/BG/2',
   },
 ]
 
 const MOCK_CT: HopDongBanChiTiet[] = [
   {
-    id: 'hdbct1',
-    hop_dong_ban_id: 'hdb1',
+    id: 'hdbntct1',
+    hop_dong_ban_id: 'hdbnt1',
+    stt: 1,
     ma_hang: 'VT00002',
     ten_hang: 'Xi măng Hoàng Thạch',
     dvt: 'Tấn',
-    so_luong: 500,
-    don_gia: 850000,
-    thanh_tien: 425000000,
+    so_luong: 100,
+    don_gia: 850_000,
+    thanh_tien: 85_000_000,
     pt_thue_gtgt: 10,
-    tien_thue_gtgt: 42500000,
+    tien_thue_gtgt: 8_500_000,
   },
 ]
 
-function loadFromStorage(): { don: HopDongBanRecord[]; chiTiet: HopDongBanChiTiet[] } {
+function loadFromStorage(): { hd: HopDongBanRecord[]; chiTiet: HopDongBanChiTiet[] } {
   try {
-    const rawDon = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DON) : null
+    const rawHd = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_HD) : null
     const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
-    const don = rawDon ? JSON.parse(rawDon) : null
+    const hd = rawHd ? JSON.parse(rawHd) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
-    if (Array.isArray(don) && Array.isArray(chiTiet)) return { don, chiTiet }
+    if (Array.isArray(hd) && Array.isArray(chiTiet)) return { hd, chiTiet }
   } catch { /* ignore */ }
-  return { don: [...MOCK_HDB], chiTiet: [...MOCK_CT] }
+  return { hd: [...MOCK_HD], chiTiet: [...MOCK_CT] }
 }
 
 let _list: HopDongBanRecord[] = []
@@ -65,7 +69,7 @@ let _chiTietList: HopDongBanChiTiet[] = []
 function init() {
   if (_list.length === 0 && _chiTietList.length === 0) {
     const loaded = loadFromStorage()
-    _list = loaded.don
+    _list = loaded.hd
     _chiTietList = loaded.chiTiet
   }
 }
@@ -74,7 +78,7 @@ init()
 function save() {
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_list))
+      localStorage.setItem(STORAGE_KEY_HD, JSON.stringify(_list))
       localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch { /* ignore */ }
@@ -127,7 +131,7 @@ export function hopDongBanGetAll(filter: BanHangFilter): HopDongBanRecord[] {
     if (den && r.ngay_ky > den) return false
     if (tim_kiem) {
       const kw = tim_kiem.toLowerCase()
-      const hay = `${r.so_hop_dong} ${r.khach_hang} ${r.dien_giai ?? ''} ${r.tinh_trang}`.toLowerCase()
+      const hay = `${r.so_hop_dong} ${r.khach_hang} ${r.dien_giai ?? ''} ${r.tinh_trang} ${r.so_bao_gia_goc ?? ''}`.toLowerCase()
       if (!hay.includes(kw)) return false
     }
     return true
@@ -147,7 +151,7 @@ export function hopDongBanDelete(id: string): void {
 }
 
 function genId(): string {
-  return `hdb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  return `hdbnt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
 export function hopDongBanSoTiepTheo(): string {
@@ -155,12 +159,12 @@ export function hopDongBanSoTiepTheo(): string {
   const year = getCurrentYear()
   const nums = _list
     .map((r) => {
-      const m = r.so_hop_dong.match(/^(\d{4})\/HDB\/(\d+)$/)
+      const m = r.so_hop_dong.match(/^(\d{4})\/HDBNT\/(\d+)$/)
       return m && parseInt(m[1], 10) === year ? parseInt(m[2], 10) : 0
     })
     .filter(Boolean)
   const max = nums.length ? Math.max(...nums) : 0
-  return maFormatHeThong('HDB', max + 1)
+  return maFormatHeThong('HDBNT', max + 1)
 }
 
 export function hopDongBanPost(payload: HopDongBanCreatePayload): HopDongBanRecord {
@@ -179,11 +183,13 @@ export function hopDongBanPost(payload: HopDongBanCreatePayload): HopDongBanReco
     tinh_trang: payload.tinh_trang,
     ghi_chu: payload.ghi_chu,
     nv_ban_hang: payload.nv_ban_hang,
+    bao_gia_id: payload.bao_gia_id,
+    so_bao_gia_goc: payload.so_bao_gia_goc,
   }
   _list.unshift(record)
   const ctNew = payload.chi_tiet.map((c, i) => ({
     ...c,
-    id: `hdbct_${id}_${i}`,
+    id: `hdbntct_${id}_${i}`,
     hop_dong_ban_id: id,
     stt: i + 1,
   }))
@@ -209,18 +215,54 @@ export function hopDongBanPut(id: string, payload: HopDongBanCreatePayload): Hop
     tinh_trang: payload.tinh_trang,
     ghi_chu: payload.ghi_chu,
     nv_ban_hang: payload.nv_ban_hang,
+    bao_gia_id: payload.bao_gia_id,
+    so_bao_gia_goc: payload.so_bao_gia_goc,
   }
   _list[idx] = updated
   _chiTietList = _chiTietList.filter((c) => c.hop_dong_ban_id !== id)
   const newCt = payload.chi_tiet.map((c, i) => ({
     ...c,
-    id: `hdbct_${id}_${i}_${Date.now()}`,
+    id: `hdbntct_${id}_${i}_${Date.now()}`,
     hop_dong_ban_id: id,
     stt: i + 1,
   }))
   _chiTietList = [..._chiTietList, ...newCt]
   save()
   return updated
+}
+
+export function hopDongBanTuBaoGia(
+  baoGia: BaoGiaRecord,
+  chiTietBaoGia: BaoGiaChiTiet[],
+  soHd: string,
+  ngayKy: string,
+): HopDongBanCreatePayload {
+  return {
+    so_hop_dong: soHd,
+    ngay_ky: ngayKy,
+    ngay_hieu_luc: ngayKy,
+    ngay_het_han: ngayKy,
+    khach_hang: baoGia.khach_hang,
+    han_muc_gia_tri: baoGia.tong_thanh_toan,
+    gia_tri_da_su_dung: 0,
+    dien_giai: baoGia.dien_giai,
+    tinh_trang: 'Chưa hiệu lực',
+    nv_ban_hang: baoGia.nv_ban_hang,
+    bao_gia_id: baoGia.id,
+    so_bao_gia_goc: baoGia.so_bao_gia,
+    chi_tiet: chiTietBaoGia.map((c) => ({
+      stt: c.stt,
+      ma_hang: c.ma_hang,
+      ten_hang: c.ten_hang,
+      dvt: c.dvt,
+      so_luong: c.so_luong,
+      don_gia: c.don_gia,
+      thanh_tien: c.thanh_tien,
+      pt_thue_gtgt: c.pt_thue_gtgt,
+      tien_thue_gtgt: c.tien_thue_gtgt,
+      ghi_chu: c.ghi_chu,
+    })),
+  }
 }
 
 export function hopDongBanBuildPayloadFromRecord(
@@ -239,6 +281,8 @@ export function hopDongBanBuildPayloadFromRecord(
     tinh_trang: r.tinh_trang,
     ghi_chu: r.ghi_chu,
     nv_ban_hang: r.nv_ban_hang,
+    bao_gia_id: r.bao_gia_id,
+    so_bao_gia_goc: r.so_bao_gia_goc,
     chi_tiet: ct.map((c) => ({
       stt: c.stt,
       ma_hang: c.ma_hang,

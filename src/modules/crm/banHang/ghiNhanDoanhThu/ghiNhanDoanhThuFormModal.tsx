@@ -1,21 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DonHangMuaForm } from '../../crm/muaHang/donHangMua/donHangMuaForm'
-import type { DonHangMuaRecord, DonHangMuaChiTiet } from '../../crm/muaHang/donHangMua/donHangMuaApi'
-import { DonHangMuaApiProvider, type DonHangMuaApi } from '../../crm/muaHang/donHangMua/donHangMuaApiContext'
-import { useNhanVatTuHangHoaApi } from './nhanVatTuHangHoaApiContext'
-import type { NhanVatTuHangHoaRecord } from './nhanVatTuHangHoaApi'
-import type { NhanVatTuHangHoaPrefillPayload } from './nhanVatTuHangHoaPrefill'
-import styles from './NhanVatTuHangHoa.module.css'
+import { DonHangMuaForm } from '../../muaHang/donHangMua/donHangMuaForm'
+import type { DonHangMuaRecord, DonHangMuaChiTiet } from '../../muaHang/donHangMua/donHangMuaApi'
+import { DonHangMuaApiProvider, type DonHangMuaApi } from '../../muaHang/donHangMua/donHangMuaApiContext'
+import { useGhiNhanDoanhThuApi } from './ghiNhanDoanhThuApiContext'
+import type { GhiNhanDoanhThuRecord } from './ghiNhanDoanhThuApi'
+import type { GhiNhanDoanhThuPrefillPayload } from './ghiNhanDoanhThuPrefill'
+import styles from './ghiNhanDoanhThu.module.css'
 
 /**
  * Modal form = `DonHangMuaForm` với `phieuNhanTuDonHangMua` + `doiChieuSource="don_mua_hang"`.
  * Canh lề cột/ô (số·ngày·giờ phải, chữ trái), datepicker, nhãn khối chứng từ: **canh-le.mdc**, **o-nhap.mdc**; triển khai trong `DonHangMuaForm.tsx`. Vùng giá trị khối Chứng từ/HĐ phiếu: **160px** (ô+chevron+gap+nút +) — `NVTHH_DON_HANG_BOX_VALUE_BAND_PX`.
  */
-type NhanVatTuHangHoaFormModalProps = {
+type GhiNhanDoanhThuFormModalProps = {
   open: boolean
-  viewDon: NhanVatTuHangHoaRecord | null
+  viewDon: GhiNhanDoanhThuRecord | null
   addFormKey: number
-  formPrefillTuDhm: NhanVatTuHangHoaPrefillPayload | null
+  formPrefillTuDhm: GhiNhanDoanhThuPrefillPayload | null
   getChiTiet: (donId: string) => DonHangMuaChiTiet[]
   onClose: () => void
   onSaved: () => void
@@ -26,7 +26,7 @@ type NhanVatTuHangHoaFormModalProps = {
   overlayZIndex?: number
 }
 
-export function NhanVatTuHangHoaFormModal({
+export function GhiNhanDoanhThuFormModal({
   open,
   viewDon,
   addFormKey,
@@ -37,8 +37,8 @@ export function NhanVatTuHangHoaFormModal({
   onSavedAndView,
   chiXemKhongSua = false,
   overlayZIndex,
-}: NhanVatTuHangHoaFormModalProps) {
-  const nvthhApi = useNhanVatTuHangHoaApi()
+}: GhiNhanDoanhThuFormModalProps) {
+  const nvthhApi = useGhiNhanDoanhThuApi()
   const modalBoxRef = useRef<HTMLDivElement>(null)
   const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | null>(null)
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)

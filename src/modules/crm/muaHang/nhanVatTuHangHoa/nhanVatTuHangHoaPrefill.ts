@@ -1,4 +1,4 @@
-import type { DonHangMuaRecord, DonHangMuaChiTiet } from '../../crm/muaHang/donHangMua/donHangMuaApi'
+import type { DonHangMuaRecord, DonHangMuaChiTiet } from '../donHangMua/donHangMuaApi'
 
 /** Map header ĐHM → form Nhận vật tư hàng hóa (prefill từ tab Đơn hàng mua). */
 export function buildPrefillDonHeaderTuDhm(don: DonHangMuaRecord): Partial<DonHangMuaRecord> & {

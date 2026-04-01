@@ -98,7 +98,7 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
     <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={containerRef} style={{ ...box, ...containerStyle }} onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
-          <span>Chọn vật tư hàng hóa (Hàng hóa, dịch vụ)</span>
+          <span>Chọn vật tư hàng hóa (Vật tư, hàng hóa)</span>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
             <X size={18} />
           </button>
