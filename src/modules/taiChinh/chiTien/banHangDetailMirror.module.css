@@ -1,0 +1,601 @@
+/* BanHang module — styles scoped, không ảnh hưởng module khác */
+
+.root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ─── Toolbar ────────────────────────────────────────── */
+.toolbarWrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background-color 0.15s, color 0.15s;
+}
+.toolbarBtn:hover:not(:disabled) {
+  background: var(--bg-tab-active) !important;
+  color: var(--accent) !important;
+}
+.toolbarBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toolbarBtnDanger {
+  composes: toolbarBtn;
+}
+.toolbarBtnDanger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #ef4444 !important;
+  border-color: #ef4444 !important;
+}
+
+/* ─── Filter ─────────────────────────────────────────── */
+.filterWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.filterInput {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.searchInput {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  width: 180px;
+}
+.searchInput::placeholder {
+  color: var(--text-muted);
+}
+
+/* ─── Content layout ─────────────────────────────────── */
+.contentArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gridWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Detail panel ───────────────────────────────────── */
+.detailWrap {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 220px;
+  min-height: 220px;
+  margin-top: 2px;
+}
+
+.detailTabBar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.detailTab,
+.detailTabActive {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  background: var(--bg-tab);
+  color: var(--text-muted);
+  margin-right: 2px;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.detailTab:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  border-bottom: none;
+}
+.detailTabActive {
+  background: var(--bg-secondary);
+  color: var(--accent);
+  border-color: var(--border-strong);
+  border-bottom: 1px solid var(--bg-secondary);
+  margin-bottom: -1px;
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.detailTabPanel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: none;
+  border-radius: 0 6px 6px 6px;
+  overflow: hidden;
+}
+
+/* ─── Status badge ────────────────────────────────────── */
+.badgeDaChot,
+.badgeChoDuyet,
+.badgeDaHuy,
+.badgeChuaThucHien,
+.badgeDangThucHien,
+.badgeDaXuatKho,
+.badgeDaNhanHang,
+.badgeChuaThanhToan,
+.badgeThanhToan1Phan,
+.badgeDaThanhToan,
+.badgeDangHieuLuc,
+.badgeHetHan,
+.badgeChuaHieuLuc,
+.badgeChoXuLy,
+.badgeDaHoanKho,
+.badgeDefault {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badgeDaChot       { background: rgba(34,197,94,0.18);  color: #15803d; }
+.badgeChoDuyet     { background: rgba(249,115,22,0.16); color: #c2410c; }
+.badgeDaHuy        { background: rgba(239,68,68,0.16);  color: #dc2626; }
+.badgeChuaThucHien { background: rgba(107,114,128,0.16);color: #6b7280; }
+.badgeDangThucHien { background: rgba(59,130,246,0.16); color: #1d4ed8; }
+.badgeDaXuatKho    { background: rgba(34,197,94,0.18);  color: #15803d; }
+.badgeDaNhanHang  { background: rgba(34,197,94,0.18);  color: #15803d; }
+.badgeChuaThanhToan{ background: rgba(249,115,22,0.16); color: #c2410c; }
+.badgeThanhToan1Phan{ background: rgba(59,130,246,0.16);color: #1d4ed8; }
+.badgeDaThanhToan  { background: rgba(34,197,94,0.18);  color: #15803d; }
+.badgeDangHieuLuc  { background: rgba(34,197,94,0.18);  color: #15803d; }
+.badgeHetHan       { background: rgba(239,68,68,0.16);  color: #dc2626; }
+.badgeChuaHieuLuc  { background: rgba(107,114,128,0.16);color: #6b7280; }
+.badgeChoXuLy      { background: rgba(249,115,22,0.16); color: #c2410c; }
+.badgeDaHoanKho    { background: rgba(34,197,94,0.18);  color: #15803d; }
+.badgeDefault      { background: rgba(107,114,128,0.1); color: var(--text-muted); }
+
+/* ─── Modal overlay / box ─────────────────────────────── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+  pointer-events: all;
+}
+
+.modalBox {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  width: 95vw;
+  max-width: 1100px;
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+.modalBoxLarge {
+  composes: modalBox;
+  max-width: min(99vw, 1580px);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 10px 16px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-tab);
+  flex-shrink: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.modalTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modalCloseBtn:hover { background: var(--bg-tab-active); color: var(--accent); }
+
+.modalBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.modalFooter {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-tab);
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─── Form fields ─────────────────────────────────────── */
+.formRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.formLabel {
+  font-size: 11px;
+  color: var(--text-primary);
+  min-width: 110px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+
+.formControl {
+  flex: 1;
+  min-width: 0;
+}
+
+.formInput {
+  width: 100%;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.formInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.formSelect {
+  composes: formInput;
+  cursor: pointer;
+}
+
+.formTextarea {
+  composes: formInput;
+  resize: vertical;
+  min-height: 52px;
+}
+
+/* ─── Chi tiết table ──────────────────────────────────── */
+.chiTietSection {
+  margin-top: 12px;
+}
+
+.chiTietTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.chiTietTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+
+.chiTietTable th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-tab);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 5px 6px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-primary);
+  z-index: 1;
+}
+.chiTietTable th.thRight { text-align: right; }
+
+.chiTietTable td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+/* [YC30] Hover effects đồng bộ với Form ĐHM */
+.chiTietTable tbody tr > td {
+  transition: background-color 0.14s ease;
+}
+.chiTietTable tbody tr:hover > td,
+.chiTietTable tbody tr:focus-within > td {
+  background-color: rgba(230, 126, 34, 0.06) !important;
+}
+@supports (background-color: color-mix(in srgb, white, black)) {
+  .chiTietTable tbody tr:hover > td,
+  .chiTietTable tbody tr:focus-within > td {
+    background-color: color-mix(in srgb, var(--row-selected-bg) 48%, var(--bg-secondary)) !important;
+  }
+}
+
+/* Viền ô nhập trong dòng đang hover / đang focus */
+.chiTietTable tbody tr:hover :global(.misa-input-solo),
+.chiTietTable tbody tr:focus-within :global(.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}
+.chiTietTable tbody tr:hover :global(select.misa-input-solo),
+.chiTietTable tbody tr:focus-within :global(select.misa-input-solo) {
+  border-color: rgba(230, 126, 34, 0.42) !important;
+}
+
+.chiTietInput {
+  width: 100%;
+  padding: 2px 5px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--text-primary);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.chiTietInput:focus {
+  background: var(--bg-primary);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.tdRight { text-align: right; }
+.tdCenter { text-align: center; }
+
+.chiTietAddRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 0;
+}
+
+/* ─── Table scroll wrapper ────────────────────────────── */
+.tableScrollWrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 260px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* ─── Context menu ────────────────────────────────────── */
+.contextMenu {
+  position: fixed;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  z-index: 4000;
+  min-width: 180px;
+  padding: 4px;
+}
+
+.contextMenuItem {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-primary);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+}
+.contextMenuItem:hover { background: var(--row-selected-bg); }
+.contextMenuItem:disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.6; }
+
+.contextMenuSep {
+  margin: 3px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* ─── Summary row ────────────────────────────────────── */
+.summaryRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.summaryItem strong {
+  color: var(--text-primary);
+  margin-left: 4px;
+}
+
+/* ─── Công nợ panel ───────────────────────────────────── */
+.congNoTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.congNoTable th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-tab);
+  border-bottom: 2px solid var(--border-strong);
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--text-primary);
+  z-index: 1;
+  white-space: nowrap;
+}
+.congNoTable td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.congNoTable tr:hover td { background: var(--row-selected-bg); }
+.congNoAmountNeg { color: #ef4444; font-weight: 600; }
+
+/* ─── Dropdown wrap ───────────────────────────────────── */
+.dropdownWrap {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 4010;
+  min-width: 180px;
+  padding: 4px 0;
+}
+
+.dropdownItem {
+  composes: toolbarBtn;
+  width: 100%;
+  justify-content: flex-start;
+  border: none;
+  border-radius: 0;
+}
+.dropdownItem:hover { background: var(--row-selected-bg) !important; }
+
+/* ─── Modal confirm (small) ──────────────────────────── */
+.modalBtn {
+  composes: toolbarBtn;
+}
+.modalBtnPrimary {
+  composes: toolbarBtn;
+  background: var(--accent) !important;
+  color: var(--accent-text) !important;
+  border-color: var(--accent) !important;
+}
+.modalBtnDanger {
+  composes: toolbarBtn;
+  background: #ef4444 !important;
+  color: #fff !important;
+  border-color: #ef4444 !important;
+}
+
+/* ─── Form section divider ────────────────────────────── */
+.formSectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin: 12px 0 8px;
+}
+
+/* ─── Source link badge (Lập từ BG, HĐ) ─────────────── */
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  background: rgba(59,130,246,0.12);
+  color: #1d4ed8;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: default;
+}
+
+/* ─── Tín hiệu liên kết xuất kho ─────────────────────── */
+.xuatKhoBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  background: rgba(34,197,94,0.14);
+  color: #15803d;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}

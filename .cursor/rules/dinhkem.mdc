@@ -58,6 +58,7 @@ alwaysApply: false
 ## Đính kèm thiết kế (dktk) — Báo giá
 
 - **Tên gọi:** **Đính kèm thiết kế** hoặc viết tắt **dktk** (nút/popover đính kèm trên form Báo giá — `BaoGiaDinhKemModal.tsx`).
+- **Nút + nhãn (vd. «Đính kèm file thiết kế») trên toolbar:** chữ nhãn **không** in đậm (`font-weight` bình thường — không dùng 600/700 trên span nhãn; giữ badge đếm file nếu có).
 - **Định dạng:** `.ai`, `.eps`, `.svg`, `.pdf`, `.cdr` (Corel), `.psd`, `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`.
 - **Dung lượng:** mỗi file phải **nhỏ hơn 2000 MB** (`BG_DINH_KEM_TOI_DA_BYTES`); file **từ 2000 MB trở lên** không đính kèm — `alert` + banner, không đọc file đó; vẫn xử lý file hợp lệ còn lại.
 - **Hiển thị dung lượng:** `formatDungLuongHienThi` — từ khoảng **1000 MB** trở lên dùng **GB / TB** cho gọn (tránh chuỗi MB quá dài).
@@ -78,7 +79,7 @@ alwaysApply: false
 
 ## Đính kèm thiết kế (dktk) — Đơn hàng bán (chứng từ ĐHB)
 
-- **Tên gọi trên form:** **Đính kèm thiết kế** (nút/popover đính kèm trên toolbar `DonHangBanForm.tsx` — cùng họ UI với dktk Báo giá).
+- **Tên gọi trên form:** **Đính kèm thiết kế** (nút/popover đính kèm trên toolbar `DonHangBanForm.tsx` — cùng họ UI với dktk Báo giá). Nhãn nút **không** in đậm (cùng quy tắc như dktk Báo giá).
 - **Quy tắc định dạng / dung lượng / tối đa file / defer `alert`–`confirm` / viewer / tiến trình:** áp dụng **cùng chuẩn** mục **«Đính kèm thiết kế (dktk) — Báo giá** ở trên (định dạng file, `BG_DINH_KEM_TOI_DA_BYTES` tương đương trong code ĐHB, popover neo nút, v.v.).
 - **Khác biệt tên / path:** virtual path và `build*AttachmentBaseName` dùng **Mã ĐHB** + **phần khách** (`ma_kh` / `KH_unknown`) theo rule trong code `donHangBan*DinhKem*` / `DonHangBanChungTu`, không dùng mã báo giá.
 - **Toolbar:** nhãn nút **Đính kèm thiết kế** (không dùng «Đính kèm chứng từ» cho ĐHB); ô **Mã** mặc định hiển thị **Mã ĐHB**.

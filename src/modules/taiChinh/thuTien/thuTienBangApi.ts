@@ -7,6 +7,8 @@
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../utils/maFormat'
+import { formatSoTienHienThi, parseFloatVN } from '../../../utils/numberFormat'
+import { donHangBanGetAll } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
 import type {
   ThuTienBangAttachmentItem,
   ThuTienBangChiTiet,
@@ -18,6 +20,8 @@ import type {
 } from '../../../types/thuTienBang'
 import type { ThuTienBangApi } from './thuTienBangApiContext'
 import { donHangBanHoanTacKhiXoaThuTien } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
+import { hopDongBanHoanTacKhiXoaThuTien } from '../../crm/banHang/hopDongBan/hopDongBanChungTuApi'
+import { phuLucHopDongBanHoanTacKhiXoaThuTien } from '../../crm/banHang/phuLucHopDongBan/phuLucHopDongBanChungTuApi'
 
 export type {
   ThuTienBangAttachmentItem,
@@ -47,7 +51,6 @@ const MOCK_DON: ThuTienBangRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 4000000,
     tong_thue_gtgt: 0,
@@ -67,7 +70,6 @@ const MOCK_DON: ThuTienBangRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 15000000,
     tong_thue_gtgt: 0,
@@ -87,7 +89,6 @@ const MOCK_DON: ThuTienBangRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 8500000,
     tong_thue_gtgt: 0,
@@ -117,7 +118,6 @@ const MOCK_CHI_TIET: ThuTienBangChiTiet[] = [
     pt_thue_gtgt: null,
     tien_thue_gtgt: null,
     lenh_san_xuat: '',
-    dd_gh_index: 0,
   },
 ]
 
@@ -144,7 +144,6 @@ function normalizeThuTienBang(d: Partial<ThuTienBangRecord> & { id: string; de_x
     nv_ban_hang: d.nv_ban_hang ?? '',
     dieu_khoan_tt: d.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: d.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: d.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: d.dieu_khoan_khac ?? '',
     tong_tien_hang: typeof d.tong_tien_hang === 'number' ? d.tong_tien_hang : 0,
     tong_thue_gtgt: typeof d.tong_thue_gtgt === 'number' ? d.tong_thue_gtgt : 0,
@@ -419,7 +418,6 @@ export function thuTienBangBuildCreatePayloadFromRecord(row: ThuTienBangRecord, 
     nv_ban_hang: row.nv_ban_hang ?? '',
     dieu_khoan_tt: row.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: row.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: row.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: row.dieu_khoan_khac ?? '',
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
@@ -471,7 +469,6 @@ export function thuTienBangBuildCreatePayloadFromRecord(row: ThuTienBangRecord, 
       thanh_tien: c.thanh_tien,
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
-      dd_gh_index: c.dd_gh_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
     })),
@@ -486,12 +483,151 @@ export function thuTienBangSetTinhTrang(thuTienBangId: string, tinh_trang: strin
   thuTienBangPut(thuTienBangId, { ...thuTienBangBuildCreatePayloadFromRecord(row, ct), tinh_trang })
 }
 
+/** Prefix JSON dòng phiếu thu — đồng bộ với `thuTienForm.tsx`. */
+const PHIEU_THU_ROW_PREFIX_DONG_BO = '__PT_ROW__:'
+
+function isPhieuThuKhachRecord(r: ThuTienBangRecord): boolean {
+  return r.ly_do_thu_phieu === 'thu_khach_hang' || r.ly_do_thu_phieu === 'thu_khac'
+}
+
+function khachHangKhopDongBo(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+function tienThuChoMaDonHang(ct: ThuTienBangChiTiet[], maChungTu: string): number {
+  const m = maChungTu.trim()
+  if (!m) return 0
+  let s = 0
+  for (const line of ct) {
+    const ma = (line.ma_hang ?? '').trim()
+    if (ma !== m) continue
+    const tt = line.thanh_tien
+    if (typeof tt === 'number' && Number.isFinite(tt)) {
+      s += tt
+      continue
+    }
+    const dg = typeof line.don_gia === 'number' ? line.don_gia : 0
+    const sl = typeof line.so_luong === 'number' ? line.so_luong : 0
+    s += dg * sl
+  }
+  return s
+}
+
+function mapChiTietDongBoMaDon(
+  ct: ThuTienBangChiTiet[],
+  maDon: string,
+  phai: number,
+  soChuaTruocPhieu: number,
+): ThuTienBangChiTiet[] {
+  const ma = maDon.trim()
+  return ct.map((line) => {
+    const lineMa = (line.ma_hang ?? '').trim()
+    if (lineMa !== ma) return line
+    const raw = (line.noi_dung ?? '').trim()
+    if (raw.startsWith(PHIEU_THU_ROW_PREFIX_DONG_BO)) {
+      try {
+        const j = JSON.parse(raw.slice(PHIEU_THU_ROW_PREFIX_DONG_BO.length)) as Record<string, unknown>
+        const soPhaiStr = formatSoTienHienThi(phai)
+        const soChuaStr = formatSoTienHienThi(soChuaTruocPhieu)
+        const thuNum = parseFloatVN(String(j.thu_lan_nay ?? '0'))
+        const thuCapped = Math.min(Number.isFinite(thuNum) ? thuNum : 0, soChuaTruocPhieu)
+        const thuStr = formatSoTienHienThi(thuCapped)
+        const newJ = { ...j, so_phai_thu: soPhaiStr, so_chua_thu: soChuaStr, thu_lan_nay: thuStr }
+        return {
+          ...line,
+          noi_dung: PHIEU_THU_ROW_PREFIX_DONG_BO + JSON.stringify(newJ),
+          don_gia: thuCapped,
+          so_luong: 1,
+          thanh_tien: thuCapped,
+        }
+      } catch {
+        return line
+      }
+    }
+    const tt0 =
+      typeof line.thanh_tien === 'number' && Number.isFinite(line.thanh_tien)
+        ? line.thanh_tien
+        : (typeof line.don_gia === 'number' ? line.don_gia : 0) * (typeof line.so_luong === 'number' ? line.so_luong : 0)
+    const capped = Math.min(tt0, soChuaTruocPhieu)
+    return { ...line, don_gia: capped, so_luong: 1, thanh_tien: capped }
+  })
+}
+
+/**
+ * Sau khi xóa/đổi phiếu thu: cập nhật lại `so_phai_thu` / `so_chua_thu` / `thu_lan_nay` trong JSON
+ * và `thanh_tien` dòng theo thứ tự lập — tránh lệch «chưa thu» khi còn nhiều phiếu.
+ */
+export function dongBoLaiNoiDungPhieuThuTheoMaDonHang(khachHang: string, maDonHang: string): void {
+  const kh = khachHang.trim()
+  const ma = maDonHang.trim()
+  if (!kh || !ma) return
+  const allDhb = donHangBanGetAll({ ky: 'tat-ca', tu: '', den: '' })
+  const dhb = allDhb.find((r) => (r.so_don_hang ?? '').trim() === ma && khachHangKhopDongBo(r.khach_hang ?? '', kh))
+  if (!dhb) return
+  const phai =
+    typeof dhb.tong_thanh_toan === 'number' && Number.isFinite(dhb.tong_thanh_toan) ? dhb.tong_thanh_toan : 0
+
+  const candidates = _thuTienBangList
+    .filter((r) => isPhieuThuKhachRecord(r) && khachHangKhopDongBo(r.khach_hang ?? '', kh))
+    .map((r) => {
+      const ct = thuTienBangGetChiTiet(r.id)
+      const t = tienThuChoMaDonHang(ct, ma)
+      return { r, t, ct }
+    })
+    .filter((x) => x.t > 0)
+
+  candidates.sort((a, b) => {
+    const na = (a.r.ngay_thu_tien_bang ?? '').localeCompare(b.r.ngay_thu_tien_bang ?? '')
+    if (na !== 0) return na
+    return String(a.r.id).localeCompare(String(b.r.id))
+  })
+
+  let lapTruoc = 0
+  for (const { r, ct } of candidates) {
+    const soChua = Math.max(0, phai - lapTruoc)
+    const newCt = mapChiTietDongBoMaDon(ct, ma, phai, soChua)
+    const row = _thuTienBangList.find((d) => d.id === r.id)
+    if (!row) continue
+    thuTienBangPut(r.id, thuTienBangBuildCreatePayloadFromRecord(row, newCt))
+    const after = thuTienBangGetChiTiet(r.id)
+    lapTruoc += tienThuChoMaDonHang(after, ma)
+  }
+}
+
 /** Xóa báo giá và toàn bộ chi tiết của báo giá. */
 export function thuTienBangDelete(thuTienBangId: string): void {
+  const row = _thuTienBangList.find((d) => d.id === thuTienBangId)
+  const kh = row?.khach_hang?.trim() ?? ''
+  const ctBefore = row ? _chiTietList.filter((c) => c.thu_tien_bang_id === thuTienBangId) : []
+  const maDonSet = new Set<string>()
+  for (const line of ctBefore) {
+    const mh = (line.ma_hang ?? '').trim()
+    if (mh) maDonSet.add(mh)
+    const raw = (line.noi_dung ?? '').trim()
+    if (raw.startsWith(PHIEU_THU_ROW_PREFIX_DONG_BO)) {
+      try {
+        const j = JSON.parse(raw.slice(PHIEU_THU_ROW_PREFIX_DONG_BO.length)) as { ma_chung_tu?: string }
+        const m = (j.ma_chung_tu ?? '').trim()
+        if (m) maDonSet.add(m)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
   _thuTienBangList = _thuTienBangList.filter((d) => d.id !== thuTienBangId)
   _chiTietList = _chiTietList.filter((c) => c.thu_tien_bang_id !== thuTienBangId)
   saveToStorage()
   donHangBanHoanTacKhiXoaThuTien(thuTienBangId)
+  hopDongBanHoanTacKhiXoaThuTien(thuTienBangId)
+  phuLucHopDongBanHoanTacKhiXoaThuTien(thuTienBangId)
+  if (kh) {
+    for (const ma of maDonSet) {
+      dongBoLaiNoiDungPhieuThuTheoMaDonHang(kh, ma)
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_THU_TIEN_BANG_RELOAD_EVENT))
+  }
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
@@ -514,7 +650,6 @@ export function thuTienBangPost(payload: ThuTienBangCreatePayload): ThuTienBangR
     nv_ban_hang: payload.nv_ban_hang ?? '',
     dieu_khoan_tt: payload.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: payload.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: payload.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
@@ -579,7 +714,6 @@ export function thuTienBangPost(payload: ThuTienBangCreatePayload): ThuTienBangR
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
-      dd_gh_index: c.dd_gh_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
     })
@@ -609,7 +743,6 @@ export function thuTienBangPut(thuTienBangId: string, payload: ThuTienBangCreate
     nv_ban_hang: payload.nv_ban_hang ?? '',
     dieu_khoan_tt: payload.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: payload.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: payload.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
@@ -674,7 +807,6 @@ export function thuTienBangPut(thuTienBangId: string, payload: ThuTienBangCreate
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
-      dd_gh_index: c.dd_gh_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
     })

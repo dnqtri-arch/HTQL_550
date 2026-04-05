@@ -1,14 +1,12 @@
 /**
- * Module Bán hàng — entry point.
- * Tabs: Quy trình | Báo giá | Đơn hàng bán | Hợp đồng | Hóa đơn | Công nợ | Trả lại hàng
- * Tuân thủ imports-cau-truc.mdc: folder viết liền, không gạch ngang.
- * Quản lý tab nội bộ (không phụ thuộc vào ModulePage.setActiveSub).
+ * Module Bán hàng — entry point (YC82: không tab bar; điều hướng qua sơ đồ / sự kiện).
  */
 
 import { useState, useEffect } from 'react'
 import { BaoGia } from './baoGia/baoGia'
 import { DonHangBan } from './donHangBan/donHangBan'
 import { HopDongBan } from './hopDongBan/hopDongBan'
+import { PhuLucHopDongBan } from './phuLucHopDongBan/phuLucHopDongBan'
 import { HoaDonBan } from './hoaDon/hoaDonBan'
 import { CongNoKhachHang } from './congNo/congNoKhachHang'
 import { TraLaiHang } from './traLai/traLaiHang'
@@ -25,6 +23,7 @@ type SubId =
   | 'baogia'
   | 'donhangban'
   | 'hopdong'
+  | 'phu-luc-hop-dong'
   | 'ghinhandoanhthu'
   | 'hoadon'
   | 'congno'
@@ -32,16 +31,29 @@ type SubId =
 
 type ViewDanhMuc = 'khachhang' | 'vathh' | 'dieukhoanntt' | null
 
-const TABS: { id: SubId; label: string }[] = [
-  { id: 'quy-trinh', label: 'Quy trình' },
-  { id: 'baogia', label: 'Báo giá' },
-  { id: 'donhangban', label: 'Đơn hàng bán' },
-  { id: 'hopdong', label: 'Hợp đồng' },
-  { id: 'ghinhandoanhthu', label: 'Ghi nhận doanh thu' },
-  { id: 'hoadon', label: 'Hóa đơn bán' },
-  { id: 'congno', label: 'Công nợ KH' },
-  { id: 'tralai', label: 'Trả lại hàng' },
-]
+const VALID_SUB_IDS = new Set<SubId>([
+  'quy-trinh',
+  'baogia',
+  'donhangban',
+  'hopdong',
+  'phu-luc-hop-dong',
+  'ghinhandoanhthu',
+  'hoadon',
+  'congno',
+  'tralai',
+])
+
+/** Ánh xạ id từ sơ đồ / sự kiện → tab nội bộ */
+const NAV_TO_SUB: Record<string, SubId> = {
+  baogia: 'baogia',
+  donhangban: 'donhangban',
+  hopdong: 'hopdong',
+  phuluchopdong: 'phu-luc-hop-dong',
+  ghinhandoanhthu: 'ghinhandoanhthu',
+  hoadon: 'hoadon',
+  congno: 'congno',
+  tralai: 'tralai',
+}
 
 export function BanHang() {
   const [activeTab, setActiveTab] = useState<SubId>('quy-trinh')
@@ -61,9 +73,10 @@ export function BanHang() {
         tabId = raw.tab
         gndtTuDhb = raw.ghiNhanTuDonBan
       }
-      if (!tabId || !TABS.some((t) => t.id === tabId)) return
+      const mapped = tabId ? NAV_TO_SUB[tabId] ?? (VALID_SUB_IDS.has(tabId as SubId) ? (tabId as SubId) : undefined) : undefined
+      if (!mapped) return
       setViewDanhMuc(null)
-      setActiveTab(tabId as SubId)
+      setActiveTab(mapped)
       if (gndtTuDhb) setPrefillGndtTuDhb(gndtTuDhb)
     }
     window.addEventListener(HTQL_BAN_HANG_TAB_EVENT, onTab)
@@ -71,37 +84,36 @@ export function BanHang() {
   }, [])
 
   const navigate = (tab: string) => {
-    if (tab === 'khachhang') { setViewDanhMuc('khachhang'); return }
-    if (tab === 'vathh') { setViewDanhMuc('vathh'); return }
-    if (tab === 'dieukhoanntt') { setViewDanhMuc('dieukhoanntt'); return }
-    const found = TABS.find((t) => t.id === tab)
-    if (found) {
+    if (tab === 'khachhang') {
+      setViewDanhMuc('khachhang')
+      return
+    }
+    if (tab === 'vathh') {
+      setViewDanhMuc('vathh')
+      return
+    }
+    if (tab === 'dieukhoanntt') {
+      setViewDanhMuc('dieukhoanntt')
+      return
+    }
+    const sub = NAV_TO_SUB[tab]
+    if (sub) {
       setViewDanhMuc(null)
-      setActiveTab(found.id)
+      setActiveTab(sub)
     }
   }
 
-  const tieuDe =
-    viewDanhMuc === 'khachhang' ? 'Khách hàng'
-    : viewDanhMuc === 'vathh' ? 'Sản phẩm, hàng hóa'
-    : viewDanhMuc === 'dieukhoanntt' ? 'Điều khoản thanh toán'
-    : 'Bán hàng'
-
   return (
-    <div style={{
-      background: 'var(--bg-primary)',
-      color: 'var(--text-primary)',
-      height: '100%',
-      minHeight: 0,
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* Header */}
-      <h1 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
-        {tieuDe}
-      </h1>
-
-      {/* Danh mục view — che tab bar */}
+    <div
+      style={{
+        background: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       {viewDanhMuc === 'khachhang' && (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <KhachHang onQuayLai={() => setViewDanhMuc(null)} />
@@ -118,57 +130,23 @@ export function BanHang() {
         </div>
       )}
 
-      {/* Tab bar — ẩn khi xem danh mục */}
       {viewDanhMuc == null && (
-        <>
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 4,
-            marginBottom: 8,
-            paddingBottom: 6,
-            borderBottom: '1px solid var(--border-strong)',
-          }}>
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                style={{
-                  padding: '4px 10px',
-                  background: activeTab === tab.id ? 'var(--accent)' : 'var(--bg-secondary)',
-                  color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-primary)',
-                  border: `1px solid ${activeTab === tab.id ? 'var(--accent)' : 'var(--border)'}`,
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontFamily: 'inherit',
-                  fontWeight: activeTab === tab.id ? 700 : 400,
-                  transition: 'background 0.12s, color 0.12s',
-                }}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {activeTab === 'quy-trinh' && <QuyTrinhBanHang onNavigate={navigate} />}
-            {activeTab === 'baogia' && <BaoGia onNavigate={navigate} />}
-            {activeTab === 'donhangban' && <DonHangBan onNavigate={navigate} />}
-            {activeTab === 'hopdong' && <HopDongBan />}
-            {activeTab === 'ghinhandoanhthu' && (
-              <GhiNhanDoanhThu
-                prefillTuDonHangBan={prefillGndtTuDhb}
-                onConsumedPrefillTuDonHangBan={() => setPrefillGndtTuDhb(null)}
-              />
-            )}
-            {activeTab === 'hoadon' && <HoaDonBan />}
-            {activeTab === 'congno' && <CongNoKhachHang />}
-            {activeTab === 'tralai' && <TraLaiHang />}
-          </div>
-        </>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {activeTab === 'quy-trinh' && <QuyTrinhBanHang onNavigate={navigate} />}
+          {activeTab === 'baogia' && <BaoGia onNavigate={navigate} />}
+          {activeTab === 'donhangban' && <DonHangBan onNavigate={navigate} />}
+          {activeTab === 'hopdong' && <HopDongBan />}
+          {activeTab === 'phu-luc-hop-dong' && <PhuLucHopDongBan />}
+          {activeTab === 'ghinhandoanhthu' && (
+            <GhiNhanDoanhThu
+              prefillTuDonHangBan={prefillGndtTuDhb}
+              onConsumedPrefillTuDonHangBan={() => setPrefillGndtTuDhb(null)}
+            />
+          )}
+          {activeTab === 'hoadon' && <HoaDonBan />}
+          {activeTab === 'congno' && <CongNoKhachHang />}
+          {activeTab === 'tralai' && <TraLaiHang />}
+        </div>
       )}
     </div>
   )

@@ -35,8 +35,6 @@ export interface DonHangBanRecord {
   dia_chi?: string
   ma_so_thue?: string
   dien_giai?: string
-  /** Các địa điểm nhận hàng (mỗi dòng một địa điểm), đồng bộ cột ĐĐNH trên lưới chi tiết. */
-  dia_diem_nhan_hang?: string
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
@@ -55,8 +53,6 @@ export interface DonHangBanChiTiet {
   ma_hang: string
   ten_hang: string
   dvt: string
-  /** Chỉ số dòng Địa điểm NH (0 = ĐĐNH 1, …). */
-  dd_nh_index?: number | null
   so_luong: number
   don_gia: number
   thanh_tien: number
@@ -73,7 +69,6 @@ export interface DonHangBanCreatePayload {
   dia_chi?: string
   ma_so_thue?: string
   dien_giai?: string
-  dia_diem_nhan_hang?: string
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number

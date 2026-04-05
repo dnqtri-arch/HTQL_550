@@ -1,0 +1,17 @@
+---
+description: Tài khoản ngân hàng & gợi ý tên NH (HTQL_550)
+alwaysApply: false
+---
+
+# Tài khoản ngân hàng (`taiKhoanNganHang`)
+
+## Nguyên tắc
+
+1. **Tên ngân hàng:** ô nhập **dự đoán / gợi ý** giống cột «Tên ngân hàng» trong form Khách hàng (`khachHang.tsx`): danh sách `getBanksVietnam`, lọc theo từ khóa, dropdown dưới ô (chevron accent), chọn dòng gán `name` đầy đủ; hiển thị «viết tắt — tên đầy đủ» khi khớp danh mục — **không** bắt buộc chọn đúng một option; cho phép gõ tên tự nhập. `z-index` dropdown trong modal form ≥ **4500** (tham chiếu `taiKhoanNganHangForm.tsx`).
+2. **Trường đã bỏ:** Chi nhánh, Tỉnh/TP, Địa chỉ CN, khối logo/minh họa NH — không hiển thị trên form danh sách.
+3. **Thuộc CTY/CN:** ô chọn (select) — giá trị danh mục sẽ bổ sung sau; mặc định placeholder «—».
+4. **Thứ tự form:** Thuộc CTY/CN → Số tài khoản → Tên ngân hàng (gợi ý) → … → Chủ TK → Ngầm định khi → Diễn giải.
+
+## TypeScript
+
+- `TaiKhoanNganHangRecord` trong `src/types/taiKhoanNganHang.ts` phản ánh các trường còn lại + `thuoc_cty_cn`.

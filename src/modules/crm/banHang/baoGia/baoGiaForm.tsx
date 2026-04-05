@@ -54,7 +54,6 @@ import {
 } from '../../../../utils/numberFormat'
 import { dvtLaMetVuong } from '../../../../utils/dvtLaMetVuong'
 import {
-  COL_DD_GH,
   buildDvtOptionsForVthh,
   chiTietToLines,
   computeDonHangMuaFooterTotals,
@@ -79,10 +78,17 @@ import {
   type BaoGiaChiTiet,
   type BaoGiaAttachmentItem,
   TINH_TRANG_BAO_GIA_DA_GUI_KHACH,
+  TINH_TRANG_BG_MOI_TAO,
+  TINH_TRANG_NVTHH_DA_NHAP_KHO,
   baoGiaBiKhoaChinhSuaTheoTinhTrang,
   HTQL_BAO_GIA_RELOAD_EVENT,
 } from './baoGiaApi'
-import { HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
+import {
+  HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT,
+  HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT,
+  HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT,
+} from '../banHangTabEvent'
+import { HTQL_THU_TIEN_BANG_RELOAD_EVENT } from '../../../taiChinh/thuTien/thuTienBangApi'
 import {
   nhanVatTuHangHoaGetAll,
   getDefaultNhanVatTuHangHoaFilter,
@@ -109,19 +115,25 @@ import {
 } from './baoGiaDinhKemModal'
 import { layLichSuBanChoKhach, coLichSuBan } from './lichSuBanHangKhach'
 import { useBaoGiaApi } from './baoGiaApiContext'
-import { TINH_TRANG_NVTHH_DA_NHAP_KHO } from './baoGiaApi'
 import { setUnsavedChanges } from '../../../../context/unsavedChanges'
 import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { HTQL_FORM_ERROR_BORDER, htqlFocusAndScrollIntoView } from '../../../../utils/formValidationFocus'
 import { preserveTimeWhenCalendarDayChanges } from '../../../../utils/reactDatepickerPreserveTime'
 import { ThemDieuKhoanThanhToanModal } from '../../shared/themDieuKhoanThanhToanModal'
+import { BanHangDcnhAddressFields } from '../shared/banHangDcnhAddressFields'
+import {
+  BAN_HANG_COL_DCNH,
+  dcnhIndexToLineCell,
+  dcnhOptionDescriptors,
+  parseDcnhIndexFromLineCell,
+  splitDiaChiNhanHangLines,
+} from '../../../../utils/banHangDcnhStorage'
 import { hinhThucGetAll, type HinhThucRecord } from '../../shared/hinhThucApi'
 import { getBanksVietnam, type BankItem } from '../../shared/banksApi'
 import { ThemHinhThucModal } from '../../shared/themHinhThucModal'
 import { mauHoaDonGetAll, type MauHoaDonItem } from '../../shared/mauHoaDonApi'
 import { ThemMauHoaDonModal } from '../../shared/themMauHoaDonModal'
-import { suggestAddressVietnam } from '../../shared/addressAutocompleteApi'
 import bgDetailStyles from '../BanHang.module.css'
 import baoGiaChiTietStyles from './BaoGia.module.css'
 
@@ -411,6 +423,19 @@ const toolbarBtnAccent: React.CSSProperties = {
   boxShadow: '0 1px 3px rgba(230, 126, 34, 0.4)',
 }
 
+/** Đính kèm thiết kế: icon trên, chữ dưới (YC71) */
+const toolbarBtnDinhKemThietKe: React.CSSProperties = {
+  ...toolbarBtn,
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  gap: 2,
+  padding: '6px 10px',
+  minWidth: 108,
+  borderColor: 'var(--accent)',
+  color: 'var(--text-primary)',
+}
+
 /** Neo popover đính kèm + badge đếm file (flat) */
 const toolbarDinhKemWrap: React.CSSProperties = {
   position: 'relative',
@@ -678,10 +703,9 @@ const THUE_SUAT_GTGT_OPTIONS = [
 ] as const
 
 
-/** Cột ĐĐGH — hằng COL_DD_GH từ utils/donHangMuaCalculations (utils chung) */
-const mauBgCoDonGiaDisplay = [...mau_bgcodongia, COL_DD_GH, 'Ghi chú'] as const
-const mauBgCoDonGiaKhongVatDisplay = [...mau_bgcodongia_khong_vat, COL_DD_GH, 'Ghi chú'] as const
-const mauBgKhongDonGiaDisplay = [...mau_bgkhongdongia, COL_DD_GH] as const
+const mauBgCoDonGiaDisplay = [...mau_bgcodongia, 'Ghi chú'] as const
+const mauBgCoDonGiaKhongVatDisplay = [...mau_bgcodongia_khong_vat, 'Ghi chú'] as const
+const mauBgKhongDonGiaDisplay = [...mau_bgkhongdongia] as const
 
 /** Bản ghi cũ không có `ap_dung_vat_gtgt` → coi như có VAT; form thêm mới không có bản ghi → mặc định không VAT (YC44). */
 function deriveApDungVatGtgtTuBanGhi(r: BaoGiaRecord | Partial<BaoGiaRecord> | null | undefined): boolean {
@@ -716,28 +740,16 @@ function chiTietToBaoGiaLines(ct: BaoGiaChiTiet[]): BaoGiaGridLineRow[] {
     row['Nội dung'] = (c as BaoGiaChiTiet).noi_dung ?? ''
     row['Đơn giá'] = dg
     if (c) {
-      if (c.chieu_dai != null && Number(c.chieu_dai) > 0) row['mD'] = formatSoThapPhan(String(c.chieu_dai), 4)
-      if (c.chieu_rong != null && Number(c.chieu_rong) > 0) row['mR'] = formatSoThapPhan(String(c.chieu_rong), 4)
+      if (c.chieu_dai != null && Number(c.chieu_dai) > 0) row['mD'] = formatSoThapPhan(String(c.chieu_dai), 2)
+      if (c.chieu_rong != null && Number(c.chieu_rong) > 0) row['mR'] = formatSoThapPhan(String(c.chieu_rong), 2)
       if (c.luong != null && Number(c.luong) > 0) row['Lượng'] = formatSoNguyenInput(String(Math.max(1, Math.round(Number(c.luong)))))
       else row['Lượng'] = row['Lượng']?.trim() || '1'
+      row[BAN_HANG_COL_DCNH] = dcnhIndexToLineCell(typeof c.dcnh_index === 'number' ? c.dcnh_index : 0)
+    } else {
+      row[BAN_HANG_COL_DCNH] = dcnhIndexToLineCell(0)
     }
     return row as unknown as BaoGiaGridLineRow
   })
-}
-
-/** Thứ tự ô Địa điểm GH theo hình thức (đã bỏ trường Kho nhập — mỗi slot tương ứng một dòng ĐĐGH / địa chỉ). */
-function buildHinhThucDiaDiemOrder(
-  hinhThucSelectedIds: string[],
-  hinhThucList: { id: string; ten: string }[]
-): { type: 'dia_chi_dd' }[] {
-  const slots: { type: 'dia_chi_dd' }[] = []
-  for (const id of hinhThucSelectedIds) {
-    const h = hinhThucList.find((x) => x.id === id)
-    if (!h?.ten) continue
-    if (/không nhập kho|khong nhap kho/i.test(h.ten)) slots.push({ type: 'dia_chi_dd' })
-    else if (/nhập kho|nhap kho/i.test(h.ten) && !/không|khong/i.test(h.ten)) slots.push({ type: 'dia_chi_dd' })
-  }
-  return slots
 }
 
 /**
@@ -780,17 +792,6 @@ function defaultPhieuNhanHinhThucNhapKhoIds(): string[] {
 const PHIEU_CHUNG_TU_MUA_DEFAULT_TEXT = 'Mua hàng nhập kho'
 /** Lưới chi tiết SPHH: cao theo nội dung (bảng + nút Thêm dòng), trần cuộn dọc khi vượt quá */
 
-/** Danh sách option ĐĐgh theo các dòng địa điểm GH đang có nội dung. */
-function getDiaDiemGhOptions(list: string[], effectiveFirst: string): { idx: number; label: string }[] {
-  const opts: { idx: number; label: string }[] = []
-  for (let i = 0; i < list.length; i++) {
-    const text = i === 0 ? effectiveFirst : (list[i] ?? '')
-    if (text.trim()) opts.push({ idx: i, label: `ĐĐGH ${i + 1}` })
-  }
-  if (opts.length === 0) opts.push({ idx: 0, label: 'ĐĐGH 1' })
-  return opts
-}
-
 /** Tab Khách hàng: «Người liên hệ» lưu `ho_va_ten_lien_he`; đồng bộ ưu tiên trước `nguoi_lien_he`. */
 function tenNguoiLienHeTuDanhBaKh(kh: KhachHangRecord): string {
   return (kh.ho_va_ten_lien_he ?? kh.nguoi_lien_he ?? '').trim()
@@ -810,8 +811,8 @@ function dvtHienThiLabel(
 /** Độ rộng cột cố định (rule mau_gia: STT, Mã, Tên, ĐVT, Kích thước, Số lượng giữ nguyên khi chuyển mẫu). */
 const COL_WIDTH_STT = 36
 const COL_WIDTH_MA = 88
-const COL_WIDTH_TEN = 220
-const COL_WIDTH_NOI_DUNG = 208
+const COL_WIDTH_TEN = 280
+const COL_WIDTH_NOI_DUNG = 140
 const COL_WIDTH_DVT = 76
 const COL_WIDTH_CHIEU_DAI = 68
 const COL_WIDTH_CHIEU_RONG = 68
@@ -833,10 +834,10 @@ function colWidthStyle(col: string, ghiChuFill?: boolean): React.CSSProperties {
   if (col === 'Ghi chú') return ghiChuFill ? { width: '100%', minWidth: 72 } : { width: 104, minWidth: 72 }
   if (col === 'Đơn giá') return { width: 100, minWidth: 88 }
   if (col === 'Thành tiền') return { width: 100, minWidth: 88 }
+  if (col === BAN_HANG_COL_DCNH) return { width: 100, minWidth: 88, maxWidth: 120 }
   if (col === '% thuế GTGT') return { width: 78, minWidth: 78, maxWidth: 78 }
   if (col === 'Tiền thuế GTGT') return { width: 96, minWidth: 88, maxWidth: 112 }
   if (col === 'Tổng tiền') return { width: 100, minWidth: 88 }
-  if (col === COL_DD_GH) return { width: 88, minWidth: 80, maxWidth: 100 }
   return {}
 }
 
@@ -1022,7 +1023,7 @@ function getPhieuChiNhanFieldsTuKh(kh: KhachHangRecord): { stk: string; nganHang
   const arr = kh.tai_khoan_ngan_hang
   const tk = Array.isArray(arr) && arr.length > 0 ? arr[0] : null
   if (tk) {
-    const bank = [tk.ten_ngan_hang, tk.chi_nhanh].map((x) => String(x ?? '').trim()).filter(Boolean).join(' — ')
+    const bank = String(tk.ten_ngan_hang ?? '').trim()
     return {
       stk: (tk.so_tai_khoan ?? '').trim(),
       nganHang: bank,
@@ -1044,7 +1045,7 @@ function baoGiaListChoPhieuNhanTuBaoGia(): BaoGiaRecord[] {
 
 function gridColumnHeaderLabel(col: string): React.ReactNode {
   if (col === 'Mã') return 'Mã SPHH'
-  if (col === COL_DD_GH) return 'ĐĐGH'
+  if (col === BAN_HANG_COL_DCNH) return 'ĐCNH'
   if (col === '% thuế GTGT') return (<>% thuế<br />GTGT</>)
   return col
 }
@@ -1094,10 +1095,14 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     window.addEventListener(HTQL_BAO_GIA_RELOAD_EVENT, bump)
     window.addEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, bump)
     window.addEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    window.addEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    window.addEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, bump)
     return () => {
       window.removeEventListener(HTQL_BAO_GIA_RELOAD_EVENT, bump)
       window.removeEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, bump)
       window.removeEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+      window.removeEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+      window.removeEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, bump)
     }
   }, [])
   /** Mã KH (ma_kh) — dùng đặt tên file đính kèm theo rule hệ thống. */
@@ -1129,6 +1134,11 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   const [diaChi, setDiaChi] = useState(() => {
     if (isViewMode && initialDon) return initialDon.dia_chi ?? ''
     if (prefillDon?.dia_chi != null) return prefillDon.dia_chi
+    return ''
+  })
+  const [diaChiNhanHangJoined, setDiaChiNhanHangJoined] = useState(() => {
+    if (isViewMode && initialDon) return initialDon.dia_chi_nhan_hang ?? ''
+    if (prefillDon?.dia_chi_nhan_hang != null) return prefillDon.dia_chi_nhan_hang
     return ''
   })
   const [nguoiGiaoHang, setNguoiGiaoHang] = useState(() => {
@@ -1177,12 +1187,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     const h = hinhThucList.find((x) => x.id === id)
     return h?.ten ? /không nhập kho|khong nhap kho/i.test(h.ten) : false
   })
-  const [diaDiemGiaoHangList, setDiaDiemGiaoHangList] = useState<string[]>(() => {
-    const raw = (initialDon ?? prefillDon) as { dia_diem_giao_hang?: string } | null | undefined
-    const s = raw?.dia_diem_giao_hang ?? ''
-    if (!s.trim()) return ['']
-    return s.split(/\r?\n/).filter(Boolean).length > 0 ? s.split(/\r?\n/).map((x) => x.trim()) : ['']
-  })
   const [dieuKhoanKhac, setDieuKhoanKhac] = useState(() => {
     if (isViewMode && initialDon) return initialDon.dieu_khoan_khac ?? ''
     if (prefillDon?.dieu_khoan_khac != null) return prefillDon.dieu_khoan_khac
@@ -1220,8 +1224,9 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   })
   const [soDonHang, setSoDonHang] = useState(() => (isViewMode && initialDon ? initialDon.so_bao_gia : api.soDonHangTiepTheo()))
   const [tinhTrang, setTinhTrang] = useState(() => {
-    const raw = isViewMode && initialDon ? initialDon.tinh_trang : prefillDon?.tinh_trang
-    return normalizeTinhTrangPhieuNvthhForForm(raw, laPhieuNhanNvthh)
+    if (isViewMode && initialDon) return normalizeTinhTrangPhieuNvthhForForm(initialDon.tinh_trang, laPhieuNhanNvthh)
+    if (prefillDon?.tinh_trang != null) return normalizeTinhTrangPhieuNvthhForForm(prefillDon.tinh_trang, laPhieuNhanNvthh)
+    return normalizeTinhTrangPhieuNvthhForForm(TINH_TRANG_BG_MOI_TAO, laPhieuNhanNvthh)
   })
   const [tgNhapPickerOpen, setTgNhapPickerOpen] = useState(false)
   const [phieuChiNgayPickerOpen, setPhieuChiNgayPickerOpen] = useState(false)
@@ -1273,6 +1278,28 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     }
     return []
   })
+  const dcnhLineCount = useMemo(() => Math.max(1, splitDiaChiNhanHangLines(diaChiNhanHangJoined).length), [diaChiNhanHangJoined])
+  useEffect(() => {
+    const maxIdx = dcnhLineCount - 1
+    setLines((prev) => {
+      let changed = false
+      const next = prev.map((row) => {
+        const r = row as Record<string, string>
+        const raw = (r[BAN_HANG_COL_DCNH] ?? '0').trim()
+        const cur = parseDcnhIndexFromLineCell(raw, maxIdx)
+        if (String(cur) !== raw) {
+          changed = true
+          return { ...row, [BAN_HANG_COL_DCNH]: String(cur) } as unknown as BaoGiaGridLineRow
+        }
+        if (!(BAN_HANG_COL_DCNH in r) || (r[BAN_HANG_COL_DCNH] ?? '').trim() === '') {
+          changed = true
+          return { ...row, [BAN_HANG_COL_DCNH]: '0' } as unknown as BaoGiaGridLineRow
+        }
+        return row
+      })
+      return changed ? next : prev
+    })
+  }, [dcnhLineCount])
   const [vatTuList, setVatTuList] = useState<VatTuHangHoaRecord[]>([])
   const [dvtList, setDvtList] = useState<{ ma_dvt: string; ten_dvt: string; ky_hieu?: string }[]>([])
   const [vthhDropdownRowIndex, setVthhDropdownRowIndex] = useState<number | null>(null)
@@ -1309,8 +1336,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   const [hinhThucDropdownOpen, setHinhThucDropdownOpen] = useState(false)
   const [hinhThucDropdownRect, setHinhThucDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const refHinhThucWrap = useRef<HTMLDivElement>(null)
-  const [deleteDiaDiemModal, setDeleteDiaDiemModal] = useState<{ index: number; content: string } | null>(null)
-  const [activeDiaDiemIndex, setActiveDiaDiemIndex] = useState<number | null>(null)
   const [diaChiCongTrinh, setDiaChiCongTrinh] = useState(() => {
     const d = (initialDon ?? prefillDon) as { dia_chi_cong_trinh?: string } | null | undefined
     return d?.dia_chi_cong_trinh ?? ''
@@ -1413,10 +1438,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   }, [])
   const [showDinhKemPhieuChiModal, setShowDinhKemPhieuChiModal] = useState(false)
   const [bankSuggestList, setBankSuggestList] = useState<BankItem[]>([])
-  const [diaDiemSuggestions, setDiaDiemSuggestions] = useState<string[]>([])
-  const [diaDiemSuggestionRect, setDiaDiemSuggestionRect] = useState<{ top: number; left: number; width: number } | null>(null)
-  const diaDiemDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const refDiaDiemGiaoHangWrap = useRef<HTMLDivElement>(null)
   const refEmail = useRef<HTMLDivElement>(null)
   const refKhWrap = useRef<HTMLDivElement>(null)
   const refDinhKemBtn = useRef<HTMLButtonElement>(null)
@@ -1615,16 +1636,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     if (prefillDon) {
       if (prefillDon.khach_hang != null) setKhachHangDisplay(prefillDon.khach_hang)
       if (prefillDon.dia_chi != null) setDiaChi(prefillDon.dia_chi)
+      if (prefillDon.dia_chi_nhan_hang != null) setDiaChiNhanHangJoined(prefillDon.dia_chi_nhan_hang)
       if (prefillDon.nguoi_giao_hang != null) setNguoiGiaoHang(prefillDon.nguoi_giao_hang)
       if (prefillDon.ma_so_thue != null) setMaSoThue(prefillDon.ma_so_thue)
       if (prefillDon.dien_giai != null) setDienGiai(prefillDon.dien_giai)
       if (prefillDon.nv_ban_hang != null) setNvMuaHang(prefillDon.nv_ban_hang)
       if (prefillDon.dieu_khoan_tt != null) setDieuKhoanTT(prefillDon.dieu_khoan_tt)
       if (prefillDon.so_ngay_duoc_no != null) setSoNgayDuocNo(prefillDon.so_ngay_duoc_no)
-      if (prefillDon.dia_diem_giao_hang != null) {
-        const parts = String(prefillDon.dia_diem_giao_hang).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
-        setDiaDiemGiaoHangList(parts.length > 0 ? parts : [''])
-      }
       if (prefillDon.dieu_khoan_khac != null) setDieuKhoanKhac(prefillDon.dieu_khoan_khac)
       if (phieuNhanTuBaoGia) {
         const pd = prefillDon as BaoGiaRecord
@@ -1721,10 +1739,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
       setNvMuaHang(bg.nv_ban_hang ?? '')
       setDieuKhoanTT(bg.dieu_khoan_tt ?? '')
       setSoNgayDuocNo(bg.so_ngay_duoc_no ?? '0')
-      setDiaDiemGiaoHangList((() => {
-        const s = (bg.dia_diem_giao_hang ?? '').trim()
-        return s ? s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) : ['']
-      })())
       setDieuKhoanKhac(bg.dieu_khoan_khac ?? '')
       setNgayDonHang(parseIsoToDate(bg.ngay_bao_gia))
       setNgayGiaoHang(parseIsoToDate(bg.ngay_giao_hang ?? null))
@@ -1866,6 +1880,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     )
     setKhachHangDisplay(initialDon.khach_hang ?? '')
     setDiaChi(initialDon.dia_chi ?? '')
+    setDiaChiNhanHangJoined(initialDon.dia_chi_nhan_hang ?? '')
     setNguoiGiaoHang(initialDon.nguoi_giao_hang ?? '')
     setMaSoThue(initialDon.ma_so_thue ?? '')
     setDienGiai(initialDon.dien_giai ?? '')
@@ -1874,8 +1889,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     setSoNgayDuocNo(initialDon.so_ngay_duoc_no ?? '0')
     setHinhThucSelectedIds(deriveHinhThucSelectedIdsFromRecord(d))
     setDiaChiCongTrinh(d.dia_chi_cong_trinh ?? '')
-    const dgh = (initialDon.dia_diem_giao_hang ?? '').trim()
-    setDiaDiemGiaoHangList(dgh ? dgh.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) : [''])
     setDieuKhoanKhac(initialDon.dieu_khoan_khac ?? '')
     // [BaoGia] Bỏ setSelectedDoiChieuDonMuaId
     // setSelectedDoiChieuDonMuaId(initialDon.doi_chieu_don_mua_id ?? null)
@@ -1959,53 +1972,12 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   }, [khDropdownOpen])
 
   useLayoutEffect(() => {
-    if (activeDiaDiemIndex != null && diaDiemSuggestions.length > 0 && refDiaDiemGiaoHangWrap.current) {
-      const r = refDiaDiemGiaoHangWrap.current.getBoundingClientRect()
-      setDiaDiemSuggestionRect({ top: r.bottom, left: r.left, width: Math.max(r.width, 200) })
-    } else {
-      setDiaDiemSuggestionRect(null)
-    }
-  }, [activeDiaDiemIndex, diaDiemSuggestions.length])
-
-  useLayoutEffect(() => {
     if (!scrollChiTietSauThemDongRef.current) return
     scrollChiTietSauThemDongRef.current = false
     const el = refChiTietGridScroll.current
     if (!el) return
     el.scrollTop = el.scrollHeight
   }, [lines])
-
-  useEffect(() => {
-    if (activeDiaDiemIndex == null) return
-    const onMouseDown = (e: MouseEvent) => {
-      if (refDiaDiemGiaoHangWrap.current?.contains(e.target as Node)) return
-      if ((e.target as HTMLElement).closest('[data-dia-diem-gh-dropdown]')) return
-      setActiveDiaDiemIndex(null)
-      setDiaDiemSuggestions([])
-    }
-    window.addEventListener('mousedown', onMouseDown)
-    return () => window.removeEventListener('mousedown', onMouseDown)
-  }, [activeDiaDiemIndex])
-
-  /** Đồng bộ Địa điểm GH từ hình thức (địa chỉ công trình theo thứ tự slot). */
-  useEffect(() => {
-    if (effectiveReadOnly) return
-    const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-    const addrs: string[] = []
-    for (const _ of order) {
-      addrs.push(diaChiCongTrinh ?? '')
-    }
-    if (addrs.length > 0) {
-      setDiaDiemGiaoHangList((prev) => {
-        const merged = [...addrs]
-        for (let i = addrs.length; i < prev.length; i++) {
-          const t = (prev[i] ?? '').trim()
-          if (t) merged.push(prev[i] ?? '')
-        }
-        return merged.length > 0 ? merged : ['']
-      })
-    }
-  }, [effectiveReadOnly, hinhThucSelectedIds, diaChiCongTrinh, hinhThucList])
 
   useEffect(() => {
     let cancelled = false
@@ -2043,39 +2015,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     return () => document.removeEventListener('click', h)
   }, [])
 
-  const handleDiaDiemAddressChange = useCallback((index: number, value: string) => {
-    setDiaDiemGiaoHangList((prev) => {
-      const n = [...prev]
-      n[index] = value
-      return n
-    })
-    const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-    if (order[index]?.type === 'dia_chi_dd') setDiaChiCongTrinh(value)
-    setActiveDiaDiemIndex(index)
-    if (diaDiemDebounceRef.current) clearTimeout(diaDiemDebounceRef.current)
-    if (!value.trim()) {
-      setDiaDiemSuggestions([])
-      return
-    }
-    diaDiemDebounceRef.current = setTimeout(() => {
-      diaDiemDebounceRef.current = null
-      suggestAddressVietnam(value)
-        .then((list) => setDiaDiemSuggestions(list.slice(0, 5)))
-        .catch(() => setDiaDiemSuggestions([]))
-    }, 300)
-  }, [hinhThucSelectedIds, hinhThucList])
-
-  const handleSelectDiaDiemSuggestion = useCallback((addr: string, index: number) => {
-    setDiaDiemGiaoHangList((prev) => {
-      const n = [...prev]
-      n[index] = addr
-      return n
-    })
-    const order = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-    if (order[index]?.type === 'dia_chi_dd') setDiaChiCongTrinh(addr)
-    setDiaDiemSuggestions([])
-  }, [hinhThucSelectedIds, hinhThucList])
-
   const handleChonKh = (kh: KhachHangRecord) => {
     setKhachHangId(kh.id)
     setKhachHangMa((kh.ma_kh ?? '').trim())
@@ -2096,17 +2035,22 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     setDieuKhoanTT(kh.dieu_khoan_tt || '')
     const dktt = danhSachDKTT.find((d) => d.ma === kh.dieu_khoan_tt || d.ten === kh.dieu_khoan_tt)
     if (dktt) setSoNgayDuocNo(String(dktt.so_ngay_duoc_no))
-    const ddh = kh.dia_diem_giao_hang
-    const khDiaChi = Array.isArray(ddh) && ddh.length > 0 ? ddh[0] : (typeof ddh === 'string' ? ddh : '') || ''
-    const defaultAddr = '105 Đường số 02, Khu CBGV ĐHCT, P. Tân An, TP. Cần Thơ'
-    const first = khDiaChi || defaultAddr
-    setDiaDiemGiaoHangList((prev) => (prev.length === 1 && !prev[0] ? [first] : [first, ...prev.slice(1)]))
     if (phieuNhanTuBaoGia && chungTuMuaPttt === 'chuyen_khoan') {
       const v = getPhieuChiNhanFieldsTuKh(kh)
       setPhieuChiTaiKhoanNhan(v.stk)
       setPhieuChiNganHangNhan(v.nganHang)
       setPhieuChiTenChuTkNhan(v.tenChuTk)
     }
+    const ddh = kh.dia_diem_giao_hang
+    const firstDd =
+      Array.isArray(ddh) && ddh.length > 0 ? String(ddh[0] ?? '') : typeof ddh === 'string' ? ddh : ''
+    setDiaChiNhanHangJoined((prev) => {
+      const arr = splitDiaChiNhanHangLines(prev)
+      if (arr.length === 1 && !(arr[0] ?? '').trim()) return firstDd
+      const next = [...arr]
+      next[0] = firstDd
+      return next.join('\n')
+    })
   }
 
   /** Nạp draft chỉ khi form thêm mới (không có initialDon), không ở chế độ xem. */
@@ -2217,34 +2161,11 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     const opts = buildDvtOptionsForVthh(vthh)
     if (opts) row._dvtOptions = opts
     else delete row._dvtOptions
-    if ((row[COL_DD_GH] ?? '').trim() === '') row[COL_DD_GH] = '0'
     next[rowIndex] = row
     setLines(next)
     setVthhDropdownRowIndex(null)
     setVthhDropdownRect(null)
   }
-
-  /** Địa điểm GH 1: sync từ useEffect theo hình thức (kho.dia_chi, diaChiCongTrinh). */
-  const effectiveDiaDiemFirst = diaDiemGiaoHangList[0] ?? ''
-
-  useEffect(() => {
-    const opts = getDiaDiemGhOptions(diaDiemGiaoHangList, effectiveDiaDiemFirst)
-    const allowed = new Set(opts.map((o) => o.idx))
-    setLines((prev) => {
-      let changed = false
-      const next = prev.map((line) => {
-        if ((line['Mã'] ?? '').trim() === '') return line
-        const raw = (line[COL_DD_GH] ?? '').trim()
-        const n = parseInt(raw, 10)
-        if (raw === '' || !Number.isFinite(n) || !allowed.has(n)) {
-          changed = true
-          return { ...line, [COL_DD_GH]: String(opts[0]?.idx ?? 0) } as unknown as BaoGiaGridLineRow
-        }
-        return line
-      })
-      return changed ? next : prev
-    })
-  }, [diaDiemGiaoHangList, effectiveDiaDiemFirst])
 
   const buildPayload = (): BaoGiaCreatePayload => {
     const coBang =
@@ -2258,6 +2179,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     const laCaNhan = loaiKhDer === 'ca_nhan'
     const isCodongia = initialDon != null || mauHienTai === 'codongia'
     let giaTriDonHang = 0
+    const maxDcnhIdx = Math.max(0, splitDiaChiNhanHangLines(diaChiNhanHangJoined).length - 1)
     const chiTiet = lines
       .filter((line) => (line['Mã'] ?? '').trim() !== '')
       .map((line) => {
@@ -2267,9 +2189,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
         const pt = isCodongia && apVat ? parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '') : null
         const tienThueLine = pt != null ? (thanhTien * pt) / 100 : 0
         giaTriDonHang += thanhTien + (apVat ? tienThueLine : 0)
-        const ddRaw = (line[COL_DD_GH] ?? '').trim()
-        let ddIdx = parseInt(ddRaw, 10)
-        if (!Number.isFinite(ddIdx) || ddIdx < 0) ddIdx = 0
         const chieu_dai = parseFloatVN(line['mD'] ?? '') || 0
         const chieu_rong = parseFloatVN(line['mR'] ?? '') || 0
         const luongKt = Math.max(0, parseFloatVN(line['Lượng'] ?? '1') || 1)
@@ -2283,14 +2202,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
           thanh_tien: thanhTien,
           pt_thue_gtgt: pt,
           tien_thue_gtgt: pt != null ? tienThueLine : null,
-          dd_gh_index: ddIdx,
           chieu_dai,
           chieu_rong,
           luong: luongKt,
+          dcnh_index: parseDcnhIndexFromLineCell((line as Record<string, string>)[BAN_HANG_COL_DCNH], maxDcnhIdx),
           ...(isCodongia ? { ghi_chu: (line['Ghi chú'] ?? '').trim() } : {}),
         }
       })
-    const diaDiemGiaoHangFull = [effectiveDiaDiemFirst.trim(), ...diaDiemGiaoHangList.slice(1).map((x) => x.trim()).filter(Boolean)].filter(Boolean).join('\n') || effectiveDiaDiemFirst.trim()
     const ngayGiaoHangPayload =
       phieuNhanTuBaoGia ? ngayGiaoHang ?? ngayDonHang : ngayGiaoHang
     const ngayGiaoHangIso =
@@ -2312,13 +2230,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
       ngay_giao_hang: ngayGiaoHangIso,
       khach_hang: khachHangDisplay.trim(),
       dia_chi: diaChi.trim(),
+      dia_chi_nhan_hang: diaChiNhanHangJoined.trim() ? diaChiNhanHangJoined : undefined,
       ...(laPhieuNhanNvthh ? { nguoi_giao_hang: nguoiGiaoHang.trim() } : {}),
       ma_so_thue: laCaNhan ? '' : maSoThue.trim(),
       dien_giai: dienGiai.trim(),
       nv_ban_hang: nvMuaHang.trim(),
       dieu_khoan_tt: dieuKhoanTT.trim(),
       so_ngay_duoc_no: soNgayDuocNo.trim() || '0',
-      dia_diem_giao_hang: diaDiemGiaoHangFull,
       dieu_khoan_khac: dieuKhoanKhac.trim(),
       tong_tien_hang: tongTienHang,
       tong_thue_gtgt: tienThue,
@@ -2578,7 +2496,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   const hinhThucLocked = effectiveReadOnly
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg-primary)' }}>
+    <div className={bgDetailStyles.htqlBanHangChungTuFormShell} style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg-primary)' }}>
       <div style={titleBarWrap}>
         <div
           onMouseDown={onHeaderPointerDown}
@@ -2626,7 +2544,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
             <button
               ref={refDinhKemBtn}
               type="button"
-              style={toolbarBtn}
+              style={toolbarBtnDinhKemThietKe}
               title={dktkPendingUploadRows.length > 0 ? 'Đang đọc file đính kèm vào bộ nhớ…' : 'Đính kèm thiết kế (dktk)'}
               onClick={() => {
                 setShowDinhKemModal((o) => {
@@ -2637,11 +2555,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
               }}
             >
               {dktkPendingUploadRows.length > 0 ? (
-                <Loader2 size={14} className="htql-spin" aria-hidden />
+                <Loader2 size={16} className="htql-spin" aria-hidden />
               ) : (
-                <Paperclip size={14} aria-hidden />
+                <Paperclip size={16} aria-hidden />
               )}
-              Đính kèm thiết kế
+              <span style={{ fontSize: 10, lineHeight: 1.25, textAlign: 'center', fontWeight: 400 }}>
+                Đính kèm file thiết kế
+              </span>
             </button>
             {attachments.length > 0 && (
               <span style={toolbarDinhKemBadge} aria-label={`${attachments.length} file đính kèm`}>
@@ -2747,32 +2667,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
           {loi}
         </div>
       )}
-
-      <Modal
-        open={deleteDiaDiemModal != null}
-        onClose={() => setDeleteDiaDiemModal(null)}
-        title="Xác nhận xóa địa điểm giao hàng"
-        size="sm"
-        footer={
-          <>
-            <button type="button" style={toolbarBtn} onClick={() => setDeleteDiaDiemModal(null)}>Hủy</button>
-            <button type="button" style={{ ...toolbarBtn, background: 'var(--accent)', color: 'var(--accent-text)', borderColor: 'var(--accent)' }} onClick={() => {
-              const m = deleteDiaDiemModal
-              if (!m) return
-              if (m.index === 0) setDiaDiemGiaoHangList([''])
-              else setDiaDiemGiaoHangList((prev) => prev.length > 1 ? prev.filter((_, j) => j !== m.index) : [''])
-              setDeleteDiaDiemModal(null)
-            }}>Đồng ý</button>
-          </>
-        }
-      >
-        {deleteDiaDiemModal && (
-          <>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>Bạn có chắc chắn xóa địa chỉ giao hàng?</p>
-            <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-word' }}>{deleteDiaDiemModal.content}</p>
-          </>
-        )}
-      </Modal>
 
       <Modal
         open={deleteRowIndex !== null}
@@ -3462,6 +3356,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
               </div>
             )}
             {(!phieuNhanTuBaoGia || chungTuMuaCachThanhToan === 'chua_thanh_toan') && (
+            <>
             <div style={{ ...fieldRowDyn, flexWrap: 'wrap', gap: 8, width: '100%', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 200px', minWidth: 0 }}>
                 <label style={labelStyle}>ĐKTT</label>
@@ -3499,85 +3394,19 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                 />
               </div>
             </div>
-            )}
-            <div style={fieldRowDyn}>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {(() => {
-                  const diaDiemSlotOrder = buildHinhThucDiaDiemOrder(hinhThucSelectedIds, hinhThucList)
-                  return diaDiemGiaoHangList.map((addr, i) => {
-                    const slotType = diaDiemSlotOrder[i]?.type
-                    const placeholder =
-                      slotType === 'dia_chi_dd'
-                        ? `Địa chỉ (ĐNH ${i + 1})`
-                        : i === 0
-                          ? 'Nhập địa chỉ (gợi ý VN)'
-                          : `Địa điểm NH ${i + 1}`
-                    return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
-                    <label style={{ ...labelStyle, minWidth: 90, paddingTop: phieuNhanTuBaoGia ? 2 : 4 }}>Địa điểm NH {i + 1}</label>
-                    <div
-                      ref={i === activeDiaDiemIndex ? refDiaDiemGiaoHangWrap : undefined}
-                      style={{ position: 'relative', flex: 1, minWidth: 0 }}
-                    >
-                      <div className="htql-address-wrap" style={{ width: '100%' }}>
-                        <input
-                          style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', paddingRight: 8 }}
-                          value={i === 0 ? effectiveDiaDiemFirst : (addr ?? '')}
-                          onChange={(e) => handleDiaDiemAddressChange(i, e.target.value)}
-                          onFocus={() => {
-                            setActiveDiaDiemIndex(i)
-                            const v = (i === 0 ? effectiveDiaDiemFirst : (addr ?? '')).trim()
-                            if (v && diaDiemDebounceRef.current) clearTimeout(diaDiemDebounceRef.current)
-                            if (v) {
-                              suggestAddressVietnam(v).then((list) => setDiaDiemSuggestions(list.slice(0, 5))).catch(() => setDiaDiemSuggestions([]))
-                            }
-                          }}
-                          onBlur={() => { setTimeout(() => { setActiveDiaDiemIndex(null); setDiaDiemSuggestions([]) }, 200) }}
-                          readOnly={effectiveReadOnly}
-                          disabled={effectiveReadOnly}
-                          placeholder={placeholder}
-                        />
-                      </div>
-                    </div>
-                    {!effectiveReadOnly && i > 0 && (
-                      <button
-                        type="button"
-                        title="Xóa địa điểm"
-                        onClick={() => {
-                          const val = addr ?? ''
-                          if (val.trim()) {
-                            setDeleteDiaDiemModal({ index: i, content: val.trim() })
-                          } else {
-                            setDiaDiemGiaoHangList((prev) => prev.length > 1 ? prev.filter((_, j) => j !== i) : [''])
-                          }
-                        }}
-                        style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, padding: 0, background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', color: 'var(--text-muted)' }}
-                        aria-label="Xóa"
-                      ><Trash2 size={12} /></button>
-                    )}
-                  </div>
-                    )
-                  })
-                })()}
-                {!effectiveReadOnly && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const lastVal = diaDiemGiaoHangList[diaDiemGiaoHangList.length - 1]?.trim()
-                      if (!lastVal) {
-                        toastApi?.showToast('Vui lòng nhập địa chỉ giao hàng dòng trên trước khi thêm địa điểm mới.', 'info')
-                        return
-                      }
-                      setDiaDiemGiaoHangList((prev) => [...prev, ''])
-                    }}
-                    style={{ alignSelf: 'flex-start', marginLeft: 98, marginTop: phieuNhanTuBaoGia ? 0 : undefined, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', fontSize: 10, background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                  >
-                    <Plus size={12} /> Địa điểm NH
-                  </button>
-                )}
-              </div>
+            <div style={{ ...fieldRowDyn, alignItems: 'flex-start', width: '100%', minWidth: 0 }}>
+              <BanHangDcnhAddressFields
+                valueJoined={diaChiNhanHangJoined}
+                onChangeJoined={setDiaChiNhanHangJoined}
+                readOnly={effectiveReadOnly}
+                labelMinWidth={90}
+                inputStyle={inputStyle}
+                showToastInfo={(msg) => toastApi?.showToast(msg, 'info')}
+              />
             </div>
             </>
+            )}
+              </>
             )
             return phieuNhanTuBaoGia ? (
               <div style={{ flex: '1 1 320px', minWidth: 280, display: 'flex', flexDirection: 'column', alignSelf: 'stretch', marginBottom: 0, minHeight: 0 }}>
@@ -4160,18 +3989,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                     />
                   </div>
                 </div>
-                <div style={fieldRowDyn}>
-                  <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
-                  <div style={nvthhChungTuValueCellWrap}>
-                    <input
-                      className="misa-input-solo"
-                      style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
-                      value={tinhTrang}
-                      readOnly
-                      tabIndex={-1}
-                    />
-                  </div>
-                </div>
               </>
             ) : (
               <>
@@ -4207,18 +4024,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                         ngayDonHang={ngayDonHang}
                         readOnly={effectiveReadOnly}
                       />
-                      <div style={fieldRowDyn}>
-                        <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
-                        <div style={nvthhChungTuValueCellWrap}>
-                          <input
-                            className="misa-input-solo"
-                            style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
-                            value={tinhTrang}
-                            readOnly
-                            tabIndex={-1}
-                          />
-                        </div>
-                      </div>
                     </>
                   ) : (
                     <>
@@ -4274,18 +4079,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                         ngayDonHang={ngayDonHang}
                         readOnly={effectiveReadOnly}
                       />
-                      <div style={fieldRowDyn}>
-                        <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
-                        <div style={nvthhChungTuValueCellWrap}>
-                          <input
-                            className="misa-input-solo"
-                            style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
-                            value={tinhTrang}
-                            readOnly
-                            tabIndex={-1}
-                          />
-                        </div>
-                      </div>
                     </>
                   )
                 ) : (
@@ -4317,18 +4110,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                       <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>{soDonLabel}</label>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <input style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', cursor: 'default', textAlign: 'right' }} value={soDonHang} readOnly disabled tabIndex={-1} />
-                      </div>
-                    </div>
-                    <div style={fieldRowDyn}>
-                      <label style={{ ...labelStyle, minWidth: LABEL_DON_HANG_BOX }}>Tình trạng</label>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <input
-                          className="misa-input-solo"
-                          style={{ ...inputStyle, width: '100%', paddingRight: 6, boxSizing: 'border-box', textAlign: 'right', cursor: 'default' }}
-                          value={tinhTrang}
-                          readOnly
-                          tabIndex={-1}
-                        />
                       </div>
                     </div>
                     <div style={fieldRowDyn}>
@@ -4367,7 +4148,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                             placeholderText="dd/mm/yyyy"
                             className="htql-datepicker-don-hang-box-full htql-datepicker-nvthh-band"
                             calendarClassName="htql-datepicker-ngay htql-datepicker-calendar"
-                            customInput={<DatePickerReadOnlyTriggerInput ref={refTgNhanBGInput} />}
+                            customInput={<DatePickerReadOnlyTriggerInput ref={refTgNhanBGInput} readOnly={false} style={{ background: '#fff' }} />}
                             renderCustomHeader={(p) => <DatePickerCustomHeader {...p} />}
                             disabled={effectiveReadOnly}
                           />
@@ -4623,15 +4404,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                         ? formatDonHangLineTienThueDisplay(line)
                                         : col === 'Tổng tiền'
                                           ? formatDonHangLineTongTienDisplay(line)
-                                          : col === COL_DD_GH
-                                            ? (() => {
-                                                const opts = getDiaDiemGhOptions(diaDiemGiaoHangList, effectiveDiaDiemFirst)
-                                                const raw = (line[COL_DD_GH] ?? '').trim()
-                                                const n = parseInt(raw, 10)
-                                                const hit = Number.isFinite(n) ? opts.find((o) => o.idx === n) : undefined
-                                                return hit?.label ?? (Number.isFinite(n) ? `ĐĐGH ${n + 1}` : opts[0]?.label ?? 'ĐĐGH 1')
-                                              })()
-                                            : (line[col] ?? '')
+                                          : (line[col] ?? '')
                                 }
                               />
                             ) : col === 'Mã' ? (
@@ -4913,6 +4686,24 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Thành tiền'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
                                 value={formatDonHangLineThanhTienDisplay(line)}
                               />
+                            ) : col === BAN_HANG_COL_DCNH ? (
+                              <select
+                                className="misa-input-solo"
+                                style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: chiTietReadOnly || chiTietGridLocked ? 'default' : 'pointer' }}
+                                value={(line as Record<string, string>)[BAN_HANG_COL_DCNH] ?? '0'}
+                                onChange={(e) => {
+                                  const r = [...lines]
+                                  r[idx] = { ...r[idx], [BAN_HANG_COL_DCNH]: e.target.value } as unknown as BaoGiaGridLineRow
+                                  setLines(r)
+                                }}
+                                disabled={chiTietReadOnly || chiTietGridLocked}
+                              >
+                                {dcnhOptionDescriptors(dcnhLineCount).map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
                             ) : col === 'Tiền thuế GTGT' ? (
                               <input
                                 readOnly
@@ -4929,42 +4720,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Tổng tiền'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
                                 value={formatDonHangLineTongTienDisplay(line)}
                               />
-                            ) : col === COL_DD_GH ? (
-                              chiTietReadOnly ? (
-                                <input
-                                  readOnly
-                                  tabIndex={-1}
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                  value={(() => {
-                                    const opts = getDiaDiemGhOptions(diaDiemGiaoHangList, effectiveDiaDiemFirst)
-                                    const raw = (line[COL_DD_GH] ?? '').trim()
-                                    const n = parseInt(raw, 10)
-                                    const hit = Number.isFinite(n) ? opts.find((o) => o.idx === n) : undefined
-                                    return hit?.label ?? (Number.isFinite(n) ? `ĐĐGH ${n + 1}` : opts[0]?.label ?? 'ĐĐGH 1')
-                                  })()}
-                                />
-                              ) : (
-                                <select
-                                  className="misa-input-solo"
-                                  style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: 'pointer' }}
-                                  value={(() => {
-                                    const opts = getDiaDiemGhOptions(diaDiemGiaoHangList, effectiveDiaDiemFirst)
-                                    const cur = (line[COL_DD_GH] ?? '').trim()
-                                    if (cur !== '' && opts.some((o) => String(o.idx) === cur)) return cur
-                                    return String(opts[0]?.idx ?? 0)
-                                  })()}
-                                  onChange={(e) => {
-                                    const r = [...lines]
-                                    r[idx] = { ...r[idx], [COL_DD_GH]: e.target.value } as unknown as BaoGiaGridLineRow
-                                    setLines(r)
-                                  }}
-                                >
-                                  {getDiaDiemGhOptions(diaDiemGiaoHangList, effectiveDiaDiemFirst).map((o) => (
-                                    <option key={o.idx} value={String(o.idx)}>{o.label}</option>
-                                  ))}
-                                </select>
-                              )
                             ) : col === '% thuế GTGT' ? (
                               <select
                                 className="misa-input-solo"
@@ -5367,46 +5122,6 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
               })()}
             </tbody>
           </table>
-        </div>,
-        document.body
-      )}
-
-      {activeDiaDiemIndex != null && diaDiemSuggestionRect && diaDiemSuggestions.length > 0 && ReactDOM.createPortal(
-        <div
-          data-dia-diem-gh-dropdown
-          style={{
-            position: 'fixed',
-            top: diaDiemSuggestionRect.top,
-            left: diaDiemSuggestionRect.left,
-            width: diaDiemSuggestionRect.width,
-            maxHeight: 220,
-            overflowY: 'auto',
-            background: 'var(--bg-primary)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 6,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-            zIndex: 4000,
-          }}
-        >
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }} role="listbox">
-            {diaDiemSuggestions.map((a, idx) => (
-              <li
-                key={idx}
-                role="option"
-                style={{
-                  padding: '10px 12px',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  color: 'var(--text-primary)',
-                  borderBottom: '1px solid var(--border)',
-                }}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelectDiaDiemSuggestion(a, activeDiaDiemIndex)}
-              >
-                {a}
-              </li>
-            ))}
-          </ul>
         </div>,
         document.body
       )}

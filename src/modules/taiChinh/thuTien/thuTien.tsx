@@ -13,7 +13,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { DataGrid, type DataGridColumn } from '../../../components/common/dataGrid'
 import { useToastOptional } from '../../../context/toastContext'
 import { matchSearchKeyword } from '../../../utils/stringUtils'
-import { formatNumberDisplay, formatSoThapPhan } from '../../../utils/numberFormat'
+import { formatNumberDisplay, parseFloatVN } from '../../../utils/numberFormat'
 import { htqlDatePickerPopperTop } from '../../../constants/datePickerPlacement'
 import { DatePickerCustomHeader } from '../../../components/datePickerCustomHeader'
 
@@ -36,17 +36,39 @@ import {
   HTQL_THU_TIEN_BANG_RELOAD_EVENT,
   thuTienBangApiImpl,
 } from './thuTienBangApi'
-import { donViTinhGetAll } from '../../kho/khoHang/donViTinhApi'
-import { dvtHienThiLabel, type DvtListItem } from '../../../utils/dvtHienThiLabel'
 import { ConfirmXoaCaptchaModal } from '../../../components/common/confirmXoaCaptchaModal'
 import { useDraggable } from '../../../hooks/useDraggable'
 import { ThuTienBangApiProvider } from './thuTienBangApiContext'
 import { ThuTienForm } from './thuTienForm'
-import { donHangBanHoanTacKhiXoaThuTien } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
 import styles from './banHangDetailMirror.module.css'
 import { daGhiSoPhieuThu, ghiSoTuPhieuThu, huyGhiSoPhieuThu } from './ghiSoTaiChinhApi'
+import { donHangBanKhiPhieuThuGhiSo, donHangBanKhiPhieuThuHuyGhiSo } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
+import { hopDongBanKhiPhieuThuGhiSo, hopDongBanKhiPhieuThuHuyGhiSo } from '../../crm/banHang/hopDongBan/hopDongBanChungTuApi'
+import { phuLucHopDongBanKhiPhieuThuGhiSo, phuLucHopDongBanKhiPhieuThuHuyGhiSo } from '../../crm/banHang/phuLucHopDongBan/phuLucHopDongBanChungTuApi'
 
 registerLocale('vi', vi)
+
+const PHIEU_CT_ROW_PREFIX = '__PT_ROW__:'
+
+function parsePhieuThuJsonNoiDung(noi_dung: string | undefined): {
+  so_phai_thu?: string
+  so_chua_thu?: string
+  thu_lan_nay?: string
+  noi_dung_thu?: string
+} | null {
+  const raw = (noi_dung ?? '').trim()
+  if (!raw.startsWith(PHIEU_CT_ROW_PREFIX)) return null
+  try {
+    return JSON.parse(raw.slice(PHIEU_CT_ROW_PREFIX.length)) as {
+      so_phai_thu?: string
+      so_chua_thu?: string
+      thu_lan_nay?: string
+      noi_dung_thu?: string
+    }
+  } catch {
+    return null
+  }
+}
 
 /** Tự chèn "/" thành dd/mm/yyyy khi gõ (đồng bộ Đơn hàng mua — YC34). */
 function formatDdMmYyyyInput(raw: string): string {
@@ -175,17 +197,7 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
   const dropdownGuiRef = useRef<HTMLDivElement>(null)
   const hoverGuiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [page, setPage] = useState(1)
-  const [dvtList, setDvtList] = useState<DvtListItem[]>([])
   const thuTienFormDrag = useDraggable()
-
-  useEffect(() => {
-    let c = false
-    donViTinhGetAll().then((list) => {
-      if (c || !Array.isArray(list)) return
-      setDvtList(list)
-    })
-    return () => { c = true }
-  }, [])
 
   const loadData = useCallback(() => {
     setDanhSach(thuTienBangGetAll(filter))
@@ -235,82 +247,100 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
   const tongTien   = useMemo(() => filtered.reduce((s, r) => s + r.tong_thanh_toan, 0), [filtered])
   const selectedRow = useMemo(() => selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null, [selectedId, danhSach])
 
-  const chiTietHienThiCoVat = selectedRow == null || selectedRow.ap_dung_vat_gtgt !== false
-
   const columnsChiTiet = useMemo((): DataGridColumn<ThuTienBangChiTiet>[] => {
-    const coBan: DataGridColumn<ThuTienBangChiTiet>[] = [
-      { key: 'stt', label: 'STT', width: 36, align: 'center', renderCell: (_v, _r, idx) => String((idx ?? 0) + 1) },
-      { key: 'ma_hang', label: 'Mã SPHH', width: 88 },
-      { key: 'ten_hang', label: 'Tên Sản phẩm, Hàng hóa', width: 180 },
-      { key: 'noi_dung', label: 'Nội dung', width: 140, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
-      { key: 'dvt', label: 'ĐVT', width: 72, renderCell: (v) => dvtHienThiLabel(v as string, dvtList) },
-      { key: 'so_luong', label: 'Số lượng', width: 70, align: 'right',
-        renderCell: (v) => formatNumberDisplay(Number(v), 2) },
-      { key: 'don_gia', label: 'Đơn giá', width: 100, align: 'right',
-        renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-      { key: 'thanh_tien', label: 'Thành tiền', width: 100, align: 'right',
-        renderCell: (v) => formatNumberDisplay(Math.round(Number(v)), 0) },
-    ]
-    const cotThue: DataGridColumn<ThuTienBangChiTiet>[] = chiTietHienThiCoVat
-      ? [
-          { key: 'pt_thue_gtgt', label: '% Thuế GTGT', width: 70, align: 'right',
-            renderCell: (v) => v != null ? formatNumberDisplay(Number(v), 0) : '' },
-          { key: 'tien_thue_gtgt', label: 'Tiền thuế GTGT', width: 100, align: 'right',
-            renderCell: (v) => v != null ? formatNumberDisplay(Math.round(Number(v)), 0) : '' },
-        ]
-      : []
-    const cotTong: DataGridColumn<ThuTienBangChiTiet> = {
-      key: 'tong_tien',
-      label: 'Tổng tiền',
-      width: 100,
-      align: 'right',
-      renderCell: (_v, row) => {
-        const thue = chiTietHienThiCoVat ? (Number(row.tien_thue_gtgt) || 0) : 0
-        const tong = Math.round((Number(row.thanh_tien) || 0) + thue)
-        return <span style={{ fontWeight: 600, color: '#1e40af' }}>{formatNumberDisplay(tong, 0)}</span>
+    const maPhieu = selectedRow?.so_thu_tien_bang ?? ''
+    const ngayThuStr = formatNgay(selectedRow?.ngay_thu_tien_bang)
+    return [
+      {
+        key: 'stt',
+        label: 'STT',
+        width: 36,
+        align: 'center',
+        renderCell: (_v, _r, idx) => String((idx ?? 0) + 1),
       },
-    }
-    return [...coBan, ...cotThue, cotTong, { key: 'ghi_chu', label: 'Ghi chú', width: 140 }]
-  }, [dvtList, chiTietHienThiCoVat])
+      {
+        key: 'ma_phieu',
+        label: 'Mã phiếu thu',
+        width: 84,
+        align: 'right',
+        renderCell: () => maPhieu,
+      },
+      {
+        key: 'ngay_thu',
+        label: 'Ngày thu',
+        width: 78,
+        align: 'right',
+        renderCell: () => ngayThuStr,
+      },
+      {
+        key: 'noi_dung_thu',
+        label: 'Nội dung thu',
+        width: 220,
+        align: 'left',
+        renderCell: (_v, row) => {
+          const headerNd = (selectedRow?.dien_giai ?? '').trim()
+          if (headerNd) return headerNd
+          const j = parsePhieuThuJsonNoiDung(row.noi_dung)
+          const nd = (j?.noi_dung_thu ?? '').trim()
+          if (nd) return nd
+          return (row.ten_hang ?? '').trim() || ''
+        },
+      },
+      {
+        key: 'so_phai_thu',
+        label: 'Số phải thu',
+        width: 104,
+        align: 'right',
+        renderCell: (_v, row) => {
+          const j = parsePhieuThuJsonNoiDung(row.noi_dung)
+          if (j?.so_phai_thu != null && String(j.so_phai_thu).trim()) return String(j.so_phai_thu)
+          return formatNumberDisplay(Math.round(Number(row.thanh_tien) || 0), 0)
+        },
+      },
+      {
+        key: 'so_chua_thu',
+        label: 'Số chưa thu',
+        width: 104,
+        align: 'right',
+        renderCell: (_v, row) => {
+          const j = parsePhieuThuJsonNoiDung(row.noi_dung)
+          if (j?.so_chua_thu != null && String(j.so_chua_thu).trim()) return String(j.so_chua_thu)
+          return '—'
+        },
+      },
+      {
+        key: 'thu_lan_nay',
+        label: 'Thu lần này',
+        width: 104,
+        align: 'right',
+        renderCell: (_v, row) => {
+          const j = parsePhieuThuJsonNoiDung(row.noi_dung)
+          if (j?.thu_lan_nay != null && String(j.thu_lan_nay).trim()) return String(j.thu_lan_nay)
+          return formatNumberDisplay(Math.round(Number(row.don_gia) || 0), 0)
+        },
+      },
+      {
+        key: 'con_lai',
+        label: 'Còn lại',
+        width: 104,
+        align: 'right',
+        renderCell: (_v, row) => {
+          const j = parsePhieuThuJsonNoiDung(row.noi_dung)
+          if (j) {
+            const chua = parseFloatVN(j.so_chua_thu ?? '0')
+            const thu = parseFloatVN(j.thu_lan_nay ?? '0')
+            return formatNumberDisplay(Math.max(0, Math.round(chua - thu)), 0)
+          }
+          return '—'
+        },
+      },
+    ]
+  }, [selectedRow])
 
-  const chiTietFooterDong = useMemo(() => {
+  const chiTietFooterTong = useMemo(() => {
     if (!selectedRow) return null
-    const maSet = new Set<string>()
-    for (const c of chiTiet) {
-      const m = (c.ma_hang ?? '').trim()
-      if (m) maSet.add(m)
-    }
-    const mapDvt = new Map<string, number>()
-    for (const c of chiTiet) {
-      const m = (c.ma_hang ?? '').trim()
-      if (!m) continue
-      const sl = Number(c.so_luong) || 0
-      if (sl <= 0) continue
-      const lab = dvtHienThiLabel(c.dvt, dvtList)
-      mapDvt.set(lab, (mapDvt.get(lab) ?? 0) + sl)
-    }
-    const tongSlTxt = mapDvt.size === 0
-      ? '—'
-      : Array.from(mapDvt.entries())
-        .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
-        .map(([k, v]) => `${formatSoThapPhan(v, 2)} ${k}`)
-        .join(', ')
-    const coVat = selectedRow.ap_dung_vat_gtgt !== false
-    const tlCk = selectedRow.tl_ck != null && Number.isFinite(Number(selectedRow.tl_ck))
-      ? formatSoThapPhan(Number(selectedRow.tl_ck), 3)
-      : '0'
-    const tienCk = formatNumberDisplay(Math.round(Number(selectedRow.tien_ck) || 0), 0)
-    return {
-      chungLoaiVt: maSet.size,
-      tongSoLuongText: tongSlTxt,
-      tongTienHang: formatNumberDisplay(selectedRow.tong_tien_hang ?? 0, 0),
-      tlCk,
-      tienCk,
-      tienThue: formatNumberDisplay(Math.round(selectedRow.tong_thue_gtgt ?? 0), 0),
-      tongThanhToan: formatNumberDisplay(Math.round(selectedRow.tong_thanh_toan ?? 0), 0),
-      coVat,
-    }
-  }, [selectedRow, chiTiet, dvtList])
+    return formatNumberDisplay(Math.round(selectedRow.tong_thanh_toan ?? 0), 0)
+  }, [selectedRow])
 
   const moFormThem = () => {
     clearThuTienBangDraft()
@@ -339,15 +369,20 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
       {
         key: 'tong_thanh_toan',
         label: 'Tổng tiền',
-        width: 110,
+        width: 92,
         align: 'right',
         renderCell: (v) => formatNumberDisplay(Number(v), 0),
       },
       {
         key: 'tinh_trang',
         label: 'Trạng thái',
-        width: 130,
-        renderCell: (v) => <ThuTienBangBadge value={String(v)} />,
+        width: 82,
+        renderCell: (_v, row) =>
+          daGhiSoPhieuThu((row as ThuTienBangRecord).id) ? (
+            <span className={styles.badgeDaChot}>Ghi sổ</span>
+          ) : (
+            <ThuTienBangBadge value={String((row as ThuTienBangRecord).tinh_trang)} />
+          ),
       },
       {
         key: 'dien_giai',
@@ -385,7 +420,6 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
   }, [])
 
   const xacNhanXoa = (row: ThuTienBangRecord) => {
-    donHangBanHoanTacKhiXoaThuTien(row.id)
     huyGhiSoPhieuThu(row.id)
     thuTienBangDelete(row.id)
     loadData()
@@ -401,7 +435,8 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
         <button type="button" className={styles.toolbarBtn} onClick={moFormThem}>
           <Plus size={13} /><span>Thêm</span>
         </button>
-        <button type="button" className={styles.toolbarBtnDanger} disabled={!selectedId}
+        <button type="button" className={styles.toolbarBtnDanger}
+          disabled={!selectedId || (selectedRow != null && daGhiSoPhieuThu(selectedRow.id))}
           onClick={() => selectedRow && setXoaModalRow(selectedRow)}>
           <Trash2 size={13} /><span>Xóa</span>
         </button>
@@ -575,7 +610,7 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
 
         <div className={styles.detailWrap}>
           <div className={styles.detailTabBar}>
-            <button type="button" className={styles.detailTabActive}>Chi tiết SPHH</button>
+            <button type="button" className={styles.detailTabActive}>Chi tiết phiếu thu</button>
           </div>
           <div className={styles.detailTabPanel}>
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -586,15 +621,14 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
                 stripedRows compact height="100%"
               />
             </div>
-            {chiTietFooterDong && (
+            {chiTietFooterTong && (
               <div
                 style={{
                   flexShrink: 0,
                   display: 'flex',
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end',
                   gap: 10,
                   padding: '8px 10px',
                   fontSize: 11,
@@ -603,19 +637,7 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                <div style={{ textAlign: 'left', color: 'var(--accent)', fontWeight: 600, lineHeight: 1.5 }}>
-                  <span>Tổng chủng loại vật VT: {chiTietFooterDong.chungLoaiVt}</span>
-                  <span style={{ marginLeft: 16 }}>Tổng số lượng: {chiTietFooterDong.tongSoLuongText}</span>
-                </div>
-                <div style={{ textAlign: 'right', marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <span>Tổng tiền hàng: <strong>{chiTietFooterDong.tongTienHang}</strong></span>
-                  <span>TLCK (%): <strong>{chiTietFooterDong.tlCk}</strong></span>
-                  <span>Tiền CK: <strong>{chiTietFooterDong.tienCk}</strong></span>
-                  {chiTietFooterDong.coVat && (
-                    <span>Tiền thuế GTGT: <strong>{chiTietFooterDong.tienThue}</strong></span>
-                  )}
-                  <span>Tổng tiền thanh toán: <strong>{chiTietFooterDong.tongThanhToan}</strong></span>
-                </div>
+                <span>Tổng thu (phiếu): <strong>{chiTietFooterTong}</strong></span>
               </div>
             )}
           </div>
@@ -631,13 +653,23 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
             <Eye size={13} /> Xem
           </button>
           <button type="button" className={styles.contextMenuItem}
-            disabled={thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)}
+            disabled={
+              thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)
+              || daGhiSoPhieuThu(contextMenu.row!.id)
+            }
             style={{
-              opacity: thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) ? 0.45 : 1,
-              cursor: thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) ? 'default' : 'pointer',
+              opacity:
+                thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuThu(contextMenu.row!.id)
+                  ? 0.45
+                  : 1,
+              cursor:
+                thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuThu(contextMenu.row!.id)
+                  ? 'default'
+                  : 'pointer',
             }}
             onClick={() => {
-              if (thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)) return
+              if (thuTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuThu(contextMenu.row!.id))
+                return
               moFormSua(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
             }}>
@@ -656,6 +688,9 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
               const r = contextMenu.row!
               if (daGhiSoPhieuThu(r.id)) return
               ghiSoTuPhieuThu(r, Math.round(Number(r.tong_thanh_toan) || 0))
+              donHangBanKhiPhieuThuGhiSo(r.id)
+              hopDongBanKhiPhieuThuGhiSo(r.id)
+              phuLucHopDongBanKhiPhieuThuGhiSo(r.id)
               loadData()
               toast?.showToast('Đã ghi sổ — ghi nhận doanh thu và sổ chi tiết tương ứng.', 'success')
               setContextMenu((m) => ({ ...m, open: false }))
@@ -675,6 +710,9 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
               const r = contextMenu.row!
               if (!daGhiSoPhieuThu(r.id)) return
               huyGhiSoPhieuThu(r.id)
+              donHangBanKhiPhieuThuHuyGhiSo(r.id)
+              hopDongBanKhiPhieuThuHuyGhiSo(r.id)
+              phuLucHopDongBanKhiPhieuThuHuyGhiSo(r.id)
               loadData()
               toast?.showToast('Đã hủy ghi sổ.', 'info')
               setContextMenu((m) => ({ ...m, open: false }))
@@ -693,7 +731,13 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
           </button>
           <hr className={styles.contextMenuSep} />
           <button type="button" className={styles.contextMenuItem} style={{ color: '#dc2626' }}
-            onClick={() => { setXoaModalRow(contextMenu.row!); setContextMenu((m) => ({ ...m, open: false })) }}>
+            disabled={daGhiSoPhieuThu(contextMenu.row!.id)}
+            onClick={() => {
+              const r = contextMenu.row!
+              if (daGhiSoPhieuThu(r.id)) return
+              setXoaModalRow(r)
+              setContextMenu((m) => ({ ...m, open: false }))
+            }}>
             <Trash2 size={13} /> Xóa
           </button>
         </div>
@@ -706,7 +750,7 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
         message={
           xoaModalRow ? (
             <>
-              Xóa báo giá <strong>{xoaModalRow.so_thu_tien_bang}</strong> — <strong>{xoaModalRow.khach_hang}</strong>?<br />
+              Xóa phiếu thu <strong>{xoaModalRow.so_thu_tien_bang}</strong> — <strong>{xoaModalRow.khach_hang}</strong>?<br />
               <span style={{ color: '#dc2626' }}>Thao tác này không thể hoàn tác.</span>
             </>
           ) : null
@@ -730,6 +774,7 @@ function ThuTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
               readOnly={
                 formMode === 'view'
                 || (formRecord != null && thuTienBangBiKhoaChinhSuaTheoTinhTrang(formRecord.tinh_trang))
+                || (formRecord != null && daGhiSoPhieuThu(formRecord.id))
               }
               initialDon={formMode === 'view' || formMode === 'edit' ? (formRecord ?? undefined) : null}
               initialChiTiet={formRecord ? thuTienBangGetChiTiet(formRecord.id) : undefined}

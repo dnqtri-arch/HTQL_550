@@ -2,12 +2,37 @@ import type { TaiKhoanNganHangRecord } from '../../../types/taiKhoanNganHang'
 
 const STORAGE_KEY = 'htql550_tai_khoan_ngan_hang'
 
+const NGAM_DINH_KHI_DEFAULT = 'Thu tiền gửi' as const
+
+export const NGAM_DINH_KHI_OPTIONS = [
+  'Thu tiền gửi',
+  'Thu qua NH',
+  'Chi qua NH',
+  'Thu tiền mặt',
+  'Chi lương',
+  'Chuyển khoản',
+  'Khác',
+] as const
+
+function normalizeTaiKhoanRow(r: Partial<TaiKhoanNganHangRecord> & Record<string, unknown>): TaiKhoanNganHangRecord {
+  return {
+    id: String(r.id ?? ''),
+    thuoc_cty_cn: String(r.thuoc_cty_cn ?? ''),
+    so_tai_khoan: String(r.so_tai_khoan ?? ''),
+    ten_ngan_hang: String(r.ten_ngan_hang ?? ''),
+    chu_tai_khoan: String(r.chu_tai_khoan ?? ''),
+    ngam_dinh_khi: String(r.ngam_dinh_khi ?? NGAM_DINH_KHI_DEFAULT),
+    dien_giai: String(r.dien_giai ?? ''),
+  }
+}
+
 function loadFromStorage(): TaiKhoanNganHangRecord[] {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
-    return Array.isArray(parsed) ? (parsed as TaiKhoanNganHangRecord[]) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((x) => normalizeTaiKhoanRow(x as Partial<TaiKhoanNganHangRecord> & Record<string, unknown>))
   } catch {
     return []
   }
@@ -22,15 +47,6 @@ function saveToStorage(list: TaiKhoanNganHangRecord[]): void {
 }
 
 let _list: TaiKhoanNganHangRecord[] = loadFromStorage()
-
-export const NGAM_DINH_KHI_OPTIONS = [
-  'Thu tiền gửi',
-  'Thu qua NH',
-  'Thu tiền mặt',
-  'Chi lương',
-  'Chuyển khoản',
-  'Khác',
-] as const
 
 export function taiKhoanNganHangGetAll(): TaiKhoanNganHangRecord[] {
   return [..._list]

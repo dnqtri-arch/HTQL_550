@@ -24,6 +24,8 @@ export interface BaoGiaRecord {
   ngay_giao_hang: string | null
   khach_hang: string
   dia_chi: string
+  /** Địa chỉ nhận hàng — nhiều dòng (\n): ĐCNH, ĐCNH 1, … (YC79). */
+  dia_chi_nhan_hang?: string
   /** Phiếu NVTHH — người giao hàng (cùng dòng Địa chỉ trên form). */
   nguoi_giao_hang?: string
   ma_so_thue: string
@@ -31,7 +33,6 @@ export interface BaoGiaRecord {
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
@@ -107,7 +108,8 @@ export interface BaoGiaChiTiet {
   /** Nội dung dòng (sau Tên SPHH) — cho phép nhiều dòng cùng mã hàng. */
   noi_dung?: string
   ghi_chu?: string
-  dd_gh_index?: number | null
+  /** Chỉ số dòng ĐCNH (0 = ĐCNH, 1 = ĐCNH 1, …). */
+  dcnh_index?: number | null
 }
 
 export interface BaoGiaCreatePayload {
@@ -120,13 +122,13 @@ export interface BaoGiaCreatePayload {
   ngay_giao_hang: string | null
   khach_hang: string
   dia_chi: string
+  dia_chi_nhan_hang?: string
   nguoi_giao_hang?: string
   ma_so_thue: string
   dien_giai: string
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
@@ -174,12 +176,12 @@ export interface BaoGiaCreatePayload {
     thanh_tien: number
     pt_thue_gtgt: number | null
     tien_thue_gtgt: number | null
-    dd_gh_index?: number | null
     noi_dung?: string
     ghi_chu?: string
     chieu_dai?: number
     chieu_rong?: number
     luong?: number
+    dcnh_index?: number | null
   }>
 }
 

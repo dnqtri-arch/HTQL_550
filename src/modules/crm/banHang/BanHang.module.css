@@ -219,6 +219,11 @@
   pointer-events: all;
 }
 
+/** Phiếu thu/chi mở từ trong form bán hàng — luôn trên overlay form (4000). */
+.modalOverlayTaiChinhPop {
+  z-index: 4200;
+}
+
 .modalBox {
   background: var(--bg-secondary);
   border: 1px solid var(--border-strong);
@@ -600,4 +605,43 @@
   border-radius: 10px;
   font-size: 10px;
   font-weight: 600;
+}
+
+/* YC81: form Báo giá / ĐHB / HĐ bán — ô nhập được nền trắng; chỉ đọc / khóa nền #e1e1e2 */
+.htqlBanHangChungTuFormShell :global(input:not([type='checkbox']):not([type='radio']):not([type='hidden']):not(:disabled):not([readonly])) {
+  background-color: #ffffff !important;
+}
+.htqlBanHangChungTuFormShell :global(input:not([type='checkbox']):not([type='radio']):not([type='hidden']):disabled),
+.htqlBanHangChungTuFormShell :global(input:not([type='checkbox']):not([type='radio']):not([type='hidden'])[readonly]) {
+  background-color: #e1e1e2 !important;
+}
+.htqlBanHangChungTuFormShell :global(select:not(:disabled)) {
+  background-color: #ffffff !important;
+}
+.htqlBanHangChungTuFormShell :global(select:disabled) {
+  background-color: #e1e1e2 !important;
+}
+.htqlBanHangChungTuFormShell :global(textarea:not(:disabled):not([readonly])) {
+  background-color: #ffffff !important;
+}
+.htqlBanHangChungTuFormShell :global(textarea:disabled),
+.htqlBanHangChungTuFormShell :global(textarea[readonly]) {
+  background-color: #e1e1e2 !important;
+}
+
+/* Mã chứng từ bấm mở xem (danh sách) */
+.linkMaChungTu {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.linkMaChungTu:hover {
+  color: #2563eb;
 }

@@ -8,6 +8,7 @@ alwaysApply: true
 
 > Đây là file quy chuẩn DUY NHẤT. Mọi file .mdc riêng lẻ đã được hợp nhất vào đây.
 > Nguồn: `o-nhap.mdc`, `nut.mdc`, `mau_gia.mdc`, `canh-le.mdc`, `imports-cau-truc.mdc`, `form.mdc`, `menu-ngu-canh.mdc`.
+> Bổ sung: **Tài khoản ngân hàng** — `nganhang.mdc`.
 
 ---
 
@@ -141,12 +142,17 @@ Nhãn chuẩn: **Lưu**, **Lưu và cắt**, **Lưu và tiếp tục**. Không d
 ### 3.2 Nút Xoá (màn danh sách)
 
 - Icon `Trash2`, label "Xoá"; `disabled` khi chưa chọn dòng.
-- Luồng: **Modal xác nhận xóa** (không dùng `window.confirm`) — trong modal hiển thị **một phép tính cộng đơn giản** (hai số nguyên dương nhỏ, ví dụ `7 + 5 = ?`); người dùng nhập **đúng kết quả (tổng)**; chỉ khi **khớp** thì bấm **Đồng ý xóa** mới gọi API xóa (sai → báo lỗi, không xóa). Phải có nút **Làm mới câu hỏi** (tạo phép tính mới) khi khó đọc / muốn đổi câu. Component tham chiếu: `src/components/common/confirmXoaCaptchaModal.tsx`.
-- **Giao diện xác minh (captcha):** khối nhập nằm trong **thẻ** có viền, nền gradient nhẹ, tiêu đề phụ «Xác minh trước khi xóa», phép tính **mono** trong ô nổi, ô nhập tổng gọn (tabular-nums), nút **Làm mới câu hỏi** cạnh phép tính — **gọn, dễ đọc**, không trải dài toàn chiều ngang modal.
+- Luồng: **Modal xác nhận xóa** (không dùng `window.confirm`) — trong modal hiển thị **một phép tính cộng đơn giản** (hai số nguyên dương nhỏ, ví dụ `7 + 5 = ?`); người dùng nhập **đúng kết quả (tổng)**; chỉ khi **khớp** thì bấm **Đồng ý xóa** mới gọi API xóa (sai → báo lỗi, không xóa). **Mỗi lần mở modal** tạo phép tính mới — **không** dùng nút «Làm mới câu hỏi». Component tham chiếu: `src/components/common/confirmXoaCaptchaModal.tsx`.
+- **Giao diện xác minh (captcha):** khối xác minh trong **thẻ** bo góc, viền nhấn màu (rose/blue nhẹ), nền gradient, tiêu đề phụ «Xác minh trước khi xóa» kèm icon; **ô hiển thị phép tính** và **ô nhập tổng** đặt **cùng một hàng** (flex ngang), **cùng chiều cao** (hằng `CAPTCHA_INPUT_ROW_HEIGHT` trong component); **mỗi lần mở modal** đặt **focus** vào ô nhập tổng; phép tính **mono** trong ô nổi; ô nhập tổng (tabular-nums, hẹp) — **gọn, dễ đọc**, không trải dài toàn chiều ngang modal. Tham chiếu: `src/components/common/confirmXoaCaptchaModal.tsx`.
 - **Ô nhập:** chỉ **chữ số** (kết quả phép cộng, tối đa 2–3 chữ số tùy phạm vi số); gợi ý `inputMode="numeric"`, `lang="en"`, `autoComplete="off"`, `spellCheck={false}`.
+- **Phím Enter:** khi ô nhập tổng **đang focus**, bấm **Enter** tương đương bấm **Đồng ý xóa** (cùng kiểm tra đúng/sai captcha rồi mới gọi `onConfirm`).
 - Nội dung modal: tên/mã bản ghi + cảnh báo "Thao tác không hoàn tác" (hoặc tương đương).
 - Menu ngữ cảnh Xoá dùng **cùng** modal captcha.
 - Kiểm tra ràng buộc trước khi xoá (ví dụ DVT đang dùng trong VTHH).
+
+### 3.2.1 Xóa toàn bộ / reset dữ liệu local (mock)
+
+- Thao tác «xóa toàn bộ hệ thống» / reset dữ liệu HTQL phải **xóa thật** khỏi `localStorage` (mọi khóa tiền tố `htql`), ví dụ gọi `wipeAllHtqlLocalStorageKeys` trong `src/utils/htqlLocalStorageWipe.ts` — **không** chỉ ẩn danh sách trên UI.
 
 ### 3.3 Nút Hủy chứng từ (nghiệp vụ)
 

@@ -67,6 +67,10 @@ export interface NhaCungCapRecord {
   noi_cap?: string
   /** Tab Khác: địa điểm giao hàng */
   dia_diem_giao_hang?: string[]
+  /** Địa điểm nhận; dữ liệu cũ chỉ có dia_diem_giao_hang → migrate trong normalizeRecord */
+  dia_diem_nhan_hang?: string[]
+  /** Khi vừa là khách hàng: giao luôn trùng nhận (đồng bộ khi bật). */
+  dia_diem_giao_trung_nhan?: boolean
 }
 
 const STORAGE_KEY = 'htql550_nha_cung_cap'
@@ -174,6 +178,25 @@ function loadFromStorage(): NhaCungCapRecord[] {
 }
 
 function normalizeRecord(r: NhaCungCapRecord): NhaCungCapRecord {
+  const rawGiao = Array.isArray(r.dia_diem_giao_hang)
+    ? r.dia_diem_giao_hang!.filter((s) => (s ?? '').trim() !== '')
+    : []
+  let dia_diem_giao_hang = Array.isArray(r.dia_diem_giao_hang) ? r.dia_diem_giao_hang : undefined
+  let dia_diem_nhan_hang = Array.isArray(r.dia_diem_nhan_hang) ? r.dia_diem_nhan_hang : undefined
+  let dia_diem_giao_trung_nhan = r.dia_diem_giao_trung_nhan
+  const legacyChiCoGiao =
+    rawGiao.length > 0 && r.dia_diem_nhan_hang === undefined && r.dia_diem_giao_trung_nhan === undefined
+  if (legacyChiCoGiao) {
+    const copy = [...(r.dia_diem_giao_hang as string[])]
+    dia_diem_nhan_hang = copy
+    if (r.khach_hang) {
+      dia_diem_giao_hang = [...copy]
+      dia_diem_giao_trung_nhan = true
+    } else {
+      dia_diem_giao_hang = undefined
+      dia_diem_giao_trung_nhan = false
+    }
+  }
   return {
     ...r,
     loai_ncc: r.loai_ncc ?? 'to_chuc',
@@ -187,6 +210,9 @@ function normalizeRecord(r: NhaCungCapRecord): NhaCungCapRecord {
     so_cccd: r.so_cccd ?? undefined,
     ngay_cap: r.ngay_cap ?? undefined,
     noi_cap: r.noi_cap ?? undefined,
+    dia_diem_giao_hang,
+    dia_diem_nhan_hang,
+    dia_diem_giao_trung_nhan: Boolean(dia_diem_giao_trung_nhan),
   }
 }
 

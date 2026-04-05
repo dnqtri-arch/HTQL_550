@@ -45,7 +45,6 @@ const MOCK_DON: BaoGiaRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 4000000,
     tong_thue_gtgt: 0,
@@ -65,7 +64,6 @@ const MOCK_DON: BaoGiaRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 15000000,
     tong_thue_gtgt: 0,
@@ -85,7 +83,6 @@ const MOCK_DON: BaoGiaRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 8500000,
     tong_thue_gtgt: 0,
@@ -115,12 +112,32 @@ const MOCK_CHI_TIET: BaoGiaChiTiet[] = [
     pt_thue_gtgt: null,
     tien_thue_gtgt: null,
     lenh_san_xuat: '',
-    dd_gh_index: 0,
   },
 ]
 
 const STORAGE_KEY_BAO_GIA = 'htql_bao_gia_list'
 const STORAGE_KEY_CHI_TIET = 'htql_bao_gia_chi_tiet'
+
+/** [YC76] Loại bỏ bản ghi mock/dữ liệu cũ theo mã hệ thống. */
+const SO_BAO_GIA_LOAI_BO = new Set(['2026/BG/3', '2026/BG/5'])
+
+function filterBaoGiaLoaiBoTheoMa(
+  baoGia: BaoGiaRecord[],
+  chiTiet: BaoGiaChiTiet[],
+): { baoGia: BaoGiaRecord[]; chiTiet: BaoGiaChiTiet[] } {
+  const removedIds = new Set<string>()
+  const outBg: BaoGiaRecord[] = []
+  for (const d of baoGia) {
+    const so = (d.so_bao_gia ?? '').trim()
+    if (SO_BAO_GIA_LOAI_BO.has(so)) {
+      removedIds.add(d.id)
+      continue
+    }
+    outBg.push(d)
+  }
+  const outCt = chiTiet.filter((c) => !removedIds.has(c.bao_gia_id))
+  return { baoGia: outBg, chiTiet: outCt }
+}
 
 function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: string }): BaoGiaRecord {
   const legacyDx = (d as { de_xuat_id?: string }).de_xuat_id
@@ -136,13 +153,13 @@ function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: s
     ngay_giao_hang: d.ngay_giao_hang ?? null,
     khach_hang: d.khach_hang ?? '',
     dia_chi: d.dia_chi ?? '',
+    dia_chi_nhan_hang: d.dia_chi_nhan_hang,
     nguoi_giao_hang: d.nguoi_giao_hang ?? undefined,
     ma_so_thue: d.ma_so_thue ?? '',
     dien_giai: d.dien_giai ?? '',
     nv_ban_hang: d.nv_ban_hang ?? '',
     dieu_khoan_tt: d.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: d.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: d.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: d.dieu_khoan_khac ?? '',
     tong_tien_hang: typeof d.tong_tien_hang === 'number' ? d.tong_tien_hang : 0,
     tong_thue_gtgt: typeof d.tong_thue_gtgt === 'number' ? d.tong_thue_gtgt : 0,
@@ -193,12 +210,13 @@ function loadFromStorage(): { baoGia: BaoGiaRecord[]; chiTiet: BaoGiaChiTiet[] }
     const baoGia = rawBaoGia ? JSON.parse(rawBaoGia) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(baoGia) && Array.isArray(chiTiet)) {
-      return { baoGia: baoGia.map((d: Partial<BaoGiaRecord> & { id: string }) => normalizeBaoGia(d)), chiTiet }
+      const normalized = baoGia.map((d: Partial<BaoGiaRecord> & { id: string }) => normalizeBaoGia(d))
+      return filterBaoGiaLoaiBoTheoMa(normalized, chiTiet)
     }
   } catch {
     /* ignore */
   }
-  return { baoGia: [...MOCK_DON], chiTiet: [...MOCK_CHI_TIET] }
+  return filterBaoGiaLoaiBoTheoMa([...MOCK_DON], [...MOCK_CHI_TIET])
 }
 
 function saveToStorage(): void {
@@ -373,20 +391,41 @@ export function baoGiaHoanTacKhiHetLienKetDonHangBan(
   if (!row) return
   if ((row.tinh_trang ?? '').trim() !== TINH_TRANG_BG_DA_CHUYEN_DHB) return
   baoGiaCapNhatTuMenuTaoGd(id, { tinh_trang: TINH_TRANG_BG_MOI_TAO })
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
+  }
 }
 
 /**
  * Sau khi xóa HĐ bán: nếu không còn hợp đồng nào có `bao_gia_id` trùng, hoàn tác báo giá
  * từ «Đã chuyển HĐ» → «Mới tạo» (YC51).
  */
+const LS_HDB_CT_LIST = 'htql_hop_dong_ban_chung_tu_list'
+const LS_PLHDB_CT_LIST = 'htql_phu_luc_hop_dong_ban_chung_tu_list'
+
+function conBanGhiLienKetBaoGiaTrongHdbVaPhuLucCt(baoGiaId: string): boolean {
+  const id = baoGiaId.trim()
+  if (!id || typeof localStorage === 'undefined') return false
+  for (const key of [LS_HDB_CT_LIST, LS_PLHDB_CT_LIST]) {
+    try {
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
+      const arr = JSON.parse(raw) as { bao_gia_id?: string }[]
+      if (Array.isArray(arr) && arr.some((d) => (d.bao_gia_id ?? '').trim() === id)) return true
+    } catch {
+      /* ignore */
+    }
+  }
+  return false
+}
+
 export function baoGiaHoanTacKhiHetLienKetHopDongBan(
   baoGiaId: string | null | undefined,
-  cacHopDongConLai: { bao_gia_id?: string }[],
+  _cacHopDongConLai?: { bao_gia_id?: string }[],
 ): void {
   const id = (baoGiaId ?? '').trim()
   if (!id) return
-  const still = cacHopDongConLai.some((d) => (d.bao_gia_id ?? '').trim() === id)
-  if (still) return
+  if (conBanGhiLienKetBaoGiaTrongHdbVaPhuLucCt(id)) return
   const row = _baoGiaList.find((r) => r.id === id)
   if (!row) return
   if ((row.tinh_trang ?? '').trim() !== TINH_TRANG_BG_DA_CHUYEN_HD) return
@@ -408,13 +447,13 @@ export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGia
     ngay_giao_hang: row.ngay_giao_hang,
     khach_hang: row.khach_hang,
     dia_chi: row.dia_chi ?? '',
+    dia_chi_nhan_hang: row.dia_chi_nhan_hang,
     nguoi_giao_hang: row.nguoi_giao_hang,
     ma_so_thue: row.ma_so_thue ?? '',
     dien_giai: row.dien_giai ?? '',
     nv_ban_hang: row.nv_ban_hang ?? '',
     dieu_khoan_tt: row.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: row.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: row.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: row.dieu_khoan_khac ?? '',
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
@@ -462,12 +501,12 @@ export function baoGiaBuildCreatePayloadFromRecord(row: BaoGiaRecord, ct: BaoGia
       thanh_tien: c.thanh_tien,
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
-      dd_gh_index: c.dd_gh_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
       chieu_dai: c.chieu_dai,
       chieu_rong: c.chieu_rong,
       luong: c.luong,
+      dcnh_index: c.dcnh_index ?? 0,
     })),
   }
 }
@@ -504,13 +543,13 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
     ngay_giao_hang: payload.ngay_giao_hang,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
+    dia_chi_nhan_hang: payload.dia_chi_nhan_hang,
     nguoi_giao_hang: payload.nguoi_giao_hang ?? undefined,
     ma_so_thue: payload.ma_so_thue ?? '',
     dien_giai: payload.dien_giai ?? '',
     nv_ban_hang: payload.nv_ban_hang ?? '',
     dieu_khoan_tt: payload.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: payload.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: payload.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
@@ -571,9 +610,9 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
-      dd_gh_index: c.dd_gh_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
+      dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
   saveToStorage()
@@ -595,13 +634,13 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
     ngay_giao_hang: payload.ngay_giao_hang,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
+    dia_chi_nhan_hang: payload.dia_chi_nhan_hang,
     nguoi_giao_hang: payload.nguoi_giao_hang ?? undefined,
     ma_so_thue: payload.ma_so_thue ?? '',
     dien_giai: payload.dien_giai ?? '',
     nv_ban_hang: payload.nv_ban_hang ?? '',
     dieu_khoan_tt: payload.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: payload.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: payload.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
@@ -662,12 +701,24 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
-      dd_gh_index: c.dd_gh_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
+      dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
   saveToStorage()
+}
+
+/** Báo giá có thể chọn khi lập ĐHB/HĐ bán từ form (loại trừ đã chuyển ĐHB/HĐ, KH không đồng ý). */
+export function baoGiaListChoLapDonHangBanTuBang(filter: BaoGiaFilter): BaoGiaRecord[] {
+  return baoGiaGetAll(filter).filter((bg) => {
+    const t = (bg.tinh_trang ?? '').trim()
+    return (
+      t !== TINH_TRANG_BG_DA_CHUYEN_DHB &&
+      t !== TINH_TRANG_BG_DA_CHUYEN_HD &&
+      t !== TINH_TRANG_BG_KH_KHONG_DONG_Y
+    )
+  })
 }
 
 export function getDefaultBaoGiaFilter(): BaoGiaFilter {

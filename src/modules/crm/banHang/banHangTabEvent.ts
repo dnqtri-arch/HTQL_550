@@ -9,6 +9,9 @@ export const HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT = 'htql-don-hang-ban-list-refr
 /** Làm mới danh sách Hợp đồng bán (sau xóa / lưu — đồng bộ lịch sử bán trên form Báo giá, v.v.). */
 export const HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT = 'htql-hop-dong-ban-list-refresh'
 
+/** Làm mới danh sách Phụ lục HĐ bán (cùng mục đích đồng bộ như HĐ bán, lưu trữ tách biệt). */
+export const HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT = 'htql-phu-luc-hop-dong-ban-list-refresh'
+
 export type BanHangTabEventDetail =
   | string
   | {

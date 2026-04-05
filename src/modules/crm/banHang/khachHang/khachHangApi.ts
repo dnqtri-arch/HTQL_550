@@ -55,7 +55,12 @@ export interface KhachHangRecord {
   dt_co_dinh?: string
   dia_chi_lien_he?: string
   dai_dien_theo_pl?: string
+  /** Địa điểm giao (khi đồng thời là NCC). */
   dia_diem_giao_hang?: string[]
+  /** Địa điểm nhận hàng. Dữ liệu cũ chỉ có dia_diem_giao_hang → migrate sang đây trong normalizeRecord. */
+  dia_diem_nhan_hang?: string[]
+  /** Khi là NCC: địa điểm nhận luôn bằng địa điểm giao (đồng bộ lúc lưu). */
+  dia_diem_nhan_trung_giao?: boolean
   so_ho_chieu?: string
   so_cccd?: string
   ngay_cap?: string
@@ -152,6 +157,25 @@ const DKTT_MAU: DieuKhoanThanhToanKhItem[] = [
 let cache: KhachHangRecord[] | null = null
 
 function normalizeRecord(r: KhachHangRecord): KhachHangRecord {
+  const rawGiao = Array.isArray(r.dia_diem_giao_hang)
+    ? r.dia_diem_giao_hang!.filter((s) => (s ?? '').trim() !== '')
+    : []
+  let dia_diem_giao_hang = Array.isArray(r.dia_diem_giao_hang) ? r.dia_diem_giao_hang : undefined
+  let dia_diem_nhan_hang = Array.isArray(r.dia_diem_nhan_hang) ? r.dia_diem_nhan_hang : undefined
+  let dia_diem_nhan_trung_giao = r.dia_diem_nhan_trung_giao
+  const legacyChiCoGiao =
+    rawGiao.length > 0 && r.dia_diem_nhan_hang === undefined && r.dia_diem_nhan_trung_giao === undefined
+  if (legacyChiCoGiao) {
+    const copy = [...(r.dia_diem_giao_hang as string[])]
+    dia_diem_nhan_hang = copy
+    if (r.isNhaCungCap) {
+      dia_diem_giao_hang = [...copy]
+      dia_diem_nhan_trung_giao = true
+    } else {
+      dia_diem_giao_hang = undefined
+      dia_diem_nhan_trung_giao = false
+    }
+  }
   return {
     ...r,
     loai_kh: r.loai_kh ?? 'to_chuc',
@@ -164,6 +188,9 @@ function normalizeRecord(r: KhachHangRecord): KhachHangRecord {
     so_cccd: r.so_cccd ?? undefined,
     ngay_cap: r.ngay_cap ?? undefined,
     noi_cap: r.noi_cap ?? undefined,
+    dia_diem_giao_hang,
+    dia_diem_nhan_hang,
+    dia_diem_nhan_trung_giao: Boolean(dia_diem_nhan_trung_giao),
   }
 }
 
@@ -209,6 +236,9 @@ function syncNhaCungCapFromKhachHang(kh: KhachHangRecord): void {
       quoc_gia: kh.quoc_gia,
       tinh_tp: kh.tinh_tp,
       xa_phuong: kh.xa_phuong,
+      dia_diem_giao_hang: kh.dia_diem_giao_hang,
+      dia_diem_nhan_hang: kh.dia_diem_nhan_hang,
+      dia_diem_giao_trung_nhan: kh.dia_diem_nhan_trung_giao,
     }
     if (idx >= 0) { nccList[idx] = nccRecord } else { nccList.push(nccRecord) }
     localStorage.setItem(STORAGE_KEY_NCC, JSON.stringify(nccList))

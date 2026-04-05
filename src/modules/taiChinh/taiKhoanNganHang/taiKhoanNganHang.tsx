@@ -21,20 +21,18 @@ import { TaiKhoanNganHangForm } from './taiKhoanNganHangForm'
 import styles from '../../crm/banHang/BanHang.module.css'
 
 const columns: DataGridColumn<TaiKhoanNganHangRecord>[] = [
+  { key: 'thuoc_cty_cn', label: 'Thuộc CTY/CN', width: 120 },
   { key: 'so_tai_khoan', label: 'Số tài khoản', width: 140 },
   { key: 'ten_ngan_hang', label: 'Tên ngân hàng', width: '22%' },
-  { key: 'chi_nhanh', label: 'Chi nhánh', width: '14%' },
   { key: 'chu_tai_khoan', label: 'Chủ tài khoản', width: '14%' },
   { key: 'ngam_dinh_khi', label: 'Ngầm định khi', width: 140 },
 ]
 
 function emptyForm(): Omit<TaiKhoanNganHangRecord, 'id'> {
   return {
+    thuoc_cty_cn: '',
     so_tai_khoan: '',
     ten_ngan_hang: '',
-    chi_nhanh: '',
-    tinh_tp: '',
-    dia_chi_cn: '',
     chu_tai_khoan: '',
     ngam_dinh_khi: NGAM_DINH_KHI_OPTIONS[0],
     dien_giai: '',
@@ -47,7 +45,7 @@ export function TaiKhoanNganHang() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filterSo, setFilterSo] = useState('')
   const [filterNh, setFilterNh] = useState('')
-  const [filterCn, setFilterCn] = useState('')
+  const [filterCty, setFilterCty] = useState('')
   const [filterChu, setFilterChu] = useState('')
   const [filterNd, setFilterNd] = useState('')
   const [bankList, setBankList] = useState<BankItem[]>([])
@@ -72,12 +70,12 @@ export function TaiKhoanNganHang() {
     return rows.filter((r) => {
       if (filterSo.trim() && !matchSearchKeyword(r.so_tai_khoan, filterSo)) return false
       if (filterNh.trim() && !matchSearchKeyword(r.ten_ngan_hang, filterNh)) return false
-      if (filterCn.trim() && !matchSearchKeyword(r.chi_nhanh, filterCn)) return false
+      if (filterCty.trim() && !matchSearchKeyword(r.thuoc_cty_cn, filterCty)) return false
       if (filterChu.trim() && !matchSearchKeyword(r.chu_tai_khoan, filterChu)) return false
       if (filterNd.trim() && !matchSearchKeyword(r.ngam_dinh_khi, filterNd)) return false
       return true
     })
-  }, [rows, filterSo, filterNh, filterCn, filterChu, filterNd])
+  }, [rows, filterSo, filterNh, filterCty, filterChu, filterNd])
 
   const moThem = () => {
     setFormMode('add')
@@ -103,7 +101,7 @@ export function TaiKhoanNganHang() {
       return false
     }
     if (!form.ten_ngan_hang.trim()) {
-      setValErr('Vui lòng chọn ngân hàng.')
+      setValErr('Vui lòng nhập tên ngân hàng.')
       return false
     }
     setValErr('')
@@ -150,7 +148,7 @@ export function TaiKhoanNganHang() {
         <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr 1fr 140px', gap: 4, marginBottom: 4, alignItems: 'center' }}>
           <input type="text" className={styles.searchInput} placeholder="Tìm kiếm" value={filterSo} onChange={(e) => setFilterSo(e.target.value)} title="Lọc số TK" />
           <input type="text" className={styles.searchInput} placeholder="Tên NH" value={filterNh} onChange={(e) => setFilterNh(e.target.value)} />
-          <input type="text" className={styles.searchInput} placeholder="Chi nhánh" value={filterCn} onChange={(e) => setFilterCn(e.target.value)} />
+          <input type="text" className={styles.searchInput} placeholder="CTY/CN" value={filterCty} onChange={(e) => setFilterCty(e.target.value)} />
           <input type="text" className={styles.searchInput} placeholder="Chủ TK" value={filterChu} onChange={(e) => setFilterChu(e.target.value)} />
           <input type="text" className={styles.searchInput} placeholder="Ngầm định khi" value={filterNd} onChange={(e) => setFilterNd(e.target.value)} />
         </div>

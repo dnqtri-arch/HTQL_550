@@ -964,7 +964,7 @@ function getPhieuChiNhanFieldsTuNcc(ncc: NhaCungCapRecord): { stk: string; nganH
   const arr = ncc.tai_khoan_ngan_hang
   const tk = Array.isArray(arr) && arr.length > 0 ? arr[0] : null
   if (tk) {
-    const bank = [tk.ten_ngan_hang, tk.chi_nhanh].map((x) => String(x ?? '').trim()).filter(Boolean).join(' — ')
+    const bank = String(tk.ten_ngan_hang ?? '').trim()
     return {
       stk: (tk.so_tai_khoan ?? '').trim(),
       nganHang: bank,

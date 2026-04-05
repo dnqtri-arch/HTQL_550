@@ -4,7 +4,6 @@
 import { formatSoTienHienThi, parseFloatVN } from './numberFormat'
 import type { VatTuHangHoaRecord } from '../types/vatTuHangHoa'
 import {
-  COL_DD_GH,
   buildDvtOptionsForVthh,
   parsePctThueGtgtFromLine,
   type DonHangMuaGridLineRow,
@@ -88,7 +87,6 @@ export function migrateThuTienBangLinesToCoDonGia(
       '% thuế GTGT': '',
       'Tiền thuế GTGT': '',
       'Tổng tiền': '',
-      [COL_DD_GH]: (line[COL_DD_GH] ?? '').trim() !== '' ? String(line[COL_DD_GH]) : '0',
       'Ghi chú': line['Ghi chú'] ?? '',
     }
     if (vthh) {

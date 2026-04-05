@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Eye, Mail, MessageCircle, FileText, ChevronDown, ChevronRight, ListChecks, Package } from 'lucide-react'
-import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
+import { DataGrid, type DataGridColumn, type DataGridSortState } from '../../../../components/common/dataGrid'
 import { useToastOptional } from '../../../../context/toastContext'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
@@ -15,15 +15,19 @@ import {
   donHangBanGetChiTiet,
   donHangBanDelete,
   getDefaultDonHangBanChungTuFilter,
-  getDateRangeForKy,
-  KY_OPTIONS,
+  getDateRangeForKy as donHangBanGetDateRangeForKy,
+  KY_OPTIONS as DON_HANG_BAN_KY_OPTIONS,
   donHangBanSoDonHangTiepTheo,
   donHangBanChungTuApiImpl,
   donHangBanSetTinhTrang,
   TINH_TRANG_DON_HANG_BAN_DA_NHAN_HANG,
   TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN,
   donHangBanGanKetThuTienTuPhieu,
+  donHangBanGanKetChiTienTuPhieu,
   donHangBanQuetThuTienOrphanVaHoanTac,
+  donHangBanQuetChiTienOrphanVaHoanTac,
+  donHangBanThuTienBangIdsLinked,
+  donHangBanChiTienBangIdsLinked,
   type DonHangBanChungTuRecord,
   type DonHangBanChungTuChiTiet,
   type DonHangBanChungTuKyValue,
@@ -31,8 +35,20 @@ import {
 import {
   baoGiaGetAll,
   baoGiaGetChiTiet,
+  baoGiaDelete,
+  baoGiaPost,
+  baoGiaPut,
+  baoGiaSoDonHangTiepTheo,
+  clearBaoGiaDraft,
+  getBaoGiaDraft,
+  getDateRangeForKy as baoGiaGetDateRangeForKy,
   getDefaultBaoGiaFilter,
+  KY_OPTIONS as BAO_GIA_KY_OPTIONS,
+  setBaoGiaDraft,
 } from '../baoGia/baoGiaApi'
+import { BaoGiaApiProvider, type BaoGiaApi } from '../baoGia/baoGiaApiContext'
+import { BaoGiaForm } from '../baoGia/baoGiaForm'
+import type { BaoGiaRecord } from '../../../../types/baoGia'
 import type { DonHangBanChungTuFilter } from '../../../../types/donHangBanChungTu'
 import { buildDonHangBanChungTuPrefillFromBaoGia } from './baoGiaToDonHangBanChungTuPrefill'
 import { DonHangBanForm } from './donHangBanForm'
@@ -51,7 +67,35 @@ import { thuTienBangApiImpl } from '../../../taiChinh/thuTien/thuTienBangApi'
 import { buildThuTienBangPrefillFromDonHangBan } from '../../../taiChinh/thuTien/donHangBanToThuTienBangPrefill'
 import { tinhDaThuVaConLaiChoDonHangBan } from '../../../taiChinh/thuTien/chungTuCongNoKhach'
 import type { ThuTienBangChiTiet, ThuTienBangRecord } from '../../../../types/thuTienBang'
-import { thuTienBangGetAll } from '../../../taiChinh/thuTien/thuTienBangApi'
+import { HTQL_THU_TIEN_BANG_RELOAD_EVENT, thuTienBangGetAll } from '../../../taiChinh/thuTien/thuTienBangApi'
+import { daGhiSoPhieuThu } from '../../../taiChinh/thuTien/ghiSoTaiChinhApi'
+import { daGhiSoPhieuChi } from '../../../taiChinh/chiTien/ghiSoChiTienApi'
+import { ChiTienForm } from '../../../taiChinh/chiTien/chiTienForm'
+import { ChiTienBangApiProvider } from '../../../taiChinh/chiTien/chiTienBangApiContext'
+import {
+  ChiTienBangApiImpl,
+  HTQL_CHI_TIEN_BANG_RELOAD_EVENT,
+  chiTienBangGetAll,
+} from '../../../taiChinh/chiTien/chiTienBangApi'
+import { buildChiTienBangPrefillFromDonHangBan } from '../../../taiChinh/chiTien/donHangBanToChiTienBangPrefill'
+import { tinhDaThuVaConLaiChoDonHangBan as tinhDaChiVaConLaiChoDonHangBan } from '../../../taiChinh/chiTien/chungTuCongNoChiTien'
+import type { ChiTienBangChiTiet, ChiTienBangRecord } from '../../../../types/chiTienBang'
+import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
+
+const baoGiaApiModal: BaoGiaApi = {
+  getAll: baoGiaGetAll,
+  getChiTiet: baoGiaGetChiTiet,
+  delete: baoGiaDelete,
+  getDefaultFilter: getDefaultBaoGiaFilter,
+  getDateRangeForKy: baoGiaGetDateRangeForKy,
+  KY_OPTIONS: BAO_GIA_KY_OPTIONS,
+  post: baoGiaPost,
+  put: baoGiaPut,
+  soDonHangTiepTheo: baoGiaSoDonHangTiepTheo,
+  getDraft: getBaoGiaDraft,
+  setDraft: setBaoGiaDraft,
+  clearDraft: clearBaoGiaDraft,
+}
 
 function Badge({ value }: { value: string }) {
   const cls =
@@ -67,6 +111,29 @@ function Badge({ value }: { value: string }) {
 
 function BadgeCongNo() {
   return <span className={styles.badgeDangThucHien}>Công nợ</span>
+}
+
+function BadgeLapPhieuThu() {
+  return <span className={styles.badgeChoXuLy}>Lập phiếu thu</span>
+}
+
+function BadgeLapPhieuChi() {
+  return <span className={styles.badgeChoXuLy}>Lập phiếu chi</span>
+}
+
+function BadgeHoanThanhThu() {
+  return <span className={styles.badgeDaThanhToan}>Hoàn thành</span>
+}
+
+/** Khóa sửa/xóa đơn khi đã có phiếu thu hoặc phiếu chi còn tồn tại (dù chưa ghi sổ). */
+function donHangBanKhoaViDaTaoPhieuThuHoacChi(
+  row: DonHangBanChungTuRecord,
+  phieuThuTonTai: Set<string>,
+  phieuChiTonTai: Set<string>,
+): boolean {
+  const coThu = donHangBanThuTienBangIdsLinked(row).some((tid) => tid && phieuThuTonTai.has(tid))
+  const coChi = donHangBanChiTienBangIdsLinked(row).some((cid) => cid && phieuChiTonTai.has(cid))
+  return coThu || coChi
 }
 
 function formatNgay(iso: string | null | undefined): string {
@@ -104,6 +171,13 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     prefillChiTiet: ThuTienBangChiTiet[]
   } | null>(null)
   const [thuTienFormKey, setThuTienFormKey] = useState(0)
+  const chiTienLinkDonHangBanIdRef = useRef<string | null>(null)
+  const [showChiTienModal, setShowChiTienModal] = useState(false)
+  const [chiTienPrefill, setChiTienPrefill] = useState<{
+    prefillDon: Partial<ChiTienBangRecord>
+    prefillChiTiet: ChiTienBangChiTiet[]
+  } | null>(null)
+  const [chiTienFormKey, setChiTienFormKey] = useState(0)
   const [dropdownTaoGd, setDropdownTaoGd] = useState(false)
   const dropdownTaoGdRef = useRef<HTMLDivElement>(null)
   const hoverTaoGdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -114,28 +188,132 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   const SUBMENU_HOVER_DELAY_MS = 200
   const [dvtList, setDvtList] = useState<DvtListItem[]>([])
   const thuTienModalDrag = useDraggable()
+  const chiTienModalDrag = useDraggable()
   const donHangBanFormDrag = useDraggable()
+  const [baoGiaXemTuDhb, setBaoGiaXemTuDhb] = useState<BaoGiaRecord | null>(null)
+  const [baoGiaXemKey, setBaoGiaXemKey] = useState(0)
+  const [listSortState, setListSortState] = useState<DataGridSortState[]>([])
+  const [tinhTrangFilterSelected, setTinhTrangFilterSelected] = useState<string[]>([])
 
   const selectedRow = selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null
   const chiTietHienThiCoVat = selectedRow == null || selectedRow.ap_dung_vat_gtgt !== false
 
   const thuCongNoById = useMemo(() => {
-    const m = new Map<string, { da_thu: number; con_lai: number }>()
+    const m = new Map<string, { da_thu: number; con_lai: number; tong_da_lap: number }>()
     for (const r of danhSach) {
       m.set(r.id, tinhDaThuVaConLaiChoDonHangBan(r))
     }
     return m
   }, [danhSach])
 
+  const chiCongNoById = useMemo(() => {
+    const m = new Map<string, { da_thu: number; con_lai: number; tong_da_lap: number }>()
+    for (const r of danhSach) {
+      m.set(r.id, tinhDaChiVaConLaiChoDonHangBan(r))
+    }
+    return m
+  }, [danhSach])
+
+  const [phieuThuEpoch, setPhieuThuEpoch] = useState(0)
+  const phieuThuTonTai = useMemo(() => {
+    void phieuThuEpoch
+    return new Set(thuTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' }).map((p) => p.id))
+  }, [phieuThuEpoch, danhSach])
+
+  const [phieuChiEpoch, setPhieuChiEpoch] = useState(0)
+  const phieuChiTonTai = useMemo(() => {
+    void phieuChiEpoch
+    return new Set(chiTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' }).map((p) => p.id))
+  }, [phieuChiEpoch, danhSach])
+
+  const choPhepThuTienDonHang = (row: DonHangBanChungTuRecord) => {
+    const tong = Number(row.tong_thanh_toan) || 0
+    if (tong <= 0) return false
+    const ids = donHangBanThuTienBangIdsLinked(row)
+    if (ids.some((tid) => tid && !phieuThuTonTai.has(tid))) return true
+    const cn = thuCongNoById.get(row.id) ?? { da_thu: 0, con_lai: 0, tong_da_lap: 0 }
+    return tong - cn.tong_da_lap > 0
+  }
+
+  const choPhepChiTienDonHang = (row: DonHangBanChungTuRecord) => {
+    const tong = Number(row.tong_thanh_toan) || 0
+    if (tong <= 0) return false
+    const ids = donHangBanChiTienBangIdsLinked(row)
+    if (ids.some((cid) => cid && !phieuChiTonTai.has(cid))) return true
+    const cn = chiCongNoById.get(row.id) ?? { da_thu: 0, con_lai: 0, tong_da_lap: 0 }
+    return tong - cn.tong_da_lap > 0
+  }
+
+  const coTheXoaDonHangBan = (row: DonHangBanChungTuRecord) => {
+    const thuIds = donHangBanThuTienBangIdsLinked(row).filter((tid) => tid && phieuThuTonTai.has(tid))
+    const chiIds = donHangBanChiTienBangIdsLinked(row).filter((cid) => cid && phieuChiTonTai.has(cid))
+    return thuIds.length === 0 && chiIds.length === 0
+  }
+
+  /** Nhãn hiển thị cột Tình trạng — dùng đồng bộ cho lọc Excel (YC82). */
+  const getDhbTinhTrangLabel = useCallback(
+    (row: DonHangBanChungTuRecord): string => {
+      const idsThu = donHangBanThuTienBangIdsLinked(row).filter((tid) => tid && phieuThuTonTai.has(tid))
+      if (idsThu.length > 0) {
+        const cl = thuCongNoById.get(row.id)?.con_lai ?? 0
+        const allNotGhiSo = idsThu.every((tid) => !daGhiSoPhieuThu(tid))
+        const anyGhiSo = idsThu.some((tid) => daGhiSoPhieuThu(tid))
+        if (allNotGhiSo) return 'Lập phiếu thu'
+        const allGhiSo = idsThu.every((tid) => daGhiSoPhieuThu(tid))
+        if (allGhiSo && cl <= 0) return 'Hoàn thành'
+        if (anyGhiSo) return 'Công nợ'
+        return (row.tinh_trang ?? '').trim() || 'Chưa thực hiện'
+      }
+      const idsChi = donHangBanChiTienBangIdsLinked(row).filter((cid) => cid && phieuChiTonTai.has(cid))
+      if (idsChi.length > 0) {
+        const cl = chiCongNoById.get(row.id)?.con_lai ?? 0
+        const allNotGhiSo = idsChi.every((cid) => !daGhiSoPhieuChi(cid))
+        const anyGhiSo = idsChi.some((cid) => daGhiSoPhieuChi(cid))
+        if (allNotGhiSo) return 'Lập phiếu chi'
+        const allGhiSo = idsChi.every((cid) => daGhiSoPhieuChi(cid))
+        if (allGhiSo && cl <= 0) return 'Hoàn thành'
+        if (anyGhiSo) return 'Công nợ'
+        return (row.tinh_trang ?? '').trim() || 'Chưa thực hiện'
+      }
+      return (row.tinh_trang ?? '').trim() || 'Chưa thực hiện'
+    },
+    [thuCongNoById, chiCongNoById, phieuThuTonTai, phieuChiTonTai],
+  )
+
   const columns = useMemo((): DataGridColumn<DonHangBanChungTuRecord>[] => {
     return [
       { key: 'so_don_hang', label: 'Mã ĐHB', width: 88 },
       { key: 'nv_ban_hang', label: 'NV bán hàng', width: '10%' },
       { key: 'so_chung_tu_cukcuk', label: 'Đơn hàng bán', width: 160, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
-      { key: 'ngay_don_hang', label: 'Ngày ĐH', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
       { key: 'ngay_giao_hang', label: 'Ngày GH', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string | null) },
-      { key: 'khach_hang', label: 'Khách hàng', width: '20%' },
-      { key: 'so_bao_gia_goc', label: 'Từ BG', width: 90, renderCell: (v) => v ? <span className={styles.sourceBadge}>{String(v)}</span> : '' },
+      { key: 'khach_hang', label: 'Khách hàng', width: '28%' },
+      {
+        key: 'so_bao_gia_goc',
+        label: 'Từ BG',
+        width: 90,
+        renderCell: (v) => {
+          const ma = v != null && String(v).trim() ? String(v) : ''
+          if (!ma) return ''
+          return (
+            <button
+              type="button"
+              className={styles.linkMaChungTu}
+              onClick={(e) => {
+                e.stopPropagation()
+                const bg = baoGiaGetAll(getDefaultBaoGiaFilter()).find((r) => (r.so_bao_gia ?? '').trim() === ma)
+                if (!bg) {
+                  toast?.showToast('Không tìm thấy báo giá tương ứng mã.', 'error')
+                  return
+                }
+                setBaoGiaXemTuDhb(bg)
+                setBaoGiaXemKey((k) => k + 1)
+              }}
+            >
+              {ma}
+            </button>
+          )
+        },
+      },
       { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 120, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
       {
         key: 'da_thu',
@@ -153,17 +331,38 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       },
       {
         key: 'tinh_trang',
-        label: 'Trạng thái',
+        label: 'Tình trạng',
         width: 110,
-        renderCell: (v, row) => {
-          const cl = thuCongNoById.get(row.id)?.con_lai ?? 0
-          if (cl > 0) return <BadgeCongNo />
-          return <Badge value={String(v)} />
+        filterable: true,
+        renderCell: (_v, row) => {
+          const idsThu = donHangBanThuTienBangIdsLinked(row).filter((tid) => tid && phieuThuTonTai.has(tid))
+          if (idsThu.length > 0) {
+            const cl = thuCongNoById.get(row.id)?.con_lai ?? 0
+            const allNotGhiSo = idsThu.every((tid) => !daGhiSoPhieuThu(tid))
+            const anyGhiSo = idsThu.some((tid) => daGhiSoPhieuThu(tid))
+            if (allNotGhiSo) return <BadgeLapPhieuThu />
+            const allGhiSo = idsThu.every((tid) => daGhiSoPhieuThu(tid))
+            if (allGhiSo && cl <= 0) return <BadgeHoanThanhThu />
+            if (anyGhiSo) return <BadgeCongNo />
+            return <Badge value={(row.tinh_trang ?? '').trim() || 'Chưa thực hiện'} />
+          }
+          const idsChi = donHangBanChiTienBangIdsLinked(row).filter((cid) => cid && phieuChiTonTai.has(cid))
+          if (idsChi.length > 0) {
+            const cl = chiCongNoById.get(row.id)?.con_lai ?? 0
+            const allNotGhiSo = idsChi.every((cid) => !daGhiSoPhieuChi(cid))
+            const anyGhiSo = idsChi.some((cid) => daGhiSoPhieuChi(cid))
+            if (allNotGhiSo) return <BadgeLapPhieuChi />
+            const allGhiSo = idsChi.every((cid) => daGhiSoPhieuChi(cid))
+            if (allGhiSo && cl <= 0) return <BadgeHoanThanhThu />
+            if (anyGhiSo) return <BadgeCongNo />
+            return <Badge value={(row.tinh_trang ?? '').trim() || 'Chưa thực hiện'} />
+          }
+          return <Badge value={(row.tinh_trang ?? '').trim() || 'Chưa thực hiện'} />
         },
       },
       { key: 'dien_giai', label: 'Ghi chú', width: '18%' },
     ]
-  }, [thuCongNoById])
+  }, [thuCongNoById, chiCongNoById, phieuThuTonTai, phieuChiTonTai, toast])
 
   const columnsChiTiet = useMemo((): DataGridColumn<DonHangBanChungTuChiTiet>[] => {
     const coBan: DataGridColumn<DonHangBanChungTuChiTiet>[] = [
@@ -182,17 +381,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           { key: 'tien_thue_gtgt', label: 'Tiền GTGT', width: 100, align: 'right', renderCell: (v) => v != null ? formatNumberDisplay(Number(v), 0) : '' },
         ]
       : []
-    const cotDd: DataGridColumn<DonHangBanChungTuChiTiet> = {
-      key: 'dd_gh_index',
-      label: 'ĐĐGH',
-      width: 72,
-      align: 'center',
-      renderCell: (_v, row) => {
-        const n = Number(row?.dd_gh_index ?? 0)
-        return Number.isFinite(n) ? `ĐĐGH ${n + 1}` : 'ĐĐGH 1'
-      },
-    }
-    return [...coBan, ...cotThue, cotDd, { key: 'ghi_chu', label: 'Ghi chú', width: 160 }]
+    return [...coBan, ...cotThue, { key: 'ghi_chu', label: 'Ghi chú', width: 160 }]
   }, [dvtList, chiTietHienThiCoVat])
 
   useEffect(() => {
@@ -208,6 +397,9 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     const tatCaPhieuThu = thuTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' })
     const idPhieuThuConTonTai = new Set(tatCaPhieuThu.map((p) => p.id))
     donHangBanQuetThuTienOrphanVaHoanTac(idPhieuThuConTonTai)
+    const tatCaPhieuChi = chiTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' })
+    const idPhieuChiConTonTai = new Set(tatCaPhieuChi.map((p) => p.id))
+    donHangBanQuetChiTienOrphanVaHoanTac(idPhieuChiConTonTai)
     setDanhSach(donHangBanGetAll(filter))
   }, [filter])
   useEffect(() => { loadData() }, [loadData])
@@ -257,6 +449,24 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   }, [loadData])
 
   useEffect(() => {
+    const h = () => {
+      setPhieuThuEpoch((e) => e + 1)
+      loadData()
+    }
+    window.addEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, h)
+    return () => window.removeEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, h)
+  }, [loadData])
+
+  useEffect(() => {
+    const h = () => {
+      setPhieuChiEpoch((e) => e + 1)
+      loadData()
+    }
+    window.addEventListener(HTQL_CHI_TIEN_BANG_RELOAD_EVENT, h)
+    return () => window.removeEventListener(HTQL_CHI_TIEN_BANG_RELOAD_EVENT, h)
+  }, [loadData])
+
+  useEffect(() => {
     const onSyncNvthh = (e: Event) => {
       const id = (e as CustomEvent<{ doi_chieu_don_mua_id?: string }>).detail?.doi_chieu_don_mua_id?.trim()
       if (!id) return
@@ -273,6 +483,54 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     ? danhSach.filter((r) => matchSearchKeyword(`${r.so_don_hang} ${r.khach_hang} ${r.dien_giai ?? ''} ${r.tinh_trang} ${r.so_bao_gia_goc ?? ''}`, search))
     : danhSach
 
+  const tinhTrangOptionsDhb = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of filtered) {
+      set.add(getDhbTinhTrangLabel(r))
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  }, [filtered, getDhbTinhTrangLabel])
+
+  const filteredByTinhTrangDhb = useMemo(() => {
+    if (tinhTrangFilterSelected.length === 0) return filtered
+    if (
+      tinhTrangOptionsDhb.length > 0 &&
+      tinhTrangFilterSelected.length >= tinhTrangOptionsDhb.length
+    ) {
+      return filtered
+    }
+    return filtered.filter((r) => tinhTrangFilterSelected.includes(getDhbTinhTrangLabel(r)))
+  }, [filtered, tinhTrangFilterSelected, tinhTrangOptionsDhb, getDhbTinhTrangLabel])
+
+  const sortedListDhb = useMemo(() => {
+    const sort = listSortState.find((s) => s.key === 'so_don_hang')
+    const arr = [...filteredByTinhTrangDhb]
+    if (!sort) return arr
+    arr.sort((a, b) => {
+      const na = parseTrailingIntFromMa(a.so_don_hang)
+      const nb = parseTrailingIntFromMa(b.so_don_hang)
+      const c = na - nb
+      return sort.direction === 'asc' ? c : -c
+    })
+    return arr
+  }, [filteredByTinhTrangDhb, listSortState])
+
+  const dhbTinhTrangColumnFilter = useMemo(
+    () => ({
+      tinh_trang: {
+        options: tinhTrangOptionsDhb,
+        selected: tinhTrangFilterSelected,
+        onChange: setTinhTrangFilterSelected,
+      },
+    }),
+    [tinhTrangOptionsDhb, tinhTrangFilterSelected],
+  )
+
+  const coLocTinhTrangDhbHieuLuc =
+    tinhTrangOptionsDhb.length > 0 &&
+    tinhTrangFilterSelected.length > 0 &&
+    tinhTrangFilterSelected.length < tinhTrangOptionsDhb.length
+
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (dropdownTaoGdRef.current && !dropdownTaoGdRef.current.contains(e.target as Node)) setDropdownTaoGd(false)
@@ -282,7 +540,12 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     return () => window.removeEventListener('click', h)
   }, [])
 
-  const tongTien = filtered.reduce((s, r) => s + r.tong_thanh_toan, 0)
+  const tongTien = filteredByTinhTrangDhb.reduce((s, r) => s + r.tong_thanh_toan, 0)
+
+  const chungTuDongBoChoForm = useMemo(() => {
+    if (!formRecord) return null
+    return danhSach.find((d) => d.id === formRecord.id) ?? formRecord
+  }, [formRecord, danhSach])
 
   const resetFormPrefill = () => {
     setPrefillTuBaoGia(undefined)
@@ -290,13 +553,23 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   }
 
   const moThuTienTuDonHang = (row: DonHangBanChungTuRecord) => {
-    if (row.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN) return
+    if (!choPhepThuTienDonHang(row)) return
     const ct = donHangBanGetChiTiet(row.id)
     const { prefillDon, prefillChiTiet } = buildThuTienBangPrefillFromDonHangBan(row, ct)
     thuTienLinkDonHangBanIdRef.current = row.id
     setThuTienPrefill({ prefillDon, prefillChiTiet })
     setThuTienFormKey((k) => k + 1)
     setShowThuTienModal(true)
+  }
+
+  const moChiTienTuDonHang = (row: DonHangBanChungTuRecord) => {
+    if (!choPhepChiTienDonHang(row)) return
+    const ct = donHangBanGetChiTiet(row.id)
+    const { prefillDon, prefillChiTiet } = buildChiTienBangPrefillFromDonHangBan(row, ct)
+    chiTienLinkDonHangBanIdRef.current = row.id
+    setChiTienPrefill({ prefillDon, prefillChiTiet })
+    setChiTienFormKey((k) => k + 1)
+    setShowChiTienModal(true)
   }
 
   return (
@@ -318,7 +591,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
         <button
           type="button"
           className={styles.toolbarBtnDanger}
-          disabled={!selectedId || selectedRow?.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN}
+          disabled={!selectedId || !selectedRow || !coTheXoaDonHangBan(selectedRow)}
           onClick={() => selectedRow && setXoaModal(selectedRow)}
         >
           <Trash2 size={13} /><span>Xóa</span>
@@ -339,20 +612,20 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
         >
           <button type="button" className={styles.toolbarBtn} disabled={!selectedId}
             onClick={() => setDropdownTaoGd((v) => !v)}>
-            <FileText size={13} /><span>Tạo giao dịch</span><ChevronDown size={12} style={{ marginLeft: 2 }} />
+            <FileText size={13} /><span>Thanh toán</span><ChevronDown size={12} style={{ marginLeft: 2 }} />
           </button>
           {dropdownTaoGd && selectedRow && (
             <div className={styles.dropdownMenu}>
               <button
                 type="button"
                 className={styles.dropdownItem}
-                disabled={selectedRow.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN}
+                disabled={!choPhepThuTienDonHang(selectedRow)}
                 style={{
-                  opacity: selectedRow.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 0.55 : 1,
-                  cursor: selectedRow.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 'not-allowed' : 'pointer',
+                  opacity: !choPhepThuTienDonHang(selectedRow) ? 0.55 : 1,
+                  cursor: !choPhepThuTienDonHang(selectedRow) ? 'not-allowed' : 'pointer',
                 }}
                 onClick={() => {
-                  if (selectedRow.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN) return
+                  if (!choPhepThuTienDonHang(selectedRow)) return
                   moThuTienTuDonHang(selectedRow)
                   setDropdownTaoGd(false)
                 }}
@@ -362,18 +635,18 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
               <button
                 type="button"
                 className={styles.dropdownItem}
-                disabled={!selectedRow || (thuCongNoById.get(selectedRow.id)?.con_lai ?? 0) <= 0}
+                disabled={!selectedRow || !choPhepChiTienDonHang(selectedRow)}
                 style={{
-                  opacity:
-                    !selectedRow || (thuCongNoById.get(selectedRow.id)?.con_lai ?? 0) <= 0 ? 0.45 : 1,
+                  opacity: !selectedRow || !choPhepChiTienDonHang(selectedRow) ? 0.55 : 1,
+                  cursor: !selectedRow || !choPhepChiTienDonHang(selectedRow) ? 'not-allowed' : 'pointer',
                 }}
                 onClick={() => {
-                  if (!selectedRow || (thuCongNoById.get(selectedRow.id)?.con_lai ?? 0) <= 0) return
-                  toast?.showToast('Phiếu chi: tính năng đang phát triển, chưa gán module.', 'info')
+                  if (!selectedRow || !choPhepChiTienDonHang(selectedRow)) return
+                  moChiTienTuDonHang(selectedRow)
                   setDropdownTaoGd(false)
                 }}
               >
-                <FileText size={13} /> Phiếu chi
+                <FileText size={13} /> Chi tiền
               </button>
             </div>
           )}
@@ -390,11 +663,11 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                 setFilter({ ky, tu: '', den: '' })
                 return
               }
-              const range = getDateRangeForKy(ky)
+              const range = donHangBanGetDateRangeForKy(ky)
               setFilter({ ky, tu: range.tu, den: range.den })
             }}
           >
-            {KY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {DON_HANG_BAN_KY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
 
@@ -404,7 +677,18 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       <div className={styles.contentArea}>
         <div className={styles.gridWrap}>
           <DataGrid<DonHangBanChungTuRecord>
-            columns={columns} data={filtered} keyField="id" stripedRows compact height="100%"
+            columns={columns}
+            data={sortedListDhb}
+            keyField="id"
+            stripedRows
+            compact
+            height="100%"
+            sortableColumns={['so_don_hang']}
+            sortState={listSortState}
+            onSortChange={setListSortState}
+            columnFilterConfig={dhbTinhTrangColumnFilter}
+            emptyDueToFilter={sortedListDhb.length === 0 && filtered.length > 0 && coLocTinhTrangDhbHieuLuc}
+            onClearAllFilters={() => setTinhTrangFilterSelected([])}
             selectedRowId={selectedId}
             onRowSelect={(r) => setSelectedId(r.id)}
             onRowDoubleClick={(r) => {
@@ -417,7 +701,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
             onRowContextMenu={(row, e) => { e.preventDefault(); setSelectedId(row.id); setContextMenu({ open: true, x: e.clientX, y: e.clientY, row }) }}
             summary={[
               { label: 'Tổng thanh toán', value: formatNumberDisplay(tongTien, 0) },
-              { label: 'Số dòng', value: `= ${filtered.length}` },
+              { label: 'Số dòng', value: `= ${sortedListDhb.length}` },
             ]}
           />
         </div>
@@ -447,13 +731,13 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           <button
             type="button"
             className={styles.contextMenuItem}
-            disabled={contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN}
+            disabled={donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
             style={{
-              opacity: contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 0.55 : 1,
-              cursor: contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 'not-allowed' : 'pointer',
+              opacity: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
+              cursor: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
             }}
             onClick={() => {
-              if (contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN) return
+              if (donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
               resetFormPrefill()
               setFormRecord(contextMenu.row!)
               setFormMode('edit')
@@ -478,7 +762,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           >
             <div className={styles.contextMenuItem} style={{ cursor: 'default', justifyContent: 'space-between' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <FileText size={13} /> Tạo giao dịch
+                <FileText size={13} /> Thanh toán
               </span>
               <ChevronRight size={12} style={{ flexShrink: 0, opacity: 0.85 }} />
             </div>
@@ -502,14 +786,14 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                 <button
                   type="button"
                   className={styles.contextMenuItem}
-                  disabled={contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN}
+                  disabled={!choPhepThuTienDonHang(contextMenu.row!)}
                   style={{
-                    opacity: contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 0.55 : 1,
-                    cursor: contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 'not-allowed' : 'pointer',
+                    opacity: !choPhepThuTienDonHang(contextMenu.row!) ? 0.55 : 1,
+                    cursor: !choPhepThuTienDonHang(contextMenu.row!) ? 'not-allowed' : 'pointer',
                   }}
                   onClick={() => {
                     const row = contextMenu.row
-                    if (!row || row.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN) return
+                    if (!row || !choPhepThuTienDonHang(row)) return
                     moThuTienTuDonHang(row)
                     setCtxSubmenuTaoGd(false)
                     setContextMenu((m) => ({ ...m, open: false }))
@@ -520,20 +804,20 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                 <button
                   type="button"
                   className={styles.contextMenuItem}
-                  disabled={(thuCongNoById.get(contextMenu.row!.id)?.con_lai ?? 0) <= 0}
+                  disabled={!choPhepChiTienDonHang(contextMenu.row!)}
                   style={{
-                    opacity: (thuCongNoById.get(contextMenu.row!.id)?.con_lai ?? 0) <= 0 ? 0.45 : 1,
-                    cursor: (thuCongNoById.get(contextMenu.row!.id)?.con_lai ?? 0) <= 0 ? 'not-allowed' : 'pointer',
+                    opacity: !choPhepChiTienDonHang(contextMenu.row!) ? 0.55 : 1,
+                    cursor: !choPhepChiTienDonHang(contextMenu.row!) ? 'not-allowed' : 'pointer',
                   }}
                   onClick={() => {
                     const row = contextMenu.row
-                    if (!row || (thuCongNoById.get(row.id)?.con_lai ?? 0) <= 0) return
-                    toast?.showToast('Phiếu chi: tính năng đang phát triển, chưa gán module.', 'info')
+                    if (!row || !choPhepChiTienDonHang(row)) return
+                    moChiTienTuDonHang(row)
                     setCtxSubmenuTaoGd(false)
                     setContextMenu((m) => ({ ...m, open: false }))
                   }}
                 >
-                  <FileText size={13} /> Phiếu chi
+                  <FileText size={13} /> Chi tiền
                 </button>
               </div>
             )}
@@ -662,12 +946,12 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
             className={styles.contextMenuItem}
             style={{
               color: '#dc2626',
-              opacity: contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 0.55 : 1,
-              cursor: contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN ? 'not-allowed' : 'pointer',
+              opacity: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
+              cursor: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
             }}
-            disabled={contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN}
+            disabled={donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
             onClick={() => {
-              if (contextMenu.row!.tinh_trang === TINH_TRANG_DON_HANG_BAN_DA_THU_TIEN) return
+              if (donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
               setXoaModal(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
             }}
@@ -678,7 +962,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       )}
 
       {showThuTienModal && thuTienPrefill && (
-        <div className={styles.modalOverlay}>
+        <div className={`${styles.modalOverlay} ${styles.modalOverlayTaiChinhPop}`}>
           <div
             ref={thuTienModalDrag.containerRef}
             className={styles.modalBox}
@@ -690,6 +974,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                 key={thuTienFormKey}
                 formTitle="Phiếu thu tiền"
                 thuTienPhieu
+                phieuThuTuMenuBanHang
                 soDonLabel="Mã phiếu thu"
                 prefillDon={thuTienPrefill.prefillDon}
                 prefillChiTiet={thuTienPrefill.prefillChiTiet}
@@ -709,11 +994,53 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                   if (saved && linkId) {
                     donHangBanGanKetThuTienTuPhieu(linkId, saved.id)
                     loadData()
-                    toast?.showToast('Đã lưu phiếu thu — trạng thái đơn: Đã thu tiền.', 'success')
+                    toast?.showToast('Đã lưu phiếu thu — đơn chuyển «Đã thu tiền» sau khi ghi sổ phiếu tại Thu tiền.', 'success')
                   }
                 }}
               />
             </ThuTienBangApiProvider>
+          </div>
+        </div>
+      )}
+
+      {showChiTienModal && chiTienPrefill && (
+        <div className={`${styles.modalOverlay} ${styles.modalOverlayTaiChinhPop}`}>
+          <div
+            ref={chiTienModalDrag.containerRef}
+            className={styles.modalBox}
+            style={chiTienModalDrag.containerStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ChiTienBangApiProvider api={ChiTienBangApiImpl}>
+              <ChiTienForm
+                key={chiTienFormKey}
+                formTitle="Phiếu chi tiền"
+                chiTienPhieu
+                phieuChiTuMenuBanHang
+                soDonLabel="Mã phiếu chi"
+                prefillDon={chiTienPrefill.prefillDon}
+                prefillChiTiet={chiTienPrefill.prefillChiTiet}
+                readOnly={false}
+                onHeaderPointerDown={chiTienModalDrag.dragHandleProps.onMouseDown}
+                headerDragStyle={chiTienModalDrag.dragHandleProps.style}
+                onClose={() => {
+                  setShowChiTienModal(false)
+                  setChiTienPrefill(null)
+                  chiTienLinkDonHangBanIdRef.current = null
+                }}
+                onSaved={(saved) => {
+                  setShowChiTienModal(false)
+                  setChiTienPrefill(null)
+                  const linkId = chiTienLinkDonHangBanIdRef.current
+                  chiTienLinkDonHangBanIdRef.current = null
+                  if (saved && linkId) {
+                    donHangBanGanKetChiTienTuPhieu(linkId, saved.id)
+                    loadData()
+                    toast?.showToast('Đã lưu phiếu chi — đơn chuyển «Đã chi tiền» sau khi ghi sổ phiếu tại Chi tiền.', 'success')
+                  }
+                }}
+              />
+            </ChiTienBangApiProvider>
           </div>
         </div>
       )}
@@ -759,7 +1086,44 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
               headerDragStyle={donHangBanFormDrag.dragHandleProps.style}
               onClose={() => { resetFormPrefill(); setShowForm(false) }}
               onSaved={() => { resetFormPrefill(); setShowForm(false); loadData() }}
+              onMoPhieuThuTuForm={
+                chungTuDongBoChoForm
+                  ? () => {
+                      moThuTienTuDonHang(chungTuDongBoChoForm)
+                    }
+                  : undefined
+              }
+              onMoPhieuChiTuForm={
+                chungTuDongBoChoForm
+                  ? () => {
+                      moChiTienTuDonHang(chungTuDongBoChoForm)
+                    }
+                  : undefined
+              }
+              choPhepMoPhieuThuTuForm={chungTuDongBoChoForm ? choPhepThuTienDonHang(chungTuDongBoChoForm) : false}
+              choPhepMoPhieuChiTuForm={chungTuDongBoChoForm ? choPhepChiTienDonHang(chungTuDongBoChoForm) : false}
             />
+          </div>
+        </div>
+      )}
+
+      {baoGiaXemTuDhb && (
+        <div className={styles.modalOverlay} onClick={() => setBaoGiaXemTuDhb(null)}>
+          <div
+            className={styles.modalBoxLarge}
+            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <BaoGiaApiProvider api={baoGiaApiModal}>
+              <BaoGiaForm
+                key={baoGiaXemKey}
+                readOnly
+                initialDon={baoGiaXemTuDhb}
+                initialChiTiet={baoGiaGetChiTiet(baoGiaXemTuDhb.id)}
+                onClose={() => setBaoGiaXemTuDhb(null)}
+                onSaved={() => setBaoGiaXemTuDhb(null)}
+              />
+            </BaoGiaApiProvider>
           </div>
         </div>
       )}

@@ -37,7 +37,6 @@ export function buildHopDongBanChungTuPrefillFromBaoGia(
     nv_ban_hang: row.nv_ban_hang,
     dieu_khoan_tt: row.dieu_khoan_tt,
     so_ngay_duoc_no: row.so_ngay_duoc_no,
-    dia_diem_giao_hang: row.dia_diem_giao_hang,
     dieu_khoan_khac: row.dieu_khoan_khac,
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
@@ -78,6 +77,7 @@ export function buildHopDongBanChungTuPrefillFromBaoGia(
     phieu_chi_ngan_hang: row.phieu_chi_ngan_hang,
     phieu_chi_ten_nguoi_nhan_ck: row.phieu_chi_ten_nguoi_nhan_ck,
     phieu_chi_attachments: row.phieu_chi_attachments?.map((a) => ({ ...a })),
+    dia_chi_nhan_hang: row.dia_chi_nhan_hang,
   }
 
   const prefillChiTiet: HopDongBanChungTuChiTiet[] = chiTiet.map((c, i) => ({
@@ -102,7 +102,7 @@ export function buildHopDongBanChungTuPrefillFromBaoGia(
     lenh_san_xuat: c.lenh_san_xuat,
     noi_dung: c.noi_dung,
     ghi_chu: c.ghi_chu,
-    dd_th_index: c.dd_gh_index ?? null,
+    dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
   }))
 
   return { prefillHdbCt, prefillChiTiet }

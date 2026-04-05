@@ -23,6 +23,9 @@ const DonHangBan = lazy(() => import('../modules/crm/banHang/donHangBan/donHangB
 const KhachHang = lazy(() => import('../modules/crm/banHang/khachHang/khachHang').then((m) => ({ default: m.KhachHang })))
 const HoaDonBan = lazy(() => import('../modules/crm/banHang/hoaDon/hoaDonBan').then((m) => ({ default: m.HoaDonBan })))
 const HopDongBan = lazy(() => import('../modules/crm/banHang/hopDongBan/hopDongBan').then((m) => ({ default: m.HopDongBan })))
+const PhuLucHopDongBan = lazy(() =>
+  import('../modules/crm/banHang/phuLucHopDongBan/phuLucHopDongBan').then((m) => ({ default: m.PhuLucHopDongBan })),
+)
 const CongNoKhachHang = lazy(() => import('../modules/crm/banHang/congNo/congNoKhachHang').then((m) => ({ default: m.CongNoKhachHang })))
 const TraLaiHang = lazy(() => import('../modules/crm/banHang/traLai/traLaiHang').then((m) => ({ default: m.TraLaiHang })))
 
@@ -85,6 +88,7 @@ const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> 
   khachHang: KhachHang,
   hoaDon: HoaDonBan,
   hopDongBan: HopDongBan,
+  phuLucHopDongBan: PhuLucHopDongBan,
   congNoKhachHang: CongNoKhachHang,
   traLaiHang: TraLaiHang,
   

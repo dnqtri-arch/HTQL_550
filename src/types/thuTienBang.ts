@@ -31,7 +31,6 @@ export interface ThuTienBangRecord {
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
@@ -115,7 +114,6 @@ export interface ThuTienBangChiTiet {
   /** Nội dung dòng (sau Tên SPHH) — cho phép nhiều dòng cùng mã hàng. */
   noi_dung?: string
   ghi_chu?: string
-  dd_gh_index?: number | null
 }
 
 export interface ThuTienBangCreatePayload {
@@ -134,7 +132,6 @@ export interface ThuTienBangCreatePayload {
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
@@ -187,7 +184,6 @@ export interface ThuTienBangCreatePayload {
     thanh_tien: number
     pt_thue_gtgt: number | null
     tien_thue_gtgt: number | null
-    dd_gh_index?: number | null
     noi_dung?: string
     ghi_chu?: string
   }>

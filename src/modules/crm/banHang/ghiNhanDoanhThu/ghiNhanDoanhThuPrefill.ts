@@ -69,7 +69,6 @@ export function buildPrefillDonHeaderTuDhb(don: DonHangBanChungTuRecord): GhiNha
     nv_mua_hang: don.nv_ban_hang,
     dieu_khoan_tt: don.dieu_khoan_tt,
     so_ngay_duoc_no: don.so_ngay_duoc_no,
-    dia_diem_giao_hang: don.dia_diem_giao_hang,
     dieu_khoan_khac: don.dieu_khoan_khac,
     ngay_giao_hang: don.ngay_giao_hang,
     tinh_trang: 'Chưa thực hiện',
@@ -142,6 +141,5 @@ export function mapDhbChiTietToMuaChiTiet(
     tien_thue_gtgt: c.tien_thue_gtgt,
     lenh_san_xuat: c.lenh_san_xuat ?? '',
     ghi_chu: c.ghi_chu,
-    dd_gh_index: c.dd_gh_index ?? null,
   }))
 }

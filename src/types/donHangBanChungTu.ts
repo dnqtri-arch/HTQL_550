@@ -24,6 +24,8 @@ export interface DonHangBanChungTuRecord {
   ngay_giao_hang: string | null
   khach_hang: string
   dia_chi: string
+  /** Địa chỉ nhận hàng — nhiều dòng (\n): ĐCNH, ĐCNH 1, … (YC79). */
+  dia_chi_nhan_hang?: string
   /** Phiếu NVTHH — người giao hàng (cùng dòng Địa chỉ trên form). */
   nguoi_giao_hang?: string
   ma_so_thue: string
@@ -31,7 +33,6 @@ export interface DonHangBanChungTuRecord {
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
@@ -87,8 +88,14 @@ export interface DonHangBanChungTuRecord {
   phieu_chi_attachments?: DonHangBanChungTuAttachmentItem[]
   /** Phiếu thu tiền (Tài chính) liên kết — khi có thì trạng thái «Đã thu tiền». */
   thu_tien_bang_id?: string
+  /** Một hoặc nhiều phiếu thu gắn cùng ĐHB (bổ sung cho `thu_tien_bang_id`). */
+  thu_tien_bang_ids?: string[]
   /** Trạng thái ĐHB trước khi gắn phiếu thu (hoàn tác khi xóa phiếu). */
   tinh_trang_truoc_thu_tien?: string
+  /** Phiếu chi tiền (module Chi tiền) — tách khỏi phiếu thu. */
+  chi_tien_bang_id?: string
+  chi_tien_bang_ids?: string[]
+  tinh_trang_truoc_chi_tien?: string
 }
 
 export interface DonHangBanChungTuChiTiet {
@@ -113,7 +120,7 @@ export interface DonHangBanChungTuChiTiet {
   lenh_san_xuat: string
   noi_dung?: string
   ghi_chu?: string
-  dd_gh_index?: number | null
+  dcnh_index?: number | null
 }
 
 export interface DonHangBanChungTuCreatePayload {
@@ -126,13 +133,13 @@ export interface DonHangBanChungTuCreatePayload {
   ngay_giao_hang: string | null
   khach_hang: string
   dia_chi: string
+  dia_chi_nhan_hang?: string
   nguoi_giao_hang?: string
   ma_so_thue: string
   dien_giai: string
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
@@ -174,7 +181,11 @@ export interface DonHangBanChungTuCreatePayload {
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: DonHangBanChungTuAttachmentItem[]
   thu_tien_bang_id?: string
+  thu_tien_bang_ids?: string[]
   tinh_trang_truoc_thu_tien?: string
+  chi_tien_bang_id?: string
+  chi_tien_bang_ids?: string[]
+  tinh_trang_truoc_chi_tien?: string
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string
@@ -184,13 +195,13 @@ export interface DonHangBanChungTuCreatePayload {
     thanh_tien: number
     pt_thue_gtgt: number | null
     tien_thue_gtgt: number | null
-    dd_gh_index?: number | null
     noi_dung?: string
     ghi_chu?: string
     /** Kích thước (mD/mR/Lượng) — đồng bộ báo giá / ĐHB */
     chieu_dai?: number
     chieu_rong?: number
     luong?: number
+    dcnh_index?: number | null
   }>
 }
 

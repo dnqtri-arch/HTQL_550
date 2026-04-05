@@ -1,20 +1,21 @@
 import { forwardRef } from 'react'
 
 /**
- * Ô kích hoạt lịch react-datepicker: readOnly (không gõ tay), click mở lịch.
- * Không đặt `readOnly` trên `<DatePicker />` — thư viện chặn `handleSelect` khi `readOnly` và không cập nhật ngày.
+ * Ô kích hoạt lịch react-datepicker. Mặc định `readOnly` (chỉ click mở lịch);
+ * truyền `readOnly={false}` để gõ tay theo `dateFormat` (nền có thể đặt `#fff` qua `style`).
+ * Không đặt `readOnly` trên `<DatePicker />` — chỉ trên customInput.
  */
 export const DatePickerReadOnlyTriggerInput = forwardRef<
   HTMLInputElement,
-  React.ComponentPropsWithoutRef<'input'>
+  React.ComponentPropsWithoutRef<'input'> & { readOnly?: boolean }
 >(function DatePickerReadOnlyTriggerInput(props, ref) {
-  const { onClick, onFocus, disabled, className, style, ...rest } = props
+  const { onClick, onFocus, disabled, className, style, readOnly = true, ...rest } = props
   return (
     <input
       {...rest}
       ref={ref}
       type="text"
-      readOnly
+      readOnly={readOnly}
       disabled={disabled}
       onClick={onClick}
       onFocus={onFocus}
@@ -30,12 +31,12 @@ export const DatePickerReadOnlyTriggerInput = forwardRef<
         minHeight: 24,
         width: '100%',
         boxSizing: 'border-box',
-        cursor: disabled ? 'default' : 'pointer',
+        cursor: disabled ? 'default' : readOnly ? 'pointer' : 'text',
         textAlign: 'right',
         fontVariantNumeric: 'tabular-nums',
         ...style,
       }}
-      aria-readonly
+      aria-readonly={readOnly ? true : undefined}
     />
   )
 })

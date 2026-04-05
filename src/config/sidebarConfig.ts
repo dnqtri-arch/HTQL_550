@@ -11,6 +11,7 @@ export type ModuleId =
   | 'khachHang'
   | 'hoaDon'
   | 'hopDongBan'
+  | 'phuLucHopDongBan'
   | 'congNoKhachHang'
   | 'traLaiHang'
   // CRM - Mua hàng (sub-modules)
@@ -88,6 +89,7 @@ export const MODULE_GROUPS: Array<{
           { id: 'khachHang', label: 'Khách hàng', icon: 'Users' },
           { id: 'hoaDon', label: 'Hóa đơn bán', icon: 'Receipt' },
           { id: 'hopDongBan', label: 'Hợp đồng bán', icon: 'FileSignature' },
+          { id: 'phuLucHopDongBan', label: 'Phụ lục HĐ bán', icon: 'FileStack' },
           { id: 'congNoKhachHang', label: 'Công nợ KH', icon: 'CreditCard' },
           { id: 'traLaiHang', label: 'Trả lại hàng', icon: 'RotateCcw' },
         ],

@@ -760,6 +760,14 @@ input[type="number"].htql-no-spinner::-webkit-outer-spin-button {
   max-height: 24px !important;
 }
 
+/* PL HĐB (YC88): TG nhận cho phép gõ — nền trắng, con trỏ nhập liệu (override --bg-primary của ô chỉ-chọn) */
+.htql-datepicker-tg-nhan-editable.htql-datepicker-don-hang-box-full .react-datepicker__input-container input,
+.htql-datepicker-tg-nhan-editable.htql-datepicker-don-hang-box-full input,
+.htql-datepicker-tg-nhan-editable.htql-datepicker-don-hang-box-full.react-datepicker-ignore-onclickoutside input {
+  background: #fff !important;
+  cursor: text !important;
+}
+
 /* Ẩn các giờ không cho chọn (ngoài 7h–19h) trong danh sách thời gian */
 .react-datepicker__time-list-item--disabled {
   display: none !important;

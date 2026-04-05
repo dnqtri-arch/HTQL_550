@@ -11,7 +11,7 @@ import {
 import DatePicker, { registerLocale } from 'react-datepicker'
 import { vi } from 'date-fns/locale'
 import 'react-datepicker/dist/react-datepicker.css'
-import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
+import { DataGrid, type DataGridColumn, type DataGridSortState } from '../../../../components/common/dataGrid'
 import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
@@ -51,16 +51,34 @@ import { BaoGiaApiProvider, type BaoGiaApi } from './baoGiaApiContext'
 import { BaoGiaForm } from './baoGiaForm'
 import { DonHangBanForm } from '../donHangBan/donHangBanForm'
 import { DonHangBanChungTuApiProvider } from '../donHangBan/donHangBanChungTuApiContext'
-import { donHangBanChungTuApiImpl, donHangBanSoDonHangTiepTheo } from '../donHangBan/donHangBanChungTuApi'
+import {
+  donHangBanChungTuApiImpl,
+  donHangBanDelete,
+  donHangBanGetAll,
+  donHangBanGetChiTiet,
+  donHangBanSoDonHangTiepTheo,
+} from '../donHangBan/donHangBanChungTuApi'
 import { buildDonHangBanChungTuPrefillFromBaoGia } from '../donHangBan/baoGiaToDonHangBanChungTuPrefill'
 import { HopDongBanChungTuApiProvider } from '../hopDongBan/hopDongBanChungTuApiContext'
-import { hopDongBanChungTuApiImpl, hopDongBanSoHopDongTiepTheo } from '../hopDongBan/hopDongBanChungTuApi'
+import {
+  hopDongBanChungTuApiImpl,
+  hopDongBanChungTuDelete,
+  hopDongBanChungTuGetAll,
+  hopDongBanChungTuGetChiTiet,
+  hopDongBanSoHopDongTiepTheo,
+} from '../hopDongBan/hopDongBanChungTuApi'
 import { buildHopDongBanChungTuPrefillFromBaoGia } from '../hopDongBan/baoGiaToHopDongBanChungTuPrefill'
 import { HopDongBanForm } from '../hopDongBan/hopDongBanForm'
 import type { DonHangBanChungTuChiTiet, DonHangBanChungTuRecord } from '../../../../types/donHangBanChungTu'
 import type { HopDongBanChungTuChiTiet, HopDongBanChungTuRecord } from '../../../../types/hopDongBanChungTu'
 import styles from '../BanHang.module.css'
+import {
+  HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT,
+  HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT,
+  HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT,
+} from '../banHangTabEvent'
 import { useDraggable } from '../../../../hooks/useDraggable'
+import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
 
 registerLocale('vi', vi)
 
@@ -161,21 +179,6 @@ function baoGiaDaChonTaoGd(row: BaoGiaRecord): boolean {
   return t === TINH_TRANG_BG_DA_CHUYEN_DHB || t === TINH_TRANG_BG_DA_CHUYEN_HD || t === TINH_TRANG_BG_KH_KHONG_DONG_Y
 }
 
-// ─── Cột danh sách (Ghi chú cuối bảng) ───────────────────────────────────────
-const columnsBaoGiaList: DataGridColumn<BaoGiaRecord>[] = [
-  { key: 'so_bao_gia', label: 'Mã BG', width: 88, align: 'right' },
-  { key: 'nv_ban_hang', label: 'NV bán hàng', width: '10%' },
-  { key: 'so_chung_tu_cukcuk', label: 'Tên báo giá', width: 140, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
-  { key: 'ngay_bao_gia', label: 'Ngày BG', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
-  { key: 'ngay_giao_hang', label: 'Hiệu lực đến', width: 88, align: 'right', renderCell: (v) => formatHieuLucDen(v as string | null) },
-  { key: 'khach_hang', label: 'Khách hàng', width: '20%' },
-  { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 110, align: 'right',
-    renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-  { key: 'tinh_trang', label: 'Tình trạng', width: 118,
-    renderCell: (v) => <BaoGiaBadge value={String(v)} /> },
-  { key: 'dien_giai', label: 'Ghi chú', width: '18%' },
-]
-
 // ─── [YC23] Phân trang ──────────────────────────────────────────────────────
 const PAGE_SIZE = 50
 
@@ -268,6 +271,13 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
   /** Chỉ cập nhật trạng thái BG «Đã chuyển ĐHB/HĐ» sau khi lưu thành công; đóng form không lưu → bỏ qua (YC51). */
   const pendingCapNhatBaoGiaDhbRef = useRef<string | null>(null)
   const pendingCapNhatBaoGiaHdbRef = useRef<string | null>(null)
+  const [giaoDichEpoch, setGiaoDichEpoch] = useState(0)
+  const [xemDhbTuBang, setXemDhbTuBang] = useState<DonHangBanChungTuRecord | null>(null)
+  const [xemHdbTuBang, setXemHdbTuBang] = useState<HopDongBanChungTuRecord | null>(null)
+  const [xemDhbKeyTuBang, setXemDhbKeyTuBang] = useState(0)
+  const [xemHdbKeyTuBang, setXemHdbKeyTuBang] = useState(0)
+  const [listSortState, setListSortState] = useState<DataGridSortState[]>([])
+  const [tinhTrangFilterSelected, setTinhTrangFilterSelected] = useState<string[]>([])
 
   useEffect(() => {
     let c = false
@@ -289,6 +299,17 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
     return () => window.removeEventListener(HTQL_BAO_GIA_RELOAD_EVENT, sync)
   }, [loadData])
   useEffect(() => {
+    const bump = () => setGiaoDichEpoch((e) => e + 1)
+    window.addEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, bump)
+    window.addEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    window.addEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    return () => {
+      window.removeEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, bump)
+      window.removeEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+      window.removeEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, bump)
+    }
+  }, [])
+  useEffect(() => {
     if (!contextMenu.open) setCtxSubmenuTaoGd(false)
   }, [contextMenu.open])
   useEffect(() => {
@@ -309,13 +330,60 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
     return result
   }, [danhSach, search])
 
-  useEffect(() => { setPage(1) }, [filter, search])
+  const tinhTrangOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of filtered) {
+      const t = (r.tinh_trang ?? '').trim()
+      set.add(t || '(Trống)')
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  }, [filtered])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated  = useMemo(() => 
-    filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
+  const filteredByTinhTrang = useMemo(() => {
+    if (tinhTrangFilterSelected.length === 0) return filtered
+    if (tinhTrangOptions.length > 0 && tinhTrangFilterSelected.length >= tinhTrangOptions.length) return filtered
+    return filtered.filter((r) => {
+      const t = (r.tinh_trang ?? '').trim() || '(Trống)'
+      return tinhTrangFilterSelected.includes(t)
+    })
+  }, [filtered, tinhTrangFilterSelected, tinhTrangOptions])
+
+  const sortedList = useMemo(() => {
+    const sort = listSortState.find((s) => s.key === 'so_bao_gia')
+    const arr = [...filteredByTinhTrang]
+    if (!sort) return arr
+    arr.sort((a, b) => {
+      const na = parseTrailingIntFromMa(a.so_bao_gia)
+      const nb = parseTrailingIntFromMa(b.so_bao_gia)
+      const c = na - nb
+      return sort.direction === 'asc' ? c : -c
+    })
+    return arr
+  }, [filteredByTinhTrang, listSortState])
+
+  useEffect(() => { setPage(1) }, [filter, search, tinhTrangFilterSelected, listSortState])
+
+  const totalPages = Math.max(1, Math.ceil(sortedList.length / PAGE_SIZE))
+  const paginated = useMemo(
+    () => sortedList.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [sortedList, page],
   )
+
+  const baoGiaTinhTrangColumnFilter = useMemo(
+    () => ({
+      tinh_trang: {
+        options: tinhTrangOptions,
+        selected: tinhTrangFilterSelected,
+        onChange: setTinhTrangFilterSelected,
+      },
+    }),
+    [tinhTrangOptions, tinhTrangFilterSelected],
+  )
+
+  const coLocTinhTrangHieuLuc =
+    tinhTrangOptions.length > 0 &&
+    tinhTrangFilterSelected.length > 0 &&
+    tinhTrangFilterSelected.length < tinhTrangOptions.length
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -327,8 +395,86 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
     return () => window.removeEventListener('click', h)
   }, [])
 
-  const tongTien   = useMemo(() => filtered.reduce((s, r) => s + r.tong_thanh_toan, 0), [filtered])
+  const tongTien = useMemo(() => filteredByTinhTrang.reduce((s, r) => s + r.tong_thanh_toan, 0), [filteredByTinhTrang])
   const selectedRow = useMemo(() => selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null, [selectedId, danhSach])
+
+  const columnsBaoGiaList = useMemo((): DataGridColumn<BaoGiaRecord>[] => {
+    void giaoDichEpoch
+    const allD = donHangBanGetAll({ ky: 'tat-ca', tu: '', den: '' })
+    const allH = hopDongBanChungTuGetAll({ ky: 'tat-ca', tu: '', den: '' })
+    const byBg = new Map<string, { d: DonHangBanChungTuRecord[]; h: HopDongBanChungTuRecord[] }>()
+    for (const d of allD) {
+      const bid = (d.bao_gia_id ?? '').trim()
+      if (!bid) continue
+      if (!byBg.has(bid)) byBg.set(bid, { d: [], h: [] })
+      byBg.get(bid)!.d.push(d)
+    }
+    for (const h of allH) {
+      const bid = (h.bao_gia_id ?? '').trim()
+      if (!bid) continue
+      if (!byBg.has(bid)) byBg.set(bid, { d: [], h: [] })
+      byBg.get(bid)!.h.push(h)
+    }
+    return [
+      { key: 'so_bao_gia', label: 'Mã BG', width: 88, align: 'right' },
+      { key: 'nv_ban_hang', label: 'NV bán hàng', width: '10%' },
+      { key: 'so_chung_tu_cukcuk', label: 'Tên báo giá', width: 140, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
+      { key: 'ngay_bao_gia', label: 'Ngày BG', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
+      { key: 'ngay_giao_hang', label: 'Hiệu lực đến', width: 88, align: 'right', renderCell: (v) => formatHieuLucDen(v as string | null) },
+      { key: 'khach_hang', label: 'Khách hàng', width: '20%' },
+      { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 110, align: 'right',
+        renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+      {
+        key: 'tinh_trang',
+        label: 'Tình trạng',
+        width: 118,
+        filterable: true,
+        renderCell: (v) => <BaoGiaBadge value={String(v)} />,
+      },
+      {
+        key: 'giao_dich',
+        label: 'Giao dịch',
+        width: 128,
+        renderCell: (_v, row) => {
+          const g = byBg.get(row.id)
+          if (!g || (g.d.length === 0 && g.h.length === 0)) return ''
+          return (
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {g.d.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={styles.linkMaChungTu}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setXemDhbTuBang(d)
+                    setXemDhbKeyTuBang((k) => k + 1)
+                  }}
+                >
+                  {d.so_don_hang}
+                </button>
+              ))}
+              {g.h.map((hdb) => (
+                <button
+                  key={hdb.id}
+                  type="button"
+                  className={styles.linkMaChungTu}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setXemHdbTuBang(hdb)
+                    setXemHdbKeyTuBang((k) => k + 1)
+                  }}
+                >
+                  {hdb.so_hop_dong}
+                </button>
+              ))}
+            </span>
+          )
+        },
+      },
+      { key: 'dien_giai', label: 'Ghi chú', width: '18%' },
+    ]
+  }, [giaoDichEpoch, danhSach])
 
   const chiTietHienThiCoVat = selectedRow == null || selectedRow.ap_dung_vat_gtgt !== false
 
@@ -418,6 +564,13 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
   const moFormSua  = (row: BaoGiaRecord) => { setFormRecord(row); setFormMode('edit'); setFormKey((k) => k + 1); setShowForm(true) }
 
   const xacNhanXoa = (row: BaoGiaRecord) => {
+    const filterTatCa = { ky: 'tat-ca' as const, tu: '', den: '' }
+    for (const d of donHangBanGetAll(filterTatCa)) {
+      if ((d.bao_gia_id ?? '').trim() === row.id) donHangBanDelete(d.id)
+    }
+    for (const h of hopDongBanChungTuGetAll(filterTatCa)) {
+      if ((h.bao_gia_id ?? '').trim() === row.id) hopDongBanChungTuDelete(h.id)
+    }
     baoGiaDelete(row.id)
     loadData()
     if (selectedId === row.id) setSelectedId(null)
@@ -665,7 +818,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
-          {filtered.length} bản ghi · trang {page}/{totalPages}
+          {sortedList.length} bản ghi · trang {page}/{totalPages}
         </span>
       </div>
 
@@ -678,6 +831,12 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
               data={paginated}
               keyField="id"
               stripedRows compact height="100%"
+              sortableColumns={['so_bao_gia']}
+              sortState={listSortState}
+              onSortChange={setListSortState}
+              columnFilterConfig={baoGiaTinhTrangColumnFilter}
+              emptyDueToFilter={sortedList.length === 0 && filtered.length > 0 && coLocTinhTrangHieuLuc}
+              onClearAllFilters={() => setTinhTrangFilterSelected([])}
               selectedRowId={selectedId}
               onRowSelect={(r) => setSelectedId(r.id)}
               onRowDoubleClick={(r) => moFormXem(r)}
@@ -686,7 +845,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
                 setSelectedId(row.id)
                 setContextMenu({ open: true, x: e.clientX, y: e.clientY, row })
               }}
-              summary={filtered.length > 0 ? [
+              summary={sortedList.length > 0 ? [
                 { label: 'Tổng báo giá', value: formatNumberDisplay(tongTien, 0) },
               ] : []}
             />
@@ -751,17 +910,14 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             onClick={() => { moFormXem(contextMenu.row!); setContextMenu((m) => ({ ...m, open: false })) }}>
             <Eye size={13} /> Xem
           </button>
-          <button type="button" className={styles.contextMenuItem}
-            disabled={baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)}
-            style={{
-              opacity: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) ? 0.45 : 1,
-              cursor: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) ? 'default' : 'pointer',
-            }}
+          <button
+            type="button"
+            className={styles.contextMenuItem}
             onClick={() => {
-              if (baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)) return
               moFormSua(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
-            }}>
+            }}
+          >
             <Plus size={13} /> Sửa
           </button>
           <hr className={styles.contextMenuSep} />
@@ -1007,10 +1163,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
           >
             <BaoGiaForm
               key={formKey}
-              readOnly={
-                formMode === 'view'
-                || (formRecord != null && baoGiaBiKhoaChinhSuaTheoTinhTrang(formRecord.tinh_trang))
-              }
+              readOnly={formMode === 'view'}
               initialDon={formMode === 'view' || formMode === 'edit' ? (formRecord ?? undefined) : null}
               initialChiTiet={formRecord ? baoGiaGetChiTiet(formRecord.id) : undefined}
               onHeaderPointerDown={baoGiaFormDrag.dragHandleProps.onMouseDown}
@@ -1101,6 +1254,57 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
                   toast?.showToast('Đã lưu hợp đồng bán.', 'success')
                   setShowHopDongTuBaoGia(false)
                   setHopDongTuBaoGiaPrefill(null)
+                }}
+              />
+            </HopDongBanChungTuApiProvider>
+          </div>
+        </div>
+      )}
+
+      {xemDhbTuBang && (
+        <div className={styles.modalOverlay} onClick={() => setXemDhbTuBang(null)}>
+          <div
+            className={styles.modalBoxLarge}
+            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DonHangBanChungTuApiProvider api={donHangBanChungTuApiImpl}>
+              <DonHangBanForm
+                key={xemDhbKeyTuBang}
+                readOnly
+                viewOnlyLocked
+                initialDhb={xemDhbTuBang}
+                initialChiTiet={donHangBanGetChiTiet(xemDhbTuBang.id)}
+                onClose={() => setXemDhbTuBang(null)}
+                onSaved={() => {
+                  setXemDhbTuBang(null)
+                  loadData()
+                  setGiaoDichEpoch((e) => e + 1)
+                }}
+              />
+            </DonHangBanChungTuApiProvider>
+          </div>
+        </div>
+      )}
+      {xemHdbTuBang && (
+        <div className={styles.modalOverlay} onClick={() => setXemHdbTuBang(null)}>
+          <div
+            className={styles.modalBoxLarge}
+            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <HopDongBanChungTuApiProvider api={hopDongBanChungTuApiImpl}>
+              <HopDongBanForm
+                key={xemHdbKeyTuBang}
+                readOnly
+                viewOnlyLocked
+                initialHdbCt={xemHdbTuBang}
+                initialChiTiet={hopDongBanChungTuGetChiTiet(xemHdbTuBang.id)}
+                onClose={() => setXemHdbTuBang(null)}
+                onSaved={() => {
+                  setXemHdbTuBang(null)
+                  loadData()
+                  setGiaoDichEpoch((e) => e + 1)
                 }}
               />
             </HopDongBanChungTuApiProvider>

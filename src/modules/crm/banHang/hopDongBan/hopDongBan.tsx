@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Eye, Mail, MessageCircle, FileText, ChevronDown, ChevronRight, ListChecks, Package } from 'lucide-react'
-import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
+import { DataGrid, type DataGridColumn, type DataGridSortState } from '../../../../components/common/dataGrid'
 import { useToastOptional } from '../../../../context/toastContext'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
@@ -20,6 +20,12 @@ import {
   hopDongBanSoHopDongTiepTheo,
   hopDongBanChungTuApiImpl,
   hopDongBanChungTuSetTinhTrang,
+  hopDongBanGanKetThuTienTuPhieu,
+  hopDongBanGanKetChiTienTuPhieu,
+  hopDongBanQuetThuTienOrphanVaHoanTac,
+  hopDongBanQuetChiTienOrphanVaHoanTac,
+  hopDongBanThuTienBangIdsLinked,
+  hopDongBanChiTienBangIdsLinked,
   TINH_TRANG_HOP_DONG_BAN_CHUNG_TU_DA_NHAN_HANG,
   type HopDongBanChungTuRecord,
   type HopDongBanChungTuChiTiet,
@@ -31,16 +37,46 @@ import {
   getDefaultBaoGiaFilter,
 } from '../baoGia/baoGiaApi'
 import type { HopDongBanChungTuFilter } from '../../../../types/hopDongBanChungTu'
+import type {
+  PhuLucHopDongBanChungTuChiTiet,
+  PhuLucHopDongBanChungTuRecord,
+} from '../../../../types/phuLucHopDongBanChungTu'
 import { buildHopDongBanChungTuPrefillFromBaoGia } from './baoGiaToHopDongBanChungTuPrefill'
 import { HopDongBanForm } from './hopDongBanForm'
 import { HopDongBanChungTuApiProvider } from './hopDongBanChungTuApiContext'
 import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
-import { HTQL_BAN_HANG_TAB_EVENT } from '../banHangTabEvent'
+import { HTQL_BAN_HANG_TAB_EVENT, HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
+import { HTQL_THU_TIEN_BANG_RELOAD_EVENT, thuTienBangGetAll } from '../../../taiChinh/thuTien/thuTienBangApi'
+import { ThuTienForm } from '../../../taiChinh/thuTien/thuTienForm'
+import { ThuTienBangApiProvider } from '../../../taiChinh/thuTien/thuTienBangApiContext'
+import { thuTienBangApiImpl } from '../../../taiChinh/thuTien/thuTienBangApi'
+import { buildThuTienBangPrefillFromHopDongBanChungTu } from '../../../taiChinh/thuTien/hopDongBanToThuTienBangPrefill'
+import type { ThuTienBangChiTiet, ThuTienBangRecord } from '../../../../types/thuTienBang'
+import { useDraggable } from '../../../../hooks/useDraggable'
+import { PhuLucHopDongBanForm } from '../phuLucHopDongBan/phuLucHopDongBanForm'
+import { PhuLucHopDongBanChungTuApiProvider } from '../phuLucHopDongBan/phuLucHopDongBanChungTuApiContext'
+import {
+  phuLucHopDongBanChungTuApiImpl,
+  phuLucHopDongBanSoHopDongTiepTheo,
+} from '../phuLucHopDongBan/phuLucHopDongBanChungTuApi'
+import { buildPhuLucHopDongBanChungTuPrefillFromHopDongBanGoc } from '../phuLucHopDongBan/hopDongBanToPhuLucHopDongBanChungTuPrefill'
+import { tinhDaThuVaConLaiChoHopDongBan } from '../../../taiChinh/thuTien/chungTuCongNoKhach'
+import { tinhDaThuVaConLaiChoHopDongBan as tinhDaChiVaConLaiChoHopDongBan } from '../../../taiChinh/chiTien/chungTuCongNoChiTien'
+import { ChiTienForm } from '../../../taiChinh/chiTien/chiTienForm'
+import { ChiTienBangApiProvider } from '../../../taiChinh/chiTien/chiTienBangApiContext'
+import {
+  ChiTienBangApiImpl,
+  HTQL_CHI_TIEN_BANG_RELOAD_EVENT,
+  chiTienBangGetAll,
+} from '../../../taiChinh/chiTien/chiTienBangApi'
+import { buildChiTienBangPrefillFromHopDongBanChungTu } from '../../../taiChinh/chiTien/hopDongBanToChiTienBangPrefill'
+import type { ChiTienBangChiTiet, ChiTienBangRecord } from '../../../../types/chiTienBang'
 import { HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT } from '../../muaHang/muaHangTabEvent'
 import { ghiNhanDoanhThuGetAll, getDefaultGhiNhanDoanhThuFilter } from '../ghiNhanDoanhThu/ghiNhanDoanhThuApi'
 import styles from '../BanHang.module.css'
+import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
 
 function Badge({ value }: { value: string }) {
   const cls =
@@ -59,20 +95,17 @@ function formatNgay(iso: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
 
-// ─── Danh sách ───────────────────────────────────────────────────────────
+function hopDongBanKhoaViDaTaoPhieuThuHoacChi(
+  row: HopDongBanChungTuRecord,
+  phieuThuTonTai: Set<string>,
+  phieuChiTonTai: Set<string>,
+): boolean {
+  const coThu = hopDongBanThuTienBangIdsLinked(row).some((tid) => tid && phieuThuTonTai.has(tid))
+  const coChi = hopDongBanChiTienBangIdsLinked(row).some((cid) => cid && phieuChiTonTai.has(cid))
+  return coThu || coChi
+}
 
-const columns: DataGridColumn<HopDongBanChungTuRecord>[] = [
-  { key: 'so_hop_dong', label: 'Mã HĐ', width: 88 },
-  { key: 'nv_ban_hang', label: 'NV bán hàng', width: '10%' },
-  { key: 'so_chung_tu_cukcuk', label: 'Hợp đồng bán', width: 160, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
-  { key: 'ngay_lap_hop_dong', label: 'Ngày lập HĐ', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
-  { key: 'ngay_cam_ket_giao', label: 'Ngày GH', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string | null) },
-  { key: 'khach_hang', label: 'Khách hàng', width: '20%' },
-  { key: 'so_bao_gia_goc', label: 'Từ BG', width: 90, renderCell: (v) => v ? <span className={styles.sourceBadge}>{String(v)}</span> : '' },
-  { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-  { key: 'tinh_trang', label: 'Trạng thái', width: 110, renderCell: (v) => <Badge value={String(v)} /> },
-  { key: 'dien_giai', label: 'Ghi chú', width: '18%' },
-]
+// ─── Danh sách ───────────────────────────────────────────────────────────
 
 function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const toast = useToastOptional()
@@ -103,8 +136,146 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   const closeCtxThaoTacRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const SUBMENU_HOVER_DELAY_MS = 200
   const [dvtList, setDvtList] = useState<DvtListItem[]>([])
+  const [phieuThuEpoch, setPhieuThuEpoch] = useState(0)
+  const [phieuChiEpoch, setPhieuChiEpoch] = useState(0)
+  const thuTienLinkHopDongBanIdRef = useRef<string | null>(null)
+  const [showThuTienModal, setShowThuTienModal] = useState(false)
+  const [thuTienPrefill, setThuTienPrefill] = useState<{
+    prefillDon: Partial<ThuTienBangRecord>
+    prefillChiTiet: ThuTienBangChiTiet[]
+  } | null>(null)
+  const [thuTienFormKey, setThuTienFormKey] = useState(0)
+  const chiTienLinkHopDongBanIdRef = useRef<string | null>(null)
+  const [showChiTienModal, setShowChiTienModal] = useState(false)
+  const [chiTienPrefill, setChiTienPrefill] = useState<{
+    prefillDon: Partial<ChiTienBangRecord>
+    prefillChiTiet: ChiTienBangChiTiet[]
+  } | null>(null)
+  const [chiTienFormKey, setChiTienFormKey] = useState(0)
+  const thuTienModalDrag = useDraggable()
+  const chiTienModalDrag = useDraggable()
+  const [showPhuLucModal, setShowPhuLucModal] = useState(false)
+  const [phuLucPrefill, setPhuLucPrefill] = useState<{
+    prefillHdbCt: Partial<PhuLucHopDongBanChungTuRecord>
+    prefillChiTiet: PhuLucHopDongBanChungTuChiTiet[]
+  } | null>(null)
+  const [phuLucFormKey, setPhuLucFormKey] = useState(0)
+  const [listSortState, setListSortState] = useState<DataGridSortState[]>([])
+  const [tinhTrangFilterSelected, setTinhTrangFilterSelected] = useState<string[]>([])
 
   const selectedRow = selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null
+
+  const thuCongNoHdbById = useMemo(() => {
+    const m = new Map<string, { da_thu: number; con_lai: number; tong_da_lap: number }>()
+    for (const r of danhSach) {
+      const x = tinhDaThuVaConLaiChoHopDongBan(r)
+      m.set(r.id, { da_thu: x.da_thu, con_lai: x.con_lai, tong_da_lap: x.tong_da_lap })
+    }
+    return m
+  }, [danhSach, phieuThuEpoch])
+
+  const chiCongNoHdbById = useMemo(() => {
+    const m = new Map<string, { da_thu: number; con_lai: number; tong_da_lap: number }>()
+    for (const r of danhSach) {
+      const x = tinhDaChiVaConLaiChoHopDongBan(r)
+      m.set(r.id, { da_thu: x.da_thu, con_lai: x.con_lai, tong_da_lap: x.tong_da_lap })
+    }
+    return m
+  }, [danhSach, phieuChiEpoch])
+
+  const phieuThuTonTai = useMemo(() => {
+    void phieuThuEpoch
+    return new Set(thuTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' }).map((p) => p.id))
+  }, [phieuThuEpoch, danhSach])
+
+  const phieuChiTonTai = useMemo(() => {
+    void phieuChiEpoch
+    return new Set(chiTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' }).map((p) => p.id))
+  }, [phieuChiEpoch, danhSach])
+
+  const choPhepThuTienHopDong = (row: HopDongBanChungTuRecord) => {
+    const tong = Number(row.tong_thanh_toan) || 0
+    if (tong <= 0) return false
+    const ids = hopDongBanThuTienBangIdsLinked(row)
+    if (ids.some((tid) => tid && !phieuThuTonTai.has(tid))) return true
+    const cn = thuCongNoHdbById.get(row.id) ?? { da_thu: 0, con_lai: 0, tong_da_lap: 0 }
+    return tong - cn.tong_da_lap > 0
+  }
+
+  const moThuTienTuHopDong = (row: HopDongBanChungTuRecord) => {
+    if (!choPhepThuTienHopDong(row)) return
+    const ct = hopDongBanChungTuGetChiTiet(row.id)
+    const { prefillDon, prefillChiTiet } = buildThuTienBangPrefillFromHopDongBanChungTu(row, ct)
+    thuTienLinkHopDongBanIdRef.current = row.id
+    setThuTienPrefill({ prefillDon, prefillChiTiet })
+    setThuTienFormKey((k) => k + 1)
+    setShowThuTienModal(true)
+  }
+
+  const choPhepChiTienHopDong = (row: HopDongBanChungTuRecord) => {
+    const tong = Number(row.tong_thanh_toan) || 0
+    if (tong <= 0) return false
+    const ids = hopDongBanChiTienBangIdsLinked(row)
+    if (ids.some((cid) => cid && !phieuChiTonTai.has(cid))) return true
+    const cn = chiCongNoHdbById.get(row.id) ?? { da_thu: 0, con_lai: 0, tong_da_lap: 0 }
+    return tong - cn.tong_da_lap > 0
+  }
+
+  const coTheXoaHopDongBan = (row: HopDongBanChungTuRecord) => {
+    const thuIds = hopDongBanThuTienBangIdsLinked(row).filter((tid) => tid && phieuThuTonTai.has(tid))
+    const chiIds = hopDongBanChiTienBangIdsLinked(row).filter((cid) => cid && phieuChiTonTai.has(cid))
+    return thuIds.length === 0 && chiIds.length === 0
+  }
+
+  const moChiTienTuHopDong = (row: HopDongBanChungTuRecord) => {
+    if (!choPhepChiTienHopDong(row)) return
+    const ct = hopDongBanChungTuGetChiTiet(row.id)
+    const { prefillDon, prefillChiTiet } = buildChiTienBangPrefillFromHopDongBanChungTu(row, ct)
+    chiTienLinkHopDongBanIdRef.current = row.id
+    setChiTienPrefill({ prefillDon, prefillChiTiet })
+    setChiTienFormKey((k) => k + 1)
+    setShowChiTienModal(true)
+  }
+
+  const moThemPhuLucTuHopDong = (row: HopDongBanChungTuRecord) => {
+    const so = phuLucHopDongBanSoHopDongTiepTheo()
+    const { prefillHdbCt, prefillChiTiet } = buildPhuLucHopDongBanChungTuPrefillFromHopDongBanGoc(row, so)
+    setPhuLucPrefill({ prefillHdbCt, prefillChiTiet })
+    setPhuLucFormKey((k) => k + 1)
+    setShowPhuLucModal(true)
+  }
+
+  const columns = useMemo((): DataGridColumn<HopDongBanChungTuRecord>[] => [
+    { key: 'so_hop_dong', label: 'Mã HĐB', width: 88 },
+    { key: 'nv_ban_hang', label: 'NV bán hàng', width: '10%' },
+    { key: 'so_chung_tu_cukcuk', label: 'Hợp đồng bán', width: 160, renderCell: (v) => (v != null && String(v).trim() ? String(v) : '') },
+    { key: 'ngay_lap_hop_dong', label: 'Ngày lập HĐ', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
+    { key: 'khach_hang', label: 'Khách hàng', width: '20%' },
+    { key: 'so_bao_gia_goc', label: 'Từ BG', width: 90, renderCell: (v) => v ? <span className={styles.sourceBadge}>{String(v)}</span> : '' },
+    { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+    {
+      key: 'da_thu',
+      label: 'Đã thu',
+      width: 100,
+      align: 'right',
+      renderCell: (_v, row) => formatNumberDisplay(thuCongNoHdbById.get(row.id)?.da_thu ?? 0, 0),
+    },
+    {
+      key: 'con_lai',
+      label: 'Còn lại',
+      width: 100,
+      align: 'right',
+      renderCell: (_v, row) => formatNumberDisplay(thuCongNoHdbById.get(row.id)?.con_lai ?? 0, 0),
+    },
+    {
+      key: 'tinh_trang',
+      label: 'Tình trạng',
+      width: 110,
+      filterable: true,
+      renderCell: (v) => <Badge value={String(v)} />,
+    },
+    { key: 'dien_giai', label: 'Ghi chú', width: '18%' },
+  ], [thuCongNoHdbById])
   const chiTietHienThiCoVat = selectedRow == null || selectedRow.ap_dung_vat_gtgt !== false
 
   const columnsChiTiet = useMemo((): DataGridColumn<HopDongBanChungTuChiTiet>[] => {
@@ -124,17 +295,7 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           { key: 'tien_thue_gtgt', label: 'Tiền GTGT', width: 100, align: 'right', renderCell: (v) => v != null ? formatNumberDisplay(Number(v), 0) : '' },
         ]
       : []
-    const cotDd: DataGridColumn<HopDongBanChungTuChiTiet> = {
-      key: 'dd_th_index',
-      label: 'ĐĐTH',
-      width: 72,
-      align: 'center',
-      renderCell: (_v, row) => {
-        const n = Number(row?.dd_th_index ?? 0)
-        return Number.isFinite(n) ? `ĐĐTH ${n + 1}` : 'ĐĐTH 1'
-      },
-    }
-    return [...coBan, ...cotThue, cotDd, { key: 'ghi_chu', label: 'Ghi chú', width: 160 }]
+    return [...coBan, ...cotThue, { key: 'ghi_chu', label: 'Ghi chú', width: 160 }]
   }, [dvtList, chiTietHienThiCoVat])
 
   useEffect(() => {
@@ -146,8 +307,37 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     return () => { c = true }
   }, [])
 
-  const loadData = useCallback(() => setDanhSach(hopDongBanChungTuGetAll(filter)), [filter])
+  const loadData = useCallback(() => {
+    const idPhieuThu = new Set(thuTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' }).map((p) => p.id))
+    hopDongBanQuetThuTienOrphanVaHoanTac(idPhieuThu)
+    const idPhieuChi = new Set(chiTienBangGetAll({ ky: 'tat-ca', tu: '', den: '' }).map((p) => p.id))
+    hopDongBanQuetChiTienOrphanVaHoanTac(idPhieuChi)
+    setDanhSach(hopDongBanChungTuGetAll(filter))
+  }, [filter])
   useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    const h = () => loadData()
+    window.addEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, h)
+    return () => window.removeEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, h)
+  }, [loadData])
+  useEffect(() => {
+    const h = () => {
+      setPhieuThuEpoch((e) => e + 1)
+      loadData()
+    }
+    window.addEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, h)
+    return () => window.removeEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, h)
+  }, [loadData])
+
+  useEffect(() => {
+    const h = () => {
+      setPhieuChiEpoch((e) => e + 1)
+      loadData()
+    }
+    window.addEventListener(HTQL_CHI_TIEN_BANG_RELOAD_EVENT, h)
+    return () => window.removeEventListener(HTQL_CHI_TIEN_BANG_RELOAD_EVENT, h)
+  }, [loadData])
+
   useEffect(() => {
     if (selectedId) setChiTiet(hopDongBanChungTuGetChiTiet(selectedId))
     else setChiTiet([])
@@ -204,6 +394,63 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     ? danhSach.filter((r) => matchSearchKeyword(`${r.so_hop_dong} ${r.khach_hang} ${r.dien_giai ?? ''} ${r.tinh_trang} ${r.so_bao_gia_goc ?? ''}`, search))
     : danhSach
 
+  const tinhTrangOptionsHdb = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of filtered) {
+      const t = (r.tinh_trang ?? '').trim()
+      set.add(t || '(Trống)')
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  }, [filtered])
+
+  const filteredByTinhTrangHdb = useMemo(() => {
+    if (tinhTrangFilterSelected.length === 0) return filtered
+    if (
+      tinhTrangOptionsHdb.length > 0 &&
+      tinhTrangFilterSelected.length >= tinhTrangOptionsHdb.length
+    ) {
+      return filtered
+    }
+    return filtered.filter((r) => {
+      const t = (r.tinh_trang ?? '').trim() || '(Trống)'
+      return tinhTrangFilterSelected.includes(t)
+    })
+  }, [filtered, tinhTrangFilterSelected, tinhTrangOptionsHdb])
+
+  const sortedListHdb = useMemo(() => {
+    const sort = listSortState.find((s) => s.key === 'so_hop_dong')
+    const arr = [...filteredByTinhTrangHdb]
+    if (!sort) return arr
+    arr.sort((a, b) => {
+      const na = parseTrailingIntFromMa(a.so_hop_dong)
+      const nb = parseTrailingIntFromMa(b.so_hop_dong)
+      const c = na - nb
+      return sort.direction === 'asc' ? c : -c
+    })
+    return arr
+  }, [filteredByTinhTrangHdb, listSortState])
+
+  const chungTuDongBoChoFormHdb = useMemo(() => {
+    if (!formRecord) return null
+    return danhSach.find((d) => d.id === formRecord.id) ?? formRecord
+  }, [formRecord, danhSach])
+
+  const hdbTinhTrangColumnFilter = useMemo(
+    () => ({
+      tinh_trang: {
+        options: tinhTrangOptionsHdb,
+        selected: tinhTrangFilterSelected,
+        onChange: setTinhTrangFilterSelected,
+      },
+    }),
+    [tinhTrangOptionsHdb, tinhTrangFilterSelected],
+  )
+
+  const coLocTinhTrangHdbHieuLuc =
+    tinhTrangOptionsHdb.length > 0 &&
+    tinhTrangFilterSelected.length > 0 &&
+    tinhTrangFilterSelected.length < tinhTrangOptionsHdb.length
+
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (dropdownTaoGdRef.current && !dropdownTaoGdRef.current.contains(e.target as Node)) setDropdownTaoGd(false)
@@ -213,7 +460,7 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     return () => window.removeEventListener('click', h)
   }, [])
 
-  const tongTien = filtered.reduce((s, r) => s + r.tong_thanh_toan, 0)
+  const tongTien = filteredByTinhTrangHdb.reduce((s, r) => s + r.tong_thanh_toan, 0)
 
   const resetFormPrefill = () => {
     setPrefillTuBaoGiaHdb(undefined)
@@ -236,7 +483,7 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
         >
           <Plus size={13} /><span>Thêm</span>
         </button>
-        <button type="button" className={styles.toolbarBtnDanger} disabled={!selectedId}
+        <button type="button" className={styles.toolbarBtnDanger} disabled={!selectedId || !selectedRow || !coTheXoaHopDongBan(selectedRow)}
           onClick={() => selectedRow && setXoaModal(selectedRow)}>
           <Trash2 size={13} /><span>Xóa</span>
         </button>
@@ -260,19 +507,37 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           </button>
           {dropdownTaoGd && selectedRow && (
             <div className={styles.dropdownMenu}>
-              <button type="button" className={styles.dropdownItem}
+              <button
+                type="button"
+                className={styles.dropdownItem}
+                disabled={!choPhepThuTienHopDong(selectedRow)}
+                style={{
+                  opacity: !choPhepThuTienHopDong(selectedRow) ? 0.55 : 1,
+                  cursor: !choPhepThuTienHopDong(selectedRow) ? 'not-allowed' : 'pointer',
+                }}
                 onClick={() => {
-                  toast?.showToast('Phiếu thu: tính năng đang phát triển, chưa gán module.', 'info')
+                  if (!choPhepThuTienHopDong(selectedRow)) return
+                  moThuTienTuHopDong(selectedRow)
                   setDropdownTaoGd(false)
-                }}>
-                <FileText size={13} /> Phiếu thu
+                }}
+              >
+                <FileText size={13} /> Thu tiền
               </button>
-              <button type="button" className={styles.dropdownItem}
+              <button
+                type="button"
+                className={styles.dropdownItem}
+                disabled={!selectedRow || !choPhepChiTienHopDong(selectedRow)}
+                style={{
+                  opacity: !selectedRow || !choPhepChiTienHopDong(selectedRow) ? 0.55 : 1,
+                  cursor: !selectedRow || !choPhepChiTienHopDong(selectedRow) ? 'not-allowed' : 'pointer',
+                }}
                 onClick={() => {
-                  toast?.showToast('Phiếu chi: tính năng đang phát triển, chưa gán module.', 'info')
+                  if (!selectedRow || !choPhepChiTienHopDong(selectedRow)) return
+                  moChiTienTuHopDong(selectedRow)
                   setDropdownTaoGd(false)
-                }}>
-                <FileText size={13} /> Phiếu chi
+                }}
+              >
+                <FileText size={13} /> Chi tiền
               </button>
             </div>
           )}
@@ -303,7 +568,18 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       <div className={styles.contentArea}>
         <div className={styles.gridWrap}>
           <DataGrid<HopDongBanChungTuRecord>
-            columns={columns} data={filtered} keyField="id" stripedRows compact height="100%"
+            columns={columns}
+            data={sortedListHdb}
+            keyField="id"
+            stripedRows
+            compact
+            height="100%"
+            sortableColumns={['so_hop_dong']}
+            sortState={listSortState}
+            onSortChange={setListSortState}
+            columnFilterConfig={hdbTinhTrangColumnFilter}
+            emptyDueToFilter={sortedListHdb.length === 0 && filtered.length > 0 && coLocTinhTrangHdbHieuLuc}
+            onClearAllFilters={() => setTinhTrangFilterSelected([])}
             selectedRowId={selectedId}
             onRowSelect={(r) => setSelectedId(r.id)}
             onRowDoubleClick={(r) => {
@@ -316,7 +592,7 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
             onRowContextMenu={(row, e) => { e.preventDefault(); setSelectedId(row.id); setContextMenu({ open: true, x: e.clientX, y: e.clientY, row }) }}
             summary={[
               { label: 'Tổng thanh toán', value: formatNumberDisplay(tongTien, 0) },
-              { label: 'Số dòng', value: `= ${filtered.length}` },
+              { label: 'Số dòng', value: `= ${sortedListHdb.length}` },
             ]}
           />
         </div>
@@ -343,14 +619,26 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
             setShowForm(true)
             setContextMenu((m) => ({ ...m, open: false }))
           }}><Eye size={13} /> Xem</button>
-          <button type="button" className={styles.contextMenuItem} onClick={() => {
-            resetFormPrefill()
-            setFormRecord(contextMenu.row!)
-            setFormMode('edit')
-            setFormKey((k) => k + 1)
-            setShowForm(true)
-            setContextMenu((m) => ({ ...m, open: false }))
-          }}><Plus size={13} /> Sửa</button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            disabled={hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
+            style={{
+              opacity: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
+              cursor: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
+            }}
+            onClick={() => {
+              if (hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
+              resetFormPrefill()
+              setFormRecord(contextMenu.row!)
+              setFormMode('edit')
+              setFormKey((k) => k + 1)
+              setShowForm(true)
+              setContextMenu((m) => ({ ...m, open: false }))
+            }}
+          >
+            <Plus size={13} /> Sửa
+          </button>
           <hr className={styles.contextMenuSep} />
           <div
             style={{ position: 'relative' }}
@@ -389,24 +677,38 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                 <button
                   type="button"
                   className={styles.contextMenuItem}
+                  disabled={!choPhepThuTienHopDong(contextMenu.row!)}
+                  style={{
+                    opacity: !choPhepThuTienHopDong(contextMenu.row!) ? 0.55 : 1,
+                    cursor: !choPhepThuTienHopDong(contextMenu.row!) ? 'not-allowed' : 'pointer',
+                  }}
                   onClick={() => {
-                    toast?.showToast('Phiếu thu: tính năng đang phát triển, chưa gán module.', 'info')
+                    const row = contextMenu.row
+                    if (!row || !choPhepThuTienHopDong(row)) return
+                    moThuTienTuHopDong(row)
                     setCtxSubmenuTaoGd(false)
                     setContextMenu((m) => ({ ...m, open: false }))
                   }}
                 >
-                  <FileText size={13} /> Phiếu thu
+                  <FileText size={13} /> Thu tiền
                 </button>
                 <button
                   type="button"
                   className={styles.contextMenuItem}
+                  disabled={!choPhepChiTienHopDong(contextMenu.row!)}
+                  style={{
+                    opacity: !choPhepChiTienHopDong(contextMenu.row!) ? 0.55 : 1,
+                    cursor: !choPhepChiTienHopDong(contextMenu.row!) ? 'not-allowed' : 'pointer',
+                  }}
                   onClick={() => {
-                    toast?.showToast('Phiếu chi: tính năng đang phát triển, chưa gán module.', 'info')
+                    const row = contextMenu.row
+                    if (!row || !choPhepChiTienHopDong(row)) return
+                    moChiTienTuHopDong(row)
                     setCtxSubmenuTaoGd(false)
                     setContextMenu((m) => ({ ...m, open: false }))
                   }}
                 >
-                  <FileText size={13} /> Phiếu chi
+                  <FileText size={13} /> Chi tiền
                 </button>
               </div>
             )}
@@ -480,6 +782,18 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
                   <button
                     type="button"
                     className={styles.contextMenuItem}
+                    onClick={() => {
+                      if (!row) return
+                      setCtxThaoTacSubOpen(false)
+                      setContextMenu((m) => ({ ...m, open: false }))
+                      moThemPhuLucTuHopDong(row)
+                    }}
+                  >
+                    <FileText size={13} /> Thêm PL hợp đồng bán
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.contextMenuItem}
                     style={{
                       opacity: disNhan ? 0.6 : 1,
                       color: disNhan ? 'var(--text-muted)' : undefined,
@@ -530,7 +844,23 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           <button type="button" className={styles.contextMenuItem} onClick={() => { toast?.showToast('Đã gửi Email.', 'success'); setContextMenu((m) => ({ ...m, open: false })) }}><Mail size={13} /> Gửi Email</button>
           <button type="button" className={styles.contextMenuItem} onClick={() => { toast?.showToast('Đã gửi Zalo.', 'success'); setContextMenu((m) => ({ ...m, open: false })) }}><MessageCircle size={13} /> Gửi Zalo</button>
           <hr className={styles.contextMenuSep} />
-          <button type="button" className={styles.contextMenuItem} style={{ color: '#dc2626' }} onClick={() => { setXoaModal(contextMenu.row!); setContextMenu((m) => ({ ...m, open: false })) }}><Trash2 size={13} /> Xóa</button>
+          <button
+            type="button"
+            className={styles.contextMenuItem}
+            style={{
+              color: '#dc2626',
+              opacity: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
+              cursor: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
+            }}
+            disabled={hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
+            onClick={() => {
+              if (hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
+              setXoaModal(contextMenu.row!)
+              setContextMenu((m) => ({ ...m, open: false }))
+            }}
+          >
+            <Trash2 size={13} /> Xóa
+          </button>
         </div>
       )}
 
@@ -555,6 +885,117 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
         }
       />
 
+      {showThuTienModal && thuTienPrefill && (
+        <div className={`${styles.modalOverlay} ${styles.modalOverlayTaiChinhPop}`}>
+          <div
+            ref={thuTienModalDrag.containerRef}
+            className={styles.modalBox}
+            style={thuTienModalDrag.containerStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ThuTienBangApiProvider api={thuTienBangApiImpl}>
+              <ThuTienForm
+                key={thuTienFormKey}
+                formTitle="Phiếu thu tiền"
+                thuTienPhieu
+                phieuThuTuMenuBanHang
+                soDonLabel="Mã phiếu thu"
+                prefillDon={thuTienPrefill.prefillDon}
+                prefillChiTiet={thuTienPrefill.prefillChiTiet}
+                readOnly={false}
+                onHeaderPointerDown={thuTienModalDrag.dragHandleProps.onMouseDown}
+                headerDragStyle={thuTienModalDrag.dragHandleProps.style}
+                onClose={() => {
+                  setShowThuTienModal(false)
+                  setThuTienPrefill(null)
+                  thuTienLinkHopDongBanIdRef.current = null
+                }}
+                onSaved={(saved) => {
+                  setShowThuTienModal(false)
+                  setThuTienPrefill(null)
+                  const linkId = thuTienLinkHopDongBanIdRef.current
+                  thuTienLinkHopDongBanIdRef.current = null
+                  if (saved && linkId) {
+                    hopDongBanGanKetThuTienTuPhieu(linkId, saved.id)
+                    loadData()
+                    toast?.showToast('Đã lưu phiếu thu — HĐ chuyển «Đã thu tiền» sau khi ghi sổ phiếu tại Thu tiền.', 'success')
+                  }
+                }}
+              />
+            </ThuTienBangApiProvider>
+          </div>
+        </div>
+      )}
+
+      {showChiTienModal && chiTienPrefill && (
+        <div className={`${styles.modalOverlay} ${styles.modalOverlayTaiChinhPop}`}>
+          <div
+            ref={chiTienModalDrag.containerRef}
+            className={styles.modalBox}
+            style={chiTienModalDrag.containerStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ChiTienBangApiProvider api={ChiTienBangApiImpl}>
+              <ChiTienForm
+                key={chiTienFormKey}
+                formTitle="Phiếu chi tiền"
+                chiTienPhieu
+                phieuChiTuMenuBanHang
+                soDonLabel="Mã phiếu chi"
+                prefillDon={chiTienPrefill.prefillDon}
+                prefillChiTiet={chiTienPrefill.prefillChiTiet}
+                readOnly={false}
+                onHeaderPointerDown={chiTienModalDrag.dragHandleProps.onMouseDown}
+                headerDragStyle={chiTienModalDrag.dragHandleProps.style}
+                onClose={() => {
+                  setShowChiTienModal(false)
+                  setChiTienPrefill(null)
+                  chiTienLinkHopDongBanIdRef.current = null
+                }}
+                onSaved={(saved) => {
+                  setShowChiTienModal(false)
+                  setChiTienPrefill(null)
+                  const linkId = chiTienLinkHopDongBanIdRef.current
+                  chiTienLinkHopDongBanIdRef.current = null
+                  if (saved && linkId) {
+                    hopDongBanGanKetChiTienTuPhieu(linkId, saved.id)
+                    loadData()
+                    toast?.showToast('Đã lưu phiếu chi — HĐ chuyển «Đã chi tiền» sau khi ghi sổ phiếu tại Chi tiền.', 'success')
+                  }
+                }}
+              />
+            </ChiTienBangApiProvider>
+          </div>
+        </div>
+      )}
+
+      {showPhuLucModal && phuLucPrefill && (
+        <div className={styles.modalOverlay} onClick={() => { setShowPhuLucModal(false); setPhuLucPrefill(null) }}>
+          <div
+            className={styles.modalBoxLarge}
+            style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PhuLucHopDongBanChungTuApiProvider api={phuLucHopDongBanChungTuApiImpl}>
+              <PhuLucHopDongBanForm
+                key={phuLucFormKey}
+                readOnly={false}
+                initialHdbCt={null}
+                prefillHdbCt={phuLucPrefill.prefillHdbCt}
+                prefillChiTiet={phuLucPrefill.prefillChiTiet}
+                onClose={() => { setShowPhuLucModal(false); setPhuLucPrefill(null) }}
+                onSaved={() => {
+                  setShowPhuLucModal(false)
+                  setPhuLucPrefill(null)
+                  loadData()
+                  toast?.showToast('Đã lưu phụ lục hợp đồng bán.', 'success')
+                }}
+              />
+            </PhuLucHopDongBanChungTuApiProvider>
+          </div>
+        </div>
+      )}
+
       {showForm && (
         <div className={styles.modalOverlay} onClick={() => { resetFormPrefill(); setShowForm(false) }}>
           <div
@@ -571,6 +1012,14 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
               prefillChiTiet={formMode === 'add' ? (prefillTuBaoGiaHdb?.prefillChiTiet ?? prefillCloneTuHopDongBanChungTu?.prefillChiTiet) : undefined}
               onClose={() => { resetFormPrefill(); setShowForm(false) }}
               onSaved={() => { resetFormPrefill(); setShowForm(false); loadData() }}
+              onMoPhieuThuTuForm={
+                chungTuDongBoChoFormHdb ? () => moThuTienTuHopDong(chungTuDongBoChoFormHdb) : undefined
+              }
+              onMoPhieuChiTuForm={
+                chungTuDongBoChoFormHdb ? () => moChiTienTuHopDong(chungTuDongBoChoFormHdb) : undefined
+              }
+              choPhepMoPhieuThuTuForm={chungTuDongBoChoFormHdb ? choPhepThuTienHopDong(chungTuDongBoChoFormHdb) : false}
+              choPhepMoPhieuChiTuForm={chungTuDongBoChoFormHdb ? choPhepChiTienHopDong(chungTuDongBoChoFormHdb) : false}
             />
           </div>
         </div>

@@ -1,100 +1,324 @@
 /**
- * Công nợ khách hàng — tự động tính từ HoaDonBan + PhieuThu.
- * Hiển thị bảng tổng hợp và chi tiết theo hóa đơn.
- * Logic: congNoKhachHang() từ hoaDonBanApi.
+ * Công nợ khách hàng — tổng hợp Đơn hàng bán + Hợp đồng bán (chứng từ), chỉ hiển thị khi còn lại > 0.
  */
-
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
-import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
+import { useDraggable } from '../../../../hooks/useDraggable'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { formatNumberDisplay } from '../../../../utils/numberFormat'
-import { formFooterButtonCancel, formFooterButtonSave } from '../../../../constants/formFooterButtons'
-import {
-  hoaDonBanGetAll,
-  phieuThuPost,
-  phieuThuSoTiepTheo,
-  congNoKhachHang,
-  getDefaultHoaDonBanFilter,
-  type HoaDonBanRecord,
-} from '../hoaDon/hoaDonBanApi'
 import styles from '../BanHang.module.css'
+import { baoGiaGetAll, getDefaultBaoGiaFilter } from '../baoGia/baoGiaApi'
+import { khachHangGetAll, type KhachHangRecord } from '../khachHang/khachHangApi'
+import {
+  donHangBanGetAll,
+  donHangBanGetChiTiet,
+  getDefaultDonHangBanChungTuFilter,
+} from '../donHangBan/donHangBanChungTuApi'
+import {
+  hopDongBanChungTuGetAll,
+  hopDongBanChungTuGetChiTiet,
+  getDefaultHopDongBanChungTuFilter,
+} from '../hopDongBan/hopDongBanChungTuApi'
+import {
+  tinhDaThuVaConLaiChoDonHangBan,
+  tinhDaThuVaConLaiChoHopDongBan,
+  hanThanhToanTuDonHang,
+  hanThanhToanTuHopDong,
+} from '../../../taiChinh/thuTien/chungTuCongNoKhach'
+import { buildThuTienBangPrefillFromDonHangBan } from '../../../taiChinh/thuTien/donHangBanToThuTienBangPrefill'
+import { buildThuTienBangPrefillFromHopDongBanChungTu } from '../../../taiChinh/thuTien/hopDongBanToThuTienBangPrefill'
+import { ThuTienForm } from '../../../taiChinh/thuTien/thuTienForm'
+import { ThuTienBangApiProvider } from '../../../taiChinh/thuTien/thuTienBangApiContext'
+import { thuTienBangApiImpl, HTQL_THU_TIEN_BANG_RELOAD_EVENT } from '../../../taiChinh/thuTien/thuTienBangApi'
+import type { DonHangBanChungTuRecord } from '../../../../types/donHangBanChungTu'
+import type { HopDongBanChungTuRecord } from '../../../../types/hopDongBanChungTu'
+import type { ThuTienBangChiTiet, ThuTienBangRecord } from '../../../../types/thuTienBang'
 
-function formatNgay(iso: string | null | undefined): string {
+function formatNgayIso(iso: string | null | undefined): string {
   if (!iso) return ''
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
 
-const TODAY_ISO = new Date().toISOString().slice(0, 10)
-
-// ─── Main ─────────────────────────────────────────────────────────────────
-
-interface CongNoRow {
-  id: string
-  khach_hang: string
-  tong_no: number
-  so_hoa_don: number
+function parseHanDdMmYyyyToTime(s: string): number | null {
+  const t = (s ?? '').trim()
+  const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!m) return null
+  const d = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10))
+  return Number.isNaN(d.getTime()) ? null : d.getTime()
 }
 
-const columnsCongNo: DataGridColumn<CongNoRow>[] = [
-  { key: 'khach_hang', label: 'Khách hàng', width: '40%' },
-  { key: 'so_hoa_don', label: 'Số hóa đơn nợ', width: 110, align: 'right' },
+function maKhachTuTen(ten: string, list: KhachHangRecord[]): string {
+  const t = ten.trim()
+  if (!t) return ''
+  const hit =
+    list.find((k) => (k.ten_kh ?? '').trim() === t) ||
+    list.find((k) => {
+      const ma = (k.ma_kh ?? '').trim()
+      return ma !== '' && (t === ma || t.startsWith(`${ma} -`))
+    })
+  return (hit?.ma_kh ?? '').trim()
+}
+
+function hanSomNhatDisplay(times: number[]): string {
+  const valid = times.filter((n) => Number.isFinite(n))
+  if (valid.length === 0) return ''
+  const min = Math.min(...valid)
+  const d = new Date(min)
+  const day = d.getDate()
+  const mo = d.getMonth() + 1
+  const y = d.getFullYear()
+  return `${String(day).padStart(2, '0')}/${String(mo).padStart(2, '0')}/${y}`
+}
+
+interface CongNoTongHopRow {
+  id: string
+  ma_khach_hang: string
+  ten_khach_hang: string
+  han_thanh_toan: string
+  tong_cong_no: number
+}
+
+type CongNoChiTietRow = {
+  id: string
+  loai: 'don_hang_ban' | 'hop_dong_ban'
+  loaiHienThi: string
+  ma_chung_tu: string
+  ngay_chung_tu: string
+  han_thanh_toan: string
+  dien_giai: string
+  tong_phai_thu: number
+  da_thu: number
+  con_lai: number
+  chungTuId: string
+}
+
+const columnsCongNo: DataGridColumn<CongNoTongHopRow>[] = [
+  { key: 'ma_khach_hang', label: 'Mã KH', width: 88 },
+  { key: 'ten_khach_hang', label: 'Tên khách hàng', width: '28%' },
+  { key: 'han_thanh_toan', label: 'Hạn thanh toán', width: 100, align: 'right' },
   {
-    key: 'tong_no',
+    key: 'tong_cong_no',
     label: 'Tổng công nợ',
-    width: 140,
+    width: 130,
     align: 'right',
     renderCell: (v) => <span className={Number(v) > 0 ? styles.congNoAmountNeg : undefined}>{formatNumberDisplay(Number(v), 0)}</span>,
   },
 ]
 
-const columnsHoaDonNo: DataGridColumn<HoaDonBanRecord>[] = [
-  { key: 'so_hoa_don', label: 'Số HĐ', width: 100 },
-  { key: 'ngay_hoa_don', label: 'Ngày HĐ', width: 76, align: 'right', renderCell: (v) => formatNgay(v as string) },
-  { key: 'dien_giai', label: 'Diễn giải', width: '30%' },
-  { key: 'tong_thanh_toan', label: 'Tổng tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
-  { key: 'so_tien_da_thu', label: 'Đã thu', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+const columnsChiTiet: DataGridColumn<CongNoChiTietRow>[] = [
+  { key: 'loaiHienThi', label: 'Loại', width: 108 },
+  { key: 'ma_chung_tu', label: 'Mã chứng từ', width: 108 },
+  { key: 'ngay_chung_tu', label: 'Ngày CT', width: 84, align: 'right' },
+  { key: 'han_thanh_toan', label: 'Hạn thanh toán', width: 100, align: 'right' },
+  { key: 'dien_giai', label: 'Diễn giải', width: '22%' },
+  { key: 'tong_phai_thu', label: 'Tổng tiền', width: 110, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
+  { key: 'da_thu', label: 'Đã thu', width: 100, align: 'right', renderCell: (v) => formatNumberDisplay(Number(v), 0) },
   { key: 'con_lai', label: 'Còn lại', width: 110, align: 'right', renderCell: (v) => <span className={styles.congNoAmountNeg}>{formatNumberDisplay(Number(v), 0)}</span> },
-  { key: 'tinh_trang', label: 'Trạng thái', width: 110 },
 ]
+
+function buildChiTietChoTenKhach(tenKhach: string): CongNoChiTietRow[] {
+  const ten = tenKhach.trim()
+  if (!ten) return []
+  const filterDhb = getDefaultDonHangBanChungTuFilter()
+  const filterHdb = getDefaultHopDongBanChungTuFilter()
+  const baoGiaIds = new Set(baoGiaGetAll(getDefaultBaoGiaFilter()).map((r) => r.id))
+  const out: CongNoChiTietRow[] = []
+
+  for (const r of donHangBanGetAll(filterDhb)) {
+    if ((r.khach_hang ?? '').trim() !== ten) continue
+    if ((r.tinh_trang ?? '').trim() === 'Hủy bỏ') continue
+    const bid = (r.bao_gia_id ?? '').trim()
+    if (bid && !baoGiaIds.has(bid)) continue
+    const { con_lai, da_thu } = tinhDaThuVaConLaiChoDonHangBan(r)
+    if (con_lai <= 0) continue
+    const hanStr = hanThanhToanTuDonHang(r)
+    const idCt = (r.so_don_hang ?? '').trim() || r.id
+    out.push({
+      id: `dhb:${r.id}`,
+      loai: 'don_hang_ban',
+      loaiHienThi: 'Đơn hàng bán',
+      ma_chung_tu: idCt,
+      ngay_chung_tu: formatNgayIso(r.ngay_don_hang),
+      han_thanh_toan: hanStr,
+      dien_giai: (r.dien_giai ?? '').trim(),
+      tong_phai_thu: typeof r.tong_thanh_toan === 'number' ? r.tong_thanh_toan : 0,
+      da_thu,
+      con_lai,
+      chungTuId: r.id,
+    })
+  }
+  for (const r of hopDongBanChungTuGetAll(filterHdb)) {
+    if ((r.khach_hang ?? '').trim() !== ten) continue
+    if ((r.tinh_trang ?? '').trim() === 'Hủy bỏ') continue
+    const bid = (r.bao_gia_id ?? '').trim()
+    if (bid && !baoGiaIds.has(bid)) continue
+    const { con_lai, da_thu } = tinhDaThuVaConLaiChoHopDongBan(r)
+    if (con_lai <= 0) continue
+    const hanStr = hanThanhToanTuHopDong(r)
+    const idCt = (r.so_hop_dong ?? '').trim() || r.id
+    out.push({
+      id: `hdb:${r.id}`,
+      loai: 'hop_dong_ban',
+      loaiHienThi: 'Hợp đồng bán',
+      ma_chung_tu: idCt,
+      ngay_chung_tu: formatNgayIso(r.ngay_lap_hop_dong),
+      han_thanh_toan: hanStr,
+      dien_giai: (r.dien_giai ?? '').trim(),
+      tong_phai_thu: typeof r.tong_thanh_toan === 'number' ? r.tong_thanh_toan : 0,
+      da_thu,
+      con_lai,
+      chungTuId: r.id,
+    })
+  }
+  out.sort((a, b) => a.ma_chung_tu.localeCompare(b.ma_chung_tu, 'vi'))
+  return out
+}
 
 export function CongNoKhachHang() {
   const toast = useToastOptional()
-  const [congNoList, setCongNoList] = useState<CongNoRow[]>([])
-  const [selectedKh, setSelectedKh] = useState<string | null>(null)
-  const [hoaDonNoCuaKh, setHoaDonNoCuaKh] = useState<HoaDonBanRecord[]>([])
+  const thuDrag = useDraggable()
+  const [khList, setKhList] = useState<KhachHangRecord[]>([])
+  const [congNoList, setCongNoList] = useState<CongNoTongHopRow[]>([])
+  const [selectedKhId, setSelectedKhId] = useState<string | null>(null)
+  const [chiTietKhach, setChiTietKhach] = useState<CongNoChiTietRow[]>([])
   const [search, setSearch] = useState('')
-  const [thuModal, setThuModal] = useState<HoaDonBanRecord | null>(null)
-  const [loi, setLoi] = useState('')
+  const [selectedChungTuId, setSelectedChungTuId] = useState<string | null>(null)
+  const [showThuTienModal, setShowThuTienModal] = useState(false)
+  const [thuPrefill, setThuPrefill] = useState<{ prefillDon: Partial<ThuTienBangRecord>; prefillChiTiet: ThuTienBangChiTiet[] } | null>(null)
+  const [thuTienFormKey, setThuTienFormKey] = useState(0)
+
+  useEffect(() => {
+    let c = false
+    khachHangGetAll().then((list) => {
+      if (!c && Array.isArray(list)) setKhList(list)
+    })
+    return () => { c = true }
+  }, [])
 
   const loadData = useCallback(() => {
-    const map = congNoKhachHang()
-    const rows: CongNoRow[] = []
-    map.forEach((v, kh) => rows.push({ id: kh, khach_hang: kh, tong_no: v.tongNo, so_hoa_don: v.soHoaDon }))
-    rows.sort((a, b) => b.tong_no - a.tong_no)
-    setCongNoList(rows)
-    if (selectedKh) {
-      const hoaDonAll = hoaDonBanGetAll({ ...getDefaultHoaDonBanFilter() })
-      setHoaDonNoCuaKh(hoaDonAll.filter((h) => h.khach_hang === selectedKh && h.con_lai > 0 && h.tinh_trang !== 'Hủy bỏ'))
+    const filterDhb = getDefaultDonHangBanChungTuFilter()
+    const filterHdb = getDefaultHopDongBanChungTuFilter()
+    const baoGiaIds = new Set(baoGiaGetAll(getDefaultBaoGiaFilter()).map((r) => r.id))
+
+    type KhBucket = { ten: string; ma_kh: string; tong: number; hanTimes: number[] }
+    const byTen: Map<string, KhBucket> = new Map()
+
+    for (const row of donHangBanGetAll(filterDhb)) {
+      if ((row.tinh_trang ?? '').trim() === 'Hủy bỏ') continue
+      const bid = (row.bao_gia_id ?? '').trim()
+      if (bid && !baoGiaIds.has(bid)) continue
+      const { con_lai } = tinhDaThuVaConLaiChoDonHangBan(row)
+      if (con_lai <= 0) continue
+      const tenKey = (row.khach_hang ?? '').trim()
+      if (!tenKey) continue
+      const maKh = maKhachTuTen(tenKey, khList)
+      const hanStr = hanThanhToanTuDonHang(row)
+      const tHan = parseHanDdMmYyyyToTime(hanStr)
+      const cur = byTen.get(tenKey) ?? { ten: tenKey, ma_kh: maKh, tong: 0, hanTimes: [] }
+      cur.tong += con_lai
+      if (tHan != null) cur.hanTimes.push(tHan)
+      if (!cur.ma_kh && maKh) cur.ma_kh = maKh
+      byTen.set(tenKey, cur)
     }
-  }, [selectedKh])
 
-  useEffect(() => { loadData() }, [loadData])
+    for (const row of hopDongBanChungTuGetAll(filterHdb)) {
+      if ((row.tinh_trang ?? '').trim() === 'Hủy bỏ') continue
+      const bid = (row.bao_gia_id ?? '').trim()
+      if (bid && !baoGiaIds.has(bid)) continue
+      const { con_lai } = tinhDaThuVaConLaiChoHopDongBan(row)
+      if (con_lai <= 0) continue
+      const tenKey = (row.khach_hang ?? '').trim()
+      if (!tenKey) continue
+      const maKh = maKhachTuTen(tenKey, khList)
+      const hanStr = hanThanhToanTuHopDong(row)
+      const tHan = parseHanDdMmYyyyToTime(hanStr)
+      const cur = byTen.get(tenKey) ?? { ten: tenKey, ma_kh: maKh, tong: 0, hanTimes: [] }
+      cur.tong += con_lai
+      if (tHan != null) cur.hanTimes.push(tHan)
+      if (!cur.ma_kh && maKh) cur.ma_kh = maKh
+      byTen.set(tenKey, cur)
+    }
 
-  const filtered = search.trim()
-    ? congNoList.filter((r) => matchSearchKeyword(r.khach_hang, search))
-    : congNoList
+    const rows: CongNoTongHopRow[] = []
+    for (const [, v] of byTen) {
+      rows.push({
+        id: v.ma_kh ? `mk:${v.ma_kh}` : `ten:${v.ten}`,
+        ma_khach_hang: v.ma_kh || '—',
+        ten_khach_hang: v.ten,
+        han_thanh_toan: hanSomNhatDisplay(v.hanTimes),
+        tong_cong_no: v.tong,
+      })
+    }
+    rows.sort((a, b) => b.tong_cong_no - a.tong_cong_no)
+    setCongNoList(rows)
+  }, [khList])
 
-  const tongNo = filtered.reduce((s, r) => s + r.tong_no, 0)
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
-  const onSelectKh = (row: CongNoRow) => {
-    setSelectedKh(row.khach_hang)
-    const hoaDonAll = hoaDonBanGetAll({ ...getDefaultHoaDonBanFilter() })
-    setHoaDonNoCuaKh(hoaDonAll.filter((h) => h.khach_hang === row.khach_hang && h.con_lai > 0 && h.tinh_trang !== 'Hủy bỏ'))
+  useEffect(() => {
+    const h = () => loadData()
+    window.addEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, h)
+    return () => window.removeEventListener(HTQL_THU_TIEN_BANG_RELOAD_EVENT, h)
+  }, [loadData])
+
+  useEffect(() => {
+    if (!selectedKhId) {
+      setChiTietKhach([])
+      return
+    }
+    const sel = congNoList.find((r) => r.id === selectedKhId)
+    if (!sel) {
+      setSelectedKhId(null)
+      setChiTietKhach([])
+      return
+    }
+    setChiTietKhach(buildChiTietChoTenKhach(sel.ten_khach_hang))
+  }, [selectedKhId, congNoList])
+
+  useEffect(() => {
+    setSelectedChungTuId(null)
+  }, [selectedKhId])
+
+  const filtered = useMemo(() => {
+    const s = search.trim()
+    if (!s) return congNoList
+    return congNoList.filter((r) => matchSearchKeyword(`${r.ma_khach_hang} ${r.ten_khach_hang}`, s))
+  }, [congNoList, search])
+
+  const tongNo = filtered.reduce((acc, r) => acc + r.tong_cong_no, 0)
+
+  const onSelectKh = (row: CongNoTongHopRow) => {
+    setSelectedKhId(row.id)
   }
+
+  const moThuTien = (ct: CongNoChiTietRow) => {
+    if (ct.loai === 'don_hang_ban') {
+      const r = donHangBanGetAll(getDefaultDonHangBanChungTuFilter()).find((x: DonHangBanChungTuRecord) => x.id === ct.chungTuId)
+      if (!r) {
+        toast?.showToast('Không tìm thấy đơn hàng bán.', 'info')
+        return
+      }
+      const chi = donHangBanGetChiTiet(r.id)
+      setThuPrefill(buildThuTienBangPrefillFromDonHangBan(r, chi))
+    } else {
+      const r = hopDongBanChungTuGetAll(getDefaultHopDongBanChungTuFilter()).find((x: HopDongBanChungTuRecord) => x.id === ct.chungTuId)
+      if (!r) {
+        toast?.showToast('Không tìm thấy hợp đồng bán.', 'info')
+        return
+      }
+      const chi = hopDongBanChungTuGetChiTiet(r.id)
+      setThuPrefill(buildThuTienBangPrefillFromHopDongBanChungTu(r, chi))
+    }
+    setShowThuTienModal(true)
+    setThuTienFormKey((k) => k + 1)
+  }
+
+  const tenKhachChon = congNoList.find((r) => r.id === (selectedKhId ?? ''))?.ten_khach_hang ?? ''
 
   return (
     <div className={styles.root}>
@@ -103,10 +327,10 @@ export function CongNoKhachHang() {
         <button
           type="button"
           className={styles.toolbarBtn}
-          disabled={!hoaDonNoCuaKh.length}
+          disabled={!chiTietKhach.length}
           onClick={() => {
-            if (hoaDonNoCuaKh.length === 1) setThuModal(hoaDonNoCuaKh[0])
-            else toast?.showToast('Chọn hóa đơn muốn thu tiền trong bảng phía dưới.', 'info')
+            if (chiTietKhach.length === 1) moThuTien(chiTietKhach[0])
+            else toast?.showToast('Chọn một dòng chứng từ còn nợ ở bảng dưới (hoặc chỉ còn một chứng từ thì bấm Thu tiền).', 'info')
           }}
         >
           <Plus size={13} /> Thu tiền
@@ -114,17 +338,21 @@ export function CongNoKhachHang() {
         <button type="button" className={styles.toolbarBtn} onClick={() => { loadData(); toast?.showToast('Đã cập nhật công nợ.', 'success') }}>
           Cập nhật
         </button>
-        <input type="text" className={styles.searchInput} placeholder="Tìm khách hàng..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ marginLeft: 8 }} />
+        <input type="text" className={styles.searchInput} placeholder="Tìm mã / tên khách..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ marginLeft: 8 }} />
       </div>
 
       <div className={styles.contentArea}>
-        {/* Bảng tổng hợp */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Tổng hợp theo khách hàng</div>
           <div style={{ flex: 1, minHeight: 0 }}>
-            <DataGrid<CongNoRow>
-              columns={columnsCongNo} data={filtered} keyField="id" stripedRows compact height="100%"
-              selectedRowId={selectedKh ?? undefined}
+            <DataGrid<CongNoTongHopRow>
+              columns={columnsCongNo}
+              data={filtered}
+              keyField="id"
+              stripedRows
+              compact
+              height="100%"
+              selectedRowId={selectedKhId ?? undefined}
               onRowSelect={onSelectKh}
               summary={[
                 { label: 'Tổng công nợ', value: formatNumberDisplay(tongNo, 0) },
@@ -134,79 +362,66 @@ export function CongNoKhachHang() {
           </div>
         </div>
 
-        {/* Chi tiết hóa đơn theo KH */}
         <div className={styles.detailWrap}>
           <div className={styles.detailTabBar}>
             <button type="button" className={styles.detailTabActive}>
-              {selectedKh ? `Hóa đơn còn nợ — ${selectedKh}` : 'Hóa đơn còn nợ'}
+              {tenKhachChon ? `Chứng từ còn nợ — ${tenKhachChon}` : 'Chứng từ còn nợ'}
             </button>
           </div>
           <div className={styles.detailTabPanel}>
-            <DataGrid<HoaDonBanRecord>
-              columns={columnsHoaDonNo} data={hoaDonNoCuaKh} keyField="id" stripedRows compact height="100%"
-              onRowDoubleClick={(r) => setThuModal(r)}
+            <DataGrid<CongNoChiTietRow>
+              columns={columnsChiTiet}
+              data={chiTietKhach}
+              keyField="id"
+              stripedRows
+              compact
+              height="100%"
+              selectedRowId={selectedChungTuId ?? undefined}
+              onRowSelect={(r) => setSelectedChungTuId(r.id)}
+              onRowDoubleClick={(r) => moThuTien(r)}
               summary={[
-                { label: 'Tổng còn lại', value: formatNumberDisplay(hoaDonNoCuaKh.reduce((s, h) => s + h.con_lai, 0), 0) },
+                { label: 'Tổng còn lại', value: formatNumberDisplay(chiTietKhach.reduce((s, h) => s + h.con_lai, 0), 0) },
               ]}
             />
           </div>
         </div>
       </div>
 
-      {/* Modal thu tiền */}
-      <Modal
-        open={thuModal != null}
-        onClose={() => setThuModal(null)}
-        title="Thu tiền khách hàng"
-        size="sm"
-        footer={
-          <>
-            <button type="button" style={formFooterButtonCancel} onClick={() => setThuModal(null)}>Hủy bỏ</button>
-            <button type="button" style={formFooterButtonSave} onClick={() => {
-              const el = document.getElementById('phieu-thu-so-tien') as HTMLInputElement | null
-              if (!el) return
-              const so = Number(el.value.replace(/[.,\s]/g, '')) || 0
-              if (!so) { setLoi('Số tiền phải lớn hơn 0.'); return }
-              phieuThuPost({
-                so_phieu: phieuThuSoTiepTheo(),
-                ngay_thu: TODAY_ISO,
-                khach_hang: thuModal?.khach_hang ?? '',
-                so_tien: so,
-                dien_giai: `Thu tiền hóa đơn ${thuModal?.so_hoa_don ?? ''}`,
-                hoa_don_ban_id: thuModal?.id,
-                so_hoa_don_lien_quan: thuModal?.so_hoa_don,
-              })
-              toast?.showToast(`Đã ghi nhận thu ${formatNumberDisplay(so, 0)}.`, 'success')
-              setThuModal(null)
-              setLoi('')
-              loadData()
-            }}>Lưu</button>
-          </>
-        }
-      >
-        {thuModal && (
-          <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ background: 'var(--bg-tab)', borderRadius: 4, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div><strong>Hóa đơn:</strong> {thuModal.so_hoa_don} — {thuModal.khach_hang}</div>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <span>Tổng: <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatNumberDisplay(thuModal.tong_thanh_toan, 0)}</strong></span>
-                <span>Còn lại: <strong style={{ color: '#c2410c', fontVariantNumeric: 'tabular-nums' }}>{formatNumberDisplay(thuModal.con_lai, 0)}</strong></span>
-              </div>
-            </div>
-            {loi && <div style={{ color: '#dc2626', fontSize: 11 }}>{loi}</div>}
-            <div className={styles.formRow}>
-              <span className={styles.formLabel} style={{ minWidth: 90 }}>Số tiền thu</span>
-              <input
-                id="phieu-thu-so-tien"
-                className={styles.formInput}
-                style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', flex: 1 }}
-                defaultValue={String(thuModal.con_lai)}
-                autoFocus
+      {showThuTienModal && thuPrefill && (
+        <div className={styles.modalOverlay}>
+          <div
+            ref={thuDrag.containerRef}
+            className={styles.modalBox}
+            style={thuDrag.containerStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ThuTienBangApiProvider api={thuTienBangApiImpl}>
+              <ThuTienForm
+                key={thuTienFormKey}
+                formTitle="Phiếu thu tiền"
+                thuTienPhieu
+                phieuThuTuMenuBanHang
+                soDonLabel="Mã phiếu thu"
+                prefillDon={thuPrefill.prefillDon}
+                prefillChiTiet={thuPrefill.prefillChiTiet}
+                readOnly={false}
+                onHeaderPointerDown={thuDrag.dragHandleProps.onMouseDown}
+                headerDragStyle={thuDrag.dragHandleProps.style}
+                onClose={() => {
+                  setShowThuTienModal(false)
+                  setThuPrefill(null)
+                }}
+                onSaved={() => {
+                  setShowThuTienModal(false)
+                  setThuPrefill(null)
+                  loadData()
+                  toast?.showToast('Đã lưu phiếu thu.', 'success')
+                }}
               />
-            </div>
+            </ThuTienBangApiProvider>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
     </div>
   )
 }

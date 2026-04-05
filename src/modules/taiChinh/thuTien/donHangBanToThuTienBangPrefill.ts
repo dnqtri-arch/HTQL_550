@@ -5,6 +5,7 @@ import { addDays } from 'date-fns'
 import type { ThuTienBangChiTiet, ThuTienBangRecord } from '../../../types/thuTienBang'
 import type { DonHangBanChungTuChiTiet, DonHangBanChungTuRecord } from '../../../types/donHangBanChungTu'
 import { formatSoTienHienThi } from '../../../utils/numberFormat'
+import { tinhDaThuVaConLaiChoDonHangBan } from './chungTuCongNoKhach'
 
 /** Đồng bộ prefix với `thuTienForm.tsx` — lưu JSON dòng phiếu trong `noi_dung`. */
 const PHIEU_THU_ROW_PREFIX = '__PT_ROW__:'
@@ -43,7 +44,11 @@ export function buildThuTienBangPrefillFromDonHangBan(
   const hanDate =
     ngayDon && Number.isFinite(days) && days >= 0 ? addDays(ngayDon, days) : ngayDon
   const hanTtStr = hanDate ? formatDdMmYyyy(hanDate) : ''
-  const tongStr = formatSoTienHienThi(typeof row.tong_thanh_toan === 'number' ? row.tong_thanh_toan : 0)
+  const tongTt = typeof row.tong_thanh_toan === 'number' ? row.tong_thanh_toan : 0
+  const tongStr = formatSoTienHienThi(tongTt)
+  const { tong_da_lap } = tinhDaThuVaConLaiChoDonHangBan(row)
+  const conLaiDeLap = Math.max(0, tongTt - tong_da_lap)
+  const conLaiStr = formatSoTienHienThi(conLaiDeLap)
 
   const noiDungThu = (row.dien_giai ?? '').trim() || `Thu tiền theo đơn ${row.so_don_hang}`
 
@@ -52,8 +57,8 @@ export function buildThuTienBangPrefillFromDonHangBan(
     ngay_tao: ngayTaoStr,
     han_tt: hanTtStr,
     so_phai_thu: tongStr,
-    so_chua_thu: tongStr,
-    thu_lan_nay: '',
+    so_chua_thu: conLaiStr,
+    thu_lan_nay: conLaiStr,
     noi_dung_thu: noiDungThu,
   }
 
@@ -72,7 +77,6 @@ export function buildThuTienBangPrefillFromDonHangBan(
     nv_ban_hang: row.nv_ban_hang,
     dieu_khoan_tt: row.dieu_khoan_tt,
     so_ngay_duoc_no: row.so_ngay_duoc_no,
-    dia_diem_giao_hang: row.dia_diem_giao_hang,
     dieu_khoan_khac: row.dieu_khoan_khac,
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
@@ -113,7 +117,6 @@ export function buildThuTienBangPrefillFromDonHangBan(
       lenh_san_xuat: '',
       noi_dung: PHIEU_THU_ROW_PREFIX + JSON.stringify(phieuRow),
       ghi_chu: '',
-      dd_gh_index: 0,
     },
   ]
 

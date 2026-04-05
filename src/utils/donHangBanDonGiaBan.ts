@@ -5,11 +5,11 @@
 import { formatSoTienHienThi, parseFloatVN } from './numberFormat'
 import type { VatTuHangHoaRecord } from '../types/vatTuHangHoa'
 import {
-  COL_DD_GH,
   buildDvtOptionsForVthh,
   parsePctThueGtgtFromLine,
   type DonHangMuaGridLineRow,
 } from './donHangMuaCalculations'
+import { BAN_HANG_COL_DCNH } from './banHangDcnhStorage'
 
 /** ĐG bán gốc (số) theo bảng bậc giá + SL; giống getBaseDgBanForDonViQuyDoi trong vatTuHangHoaForm / vatTuHangHoa.tsx (tiLe → soLuong). */
 export function getBaseDonGiaBanTheoBacGia(vthh: VatTuHangHoaRecord, soLuong: number): number {
@@ -91,10 +91,10 @@ export function migrateDonHangBanLinesToCoDonGia(
       'Số lượng': line['Số lượng'] ?? '',
       'Đơn giá': '',
       'Thành tiền': '',
+      [BAN_HANG_COL_DCNH]: raw[BAN_HANG_COL_DCNH] ?? '0',
       '% thuế GTGT': '',
       'Tiền thuế GTGT': '',
       'Tổng tiền': '',
-      [COL_DD_GH]: (line[COL_DD_GH] ?? '').trim() !== '' ? String(line[COL_DD_GH]) : '0',
       'Ghi chú': line['Ghi chú'] ?? '',
     }
     if (vthh) {

@@ -21,9 +21,7 @@ function Placeholder({ title }: { title: string }) {
 }
 
 export { ThuTien } from './thuTien/thuTien'
-export function ChiTien() {
-  return <Placeholder title="Chi tiền" />
-}
+export { ChiTien } from './chiTien/chiTien'
 export function ThuChiTien() {
   return <Placeholder title="Thu/chi tiền" />
 }

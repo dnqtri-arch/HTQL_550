@@ -37,7 +37,6 @@ export function buildDonHangBanChungTuPrefillFromThuTienBang(
     nv_ban_hang: row.nv_ban_hang,
     dieu_khoan_tt: row.dieu_khoan_tt,
     so_ngay_duoc_no: row.so_ngay_duoc_no,
-    dia_diem_giao_hang: row.dia_diem_giao_hang,
     dieu_khoan_khac: row.dieu_khoan_khac,
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
@@ -102,7 +101,6 @@ export function buildDonHangBanChungTuPrefillFromThuTienBang(
     lenh_san_xuat: c.lenh_san_xuat,
     noi_dung: c.noi_dung,
     ghi_chu: c.ghi_chu,
-    dd_gh_index: c.dd_gh_index ?? null,
   }))
 
   return { prefillDhb, prefillChiTiet }

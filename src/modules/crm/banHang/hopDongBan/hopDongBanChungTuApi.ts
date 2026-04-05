@@ -48,7 +48,6 @@ const MOCK_DON: HopDongBanChungTuRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 4000000,
     tong_thue_gtgt: 0,
@@ -68,7 +67,6 @@ const MOCK_DON: HopDongBanChungTuRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 15000000,
     tong_thue_gtgt: 0,
@@ -88,7 +86,6 @@ const MOCK_DON: HopDongBanChungTuRecord[] = [
     nv_ban_hang: '',
     dieu_khoan_tt: '',
     so_ngay_duoc_no: '0',
-    dia_diem_giao_hang: '',
     dieu_khoan_khac: '',
     tong_tien_hang: 8500000,
     tong_thue_gtgt: 0,
@@ -118,7 +115,6 @@ const MOCK_CHI_TIET: HopDongBanChungTuChiTiet[] = [
     pt_thue_gtgt: null,
     tien_thue_gtgt: null,
     lenh_san_xuat: '',
-    dd_th_index: 0,
   },
 ]
 
@@ -139,18 +135,19 @@ function normalizeHopDongBanChungTu(d: Partial<HopDongBanChungTuRecord> & { id: 
     ngay_cam_ket_giao: d.ngay_cam_ket_giao ?? null,
     khach_hang: d.khach_hang ?? '',
     dia_chi: d.dia_chi ?? '',
+    dia_chi_nhan_hang: d.dia_chi_nhan_hang,
     nguoi_giao_hang: d.nguoi_giao_hang ?? undefined,
     ma_so_thue: d.ma_so_thue ?? '',
     dien_giai: d.dien_giai ?? '',
     nv_ban_hang: d.nv_ban_hang ?? '',
     dieu_khoan_tt: d.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: d.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: d.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: d.dieu_khoan_khac ?? '',
     tong_tien_hang: typeof d.tong_tien_hang === 'number' ? d.tong_tien_hang : 0,
     tong_thue_gtgt: typeof d.tong_thue_gtgt === 'number' ? d.tong_thue_gtgt : 0,
     tong_thanh_toan: typeof d.tong_thanh_toan === 'number' ? d.tong_thanh_toan : 0,
     ap_dung_vat_gtgt: typeof d.ap_dung_vat_gtgt === 'boolean' ? d.ap_dung_vat_gtgt : undefined,
+    hop_dong_nguyen_tac: typeof d.hop_dong_nguyen_tac === 'boolean' ? d.hop_dong_nguyen_tac : undefined,
     tl_ck: typeof d.tl_ck === 'number' ? d.tl_ck : undefined,
     tien_ck: typeof d.tien_ck === 'number' ? d.tien_ck : undefined,
     so_dien_thoai: d.so_dien_thoai ?? undefined,
@@ -188,6 +185,26 @@ function normalizeHopDongBanChungTu(d: Partial<HopDongBanChungTuRecord> & { id: 
     phieu_chi_attachments: Array.isArray(d.phieu_chi_attachments) ? d.phieu_chi_attachments : undefined,
     bao_gia_id: d.bao_gia_id,
     so_bao_gia_goc: d.so_bao_gia_goc,
+    thu_tien_bang_id: d.thu_tien_bang_id,
+    thu_tien_bang_ids: (() => {
+      const fromArr = Array.isArray(d.thu_tien_bang_ids)
+        ? d.thu_tien_bang_ids!.map((x) => String(x).trim()).filter(Boolean)
+        : []
+      const p = (d.thu_tien_bang_id ?? '').trim()
+      const merged = [...new Set([...fromArr, p])].filter(Boolean)
+      return merged.length ? merged : undefined
+    })(),
+    tinh_trang_truoc_thu_tien: d.tinh_trang_truoc_thu_tien,
+    chi_tien_bang_id: d.chi_tien_bang_id,
+    chi_tien_bang_ids: (() => {
+      const fromArr = Array.isArray(d.chi_tien_bang_ids)
+        ? d.chi_tien_bang_ids!.map((x) => String(x).trim()).filter(Boolean)
+        : []
+      const p = (d.chi_tien_bang_id ?? '').trim()
+      const merged = [...new Set([...fromArr, p])].filter(Boolean)
+      return merged.length ? merged : undefined
+    })(),
+    tinh_trang_truoc_chi_tien: d.tinh_trang_truoc_chi_tien,
   }
 }
 
@@ -336,6 +353,30 @@ export const TINH_TRANG_NVTHH_DA_NHAP_KHO = 'Đã nhập kho'
 /** Sau khi lưu phiếu Ghi nhận doanh thu (NVTHH) ở trạng thái đã nhập kho — đồng bộ danh sách ĐHB. */
 export const TINH_TRANG_HOP_DONG_BAN_CHUNG_TU_DA_NHAN_HANG = 'Đã nhận hàng'
 
+/** Sau khi ghi sổ phiếu thu gắn HĐ bán. */
+export const TINH_TRANG_HOP_DONG_BAN_DA_THU_TIEN = 'Đã thu tiền'
+export const TINH_TRANG_HOP_DONG_BAN_DA_CHI_TIEN = 'Đã chi tiền'
+
+/** Hợp đồng đã thanh lý — không dùng làm HĐ gốc cho phụ lục. */
+export const TINH_TRANG_HOP_DONG_BAN_DA_THANH_LY = 'Đã thanh lý'
+
+/** Các id phiếu thu gắn HĐ bán. */
+export function hopDongBanThuTienBangIdsLinked(row: HopDongBanChungTuRecord): string[] {
+  const fromArr = Array.isArray(row.thu_tien_bang_ids)
+    ? row.thu_tien_bang_ids!.map((x) => String(x).trim()).filter(Boolean)
+    : []
+  const primary = (row.thu_tien_bang_id ?? '').trim()
+  return [...new Set([...fromArr, primary])].filter(Boolean)
+}
+
+export function hopDongBanChiTienBangIdsLinked(row: HopDongBanChungTuRecord): string[] {
+  const fromArr = Array.isArray(row.chi_tien_bang_ids)
+    ? row.chi_tien_bang_ids!.map((x) => String(x).trim()).filter(Boolean)
+    : []
+  const primary = (row.chi_tien_bang_id ?? '').trim()
+  return [...new Set([...fromArr, primary])].filter(Boolean)
+}
+
 /** Ghép payload PUT từ bản ghi + chi tiết (dùng modal hủy/phục hồi và đồng bộ tình trạng). */
 export function hopDongBanChungTuBuildCreatePayloadFromRecord(row: HopDongBanChungTuRecord, ct: HopDongBanChungTuChiTiet[]): HopDongBanChungTuCreatePayload {
   return {
@@ -348,18 +389,19 @@ export function hopDongBanChungTuBuildCreatePayloadFromRecord(row: HopDongBanChu
     ngay_cam_ket_giao: row.ngay_cam_ket_giao,
     khach_hang: row.khach_hang,
     dia_chi: row.dia_chi ?? '',
+    dia_chi_nhan_hang: row.dia_chi_nhan_hang,
     nguoi_giao_hang: row.nguoi_giao_hang,
     ma_so_thue: row.ma_so_thue ?? '',
     dien_giai: row.dien_giai ?? '',
     nv_ban_hang: row.nv_ban_hang ?? '',
     dieu_khoan_tt: row.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: row.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: row.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: row.dieu_khoan_khac ?? '',
     tong_tien_hang: row.tong_tien_hang,
     tong_thue_gtgt: row.tong_thue_gtgt,
     tong_thanh_toan: row.tong_thanh_toan,
     ap_dung_vat_gtgt: row.ap_dung_vat_gtgt,
+    hop_dong_nguyen_tac: row.hop_dong_nguyen_tac,
     tl_ck: row.tl_ck,
     tien_ck: row.tien_ck,
     so_dien_thoai: row.so_dien_thoai,
@@ -395,6 +437,12 @@ export function hopDongBanChungTuBuildCreatePayloadFromRecord(row: HopDongBanChu
     phieu_chi_ngan_hang: row.phieu_chi_ngan_hang_nhan ?? row.phieu_chi_ngan_hang,
     phieu_chi_ten_nguoi_nhan_ck: row.phieu_chi_ten_chu_tk_nhan ?? row.phieu_chi_ten_nguoi_nhan_ck,
     phieu_chi_attachments: row.phieu_chi_attachments?.length ? row.phieu_chi_attachments.map((a) => ({ ...a })) : undefined,
+    thu_tien_bang_id: row.thu_tien_bang_id,
+    thu_tien_bang_ids: row.thu_tien_bang_ids?.length ? [...row.thu_tien_bang_ids] : undefined,
+    tinh_trang_truoc_thu_tien: row.tinh_trang_truoc_thu_tien,
+    chi_tien_bang_id: row.chi_tien_bang_id,
+    chi_tien_bang_ids: row.chi_tien_bang_ids?.length ? [...row.chi_tien_bang_ids] : undefined,
+    tinh_trang_truoc_chi_tien: row.tinh_trang_truoc_chi_tien,
     chiTiet: ct.map((c) => ({
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
@@ -404,10 +452,196 @@ export function hopDongBanChungTuBuildCreatePayloadFromRecord(row: HopDongBanChu
       thanh_tien: c.thanh_tien,
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
-      dd_th_index: c.dd_th_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
+      chieu_dai: c.chieu_dai,
+      chieu_rong: c.chieu_rong,
+      luong: c.luong,
+      dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })),
+  }
+}
+
+/** Gắn phiếu thu vừa lưu vào HĐ bán — «Đã thu tiền» sau khi phiếu được ghi sổ. */
+export function hopDongBanGanKetThuTienTuPhieu(hopDongBanId: string, thuTienBangId: string): void {
+  const row = _hopDongBanChungTuList.find((d) => d.id === hopDongBanId)
+  if (!row) return
+  const ct = hopDongBanChungTuGetChiTiet(hopDongBanId)
+  const tid = (thuTienBangId ?? '').trim()
+  const nextIds = [...new Set([...hopDongBanThuTienBangIdsLinked(row), tid])].filter(Boolean)
+  hopDongBanChungTuPut(hopDongBanId, {
+    ...hopDongBanChungTuBuildCreatePayloadFromRecord(row, ct),
+    thu_tien_bang_id: tid,
+    thu_tien_bang_ids: nextIds.length ? nextIds : undefined,
+    tinh_trang_truoc_thu_tien: row.tinh_trang,
+  })
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanGanKetChiTienTuPhieu(hopDongBanId: string, chiTienBangId: string): void {
+  const row = _hopDongBanChungTuList.find((d) => d.id === hopDongBanId)
+  if (!row) return
+  const ct = hopDongBanChungTuGetChiTiet(hopDongBanId)
+  const cid = (chiTienBangId ?? '').trim()
+  const nextIds = [...new Set([...hopDongBanChiTienBangIdsLinked(row), cid])].filter(Boolean)
+  hopDongBanChungTuPut(hopDongBanId, {
+    ...hopDongBanChungTuBuildCreatePayloadFromRecord(row, ct),
+    chi_tien_bang_id: cid,
+    chi_tien_bang_ids: nextIds.length ? nextIds : undefined,
+    tinh_trang_truoc_chi_tien: row.tinh_trang,
+  })
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanKhiPhieuChiGhiSo(chiTienBangId: string): void {
+  const id = (chiTienBangId ?? '').trim()
+  if (!id) return
+  for (const d of _hopDongBanChungTuList) {
+    if (!hopDongBanChiTienBangIdsLinked(d).includes(id)) continue
+    const ct = hopDongBanChungTuGetChiTiet(d.id)
+    hopDongBanChungTuPut(d.id, {
+      ...hopDongBanChungTuBuildCreatePayloadFromRecord(d, ct),
+      chi_tien_bang_id: id,
+      tinh_trang: TINH_TRANG_HOP_DONG_BAN_DA_CHI_TIEN,
+    })
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanKhiPhieuChiHuyGhiSo(chiTienBangId: string): void {
+  const id = (chiTienBangId ?? '').trim()
+  if (!id) return
+  for (const d of _hopDongBanChungTuList) {
+    if (!hopDongBanChiTienBangIdsLinked(d).includes(id)) continue
+    const ct = hopDongBanChungTuGetChiTiet(d.id)
+    const prev =
+      (d.tinh_trang_truoc_chi_tien ?? '').trim() ||
+      (d.tinh_trang !== TINH_TRANG_HOP_DONG_BAN_DA_CHI_TIEN ? d.tinh_trang : '') ||
+      'Chưa thực hiện'
+    hopDongBanChungTuPut(d.id, {
+      ...hopDongBanChungTuBuildCreatePayloadFromRecord(d, ct),
+      chi_tien_bang_id: id,
+      tinh_trang: prev,
+    })
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanQuetChiTienOrphanVaHoanTac(validChiTienIds: Set<string>): void {
+  const orphans = new Set<string>()
+  for (const d of _hopDongBanChungTuList) {
+    for (const cid of hopDongBanChiTienBangIdsLinked(d)) {
+      if (cid && !validChiTienIds.has(cid)) orphans.add(cid)
+    }
+  }
+  for (const cid of orphans) {
+    hopDongBanHoanTacKhiXoaChiTien(cid)
+  }
+}
+
+export function hopDongBanHoanTacKhiXoaChiTien(chiTienBangId: string): void {
+  const id = (chiTienBangId ?? '').trim()
+  if (!id) return
+  for (const d of _hopDongBanChungTuList) {
+    const ids = hopDongBanChiTienBangIdsLinked(d)
+    if (!ids.includes(id)) continue
+    const nextIds = ids.filter((x) => x !== id)
+    const cleared = nextIds.length === 0
+    const prev = (d.tinh_trang_truoc_chi_tien ?? '').trim() || 'Chưa thực hiện'
+    const ct = hopDongBanChungTuGetChiTiet(d.id)
+    const payload = hopDongBanChungTuBuildCreatePayloadFromRecord(d, ct)
+    hopDongBanChungTuPut(d.id, {
+      ...payload,
+      tinh_trang: cleared ? prev : d.tinh_trang,
+      chi_tien_bang_id: cleared ? undefined : nextIds[nextIds.length - 1],
+      chi_tien_bang_ids: cleared ? undefined : nextIds,
+      tinh_trang_truoc_chi_tien: cleared ? undefined : d.tinh_trang_truoc_chi_tien,
+    })
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanKhiPhieuThuGhiSo(thuTienBangId: string): void {
+  const id = (thuTienBangId ?? '').trim()
+  if (!id) return
+  for (const d of _hopDongBanChungTuList) {
+    if (!hopDongBanThuTienBangIdsLinked(d).includes(id)) continue
+    const ct = hopDongBanChungTuGetChiTiet(d.id)
+    hopDongBanChungTuPut(d.id, {
+      ...hopDongBanChungTuBuildCreatePayloadFromRecord(d, ct),
+      thu_tien_bang_id: id,
+      tinh_trang: TINH_TRANG_HOP_DONG_BAN_DA_THU_TIEN,
+    })
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanKhiPhieuThuHuyGhiSo(thuTienBangId: string): void {
+  const id = (thuTienBangId ?? '').trim()
+  if (!id) return
+  for (const d of _hopDongBanChungTuList) {
+    if (!hopDongBanThuTienBangIdsLinked(d).includes(id)) continue
+    const ct = hopDongBanChungTuGetChiTiet(d.id)
+    const prev =
+      (d.tinh_trang_truoc_thu_tien ?? '').trim() ||
+      (d.tinh_trang !== TINH_TRANG_HOP_DONG_BAN_DA_THU_TIEN ? d.tinh_trang : '') ||
+      'Chưa thực hiện'
+    hopDongBanChungTuPut(d.id, {
+      ...hopDongBanChungTuBuildCreatePayloadFromRecord(d, ct),
+      thu_tien_bang_id: id,
+      tinh_trang: prev,
+    })
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
+  }
+}
+
+export function hopDongBanQuetThuTienOrphanVaHoanTac(validThuTienIds: Set<string>): void {
+  const orphans = new Set<string>()
+  for (const d of _hopDongBanChungTuList) {
+    for (const tid of hopDongBanThuTienBangIdsLinked(d)) {
+      if (tid && !validThuTienIds.has(tid)) orphans.add(tid)
+    }
+  }
+  for (const tid of orphans) {
+    hopDongBanHoanTacKhiXoaThuTien(tid)
+  }
+}
+
+export function hopDongBanHoanTacKhiXoaThuTien(thuTienBangId: string): void {
+  const id = (thuTienBangId ?? '').trim()
+  if (!id) return
+  for (const d of _hopDongBanChungTuList) {
+    const ids = hopDongBanThuTienBangIdsLinked(d)
+    if (!ids.includes(id)) continue
+    const nextIds = ids.filter((x) => x !== id)
+    const cleared = nextIds.length === 0
+    const prev = (d.tinh_trang_truoc_thu_tien ?? '').trim() || 'Chưa thực hiện'
+    const ct = hopDongBanChungTuGetChiTiet(d.id)
+    const payload = hopDongBanChungTuBuildCreatePayloadFromRecord(d, ct)
+    hopDongBanChungTuPut(d.id, {
+      ...payload,
+      tinh_trang: cleared ? prev : d.tinh_trang,
+      thu_tien_bang_id: cleared ? undefined : nextIds[nextIds.length - 1],
+      thu_tien_bang_ids: cleared ? undefined : nextIds,
+      tinh_trang_truoc_thu_tien: cleared ? undefined : d.tinh_trang_truoc_thu_tien,
+    })
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
   }
 }
 
@@ -426,7 +660,7 @@ export function hopDongBanChungTuDelete(donHangBanId: string): void {
   _hopDongBanChungTuList = _hopDongBanChungTuList.filter((d) => d.id !== donHangBanId)
   _chiTietList = _chiTietList.filter((c) => c.hop_dong_ban_chung_tu_id !== donHangBanId)
   saveToStorage()
-  baoGiaHoanTacKhiHetLienKetHopDongBan(baoGiaId, _hopDongBanChungTuList)
+  baoGiaHoanTacKhiHetLienKetHopDongBan(baoGiaId)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT))
   }
@@ -446,18 +680,19 @@ export function hopDongBanChungTuPost(payload: HopDongBanChungTuCreatePayload): 
     ngay_cam_ket_giao: payload.ngay_cam_ket_giao,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
+    dia_chi_nhan_hang: payload.dia_chi_nhan_hang,
     nguoi_giao_hang: payload.nguoi_giao_hang ?? undefined,
     ma_so_thue: payload.ma_so_thue ?? '',
     dien_giai: payload.dien_giai ?? '',
     nv_ban_hang: payload.nv_ban_hang ?? '',
     dieu_khoan_tt: payload.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: payload.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: payload.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
     tong_thanh_toan: payload.tong_thanh_toan,
     ap_dung_vat_gtgt: payload.ap_dung_vat_gtgt,
+    hop_dong_nguyen_tac: payload.hop_dong_nguyen_tac,
     tl_ck: payload.tl_ck,
     tien_ck: payload.tien_ck,
     so_dien_thoai: payload.so_dien_thoai,
@@ -493,6 +728,12 @@ export function hopDongBanChungTuPost(payload: HopDongBanChungTuCreatePayload): 
     phieu_chi_ngan_hang: payload.phieu_chi_ngan_hang,
     phieu_chi_ten_nguoi_nhan_ck: payload.phieu_chi_ten_nguoi_nhan_ck,
     phieu_chi_attachments: payload.phieu_chi_attachments ? [...payload.phieu_chi_attachments] : undefined,
+    thu_tien_bang_id: payload.thu_tien_bang_id,
+    thu_tien_bang_ids: payload.thu_tien_bang_ids?.length ? [...payload.thu_tien_bang_ids] : undefined,
+    tinh_trang_truoc_thu_tien: payload.tinh_trang_truoc_thu_tien,
+    chi_tien_bang_id: payload.chi_tien_bang_id,
+    chi_tien_bang_ids: payload.chi_tien_bang_ids?.length ? [...payload.chi_tien_bang_ids] : undefined,
+    tinh_trang_truoc_chi_tien: payload.tinh_trang_truoc_chi_tien,
   }
   _hopDongBanChungTuList.push(hopDongBanChungTuRow)
   payload.chiTiet.forEach((c, i) => {
@@ -503,11 +744,11 @@ export function hopDongBanChungTuPost(payload: HopDongBanChungTuCreatePayload): 
       ten_hang: c.ten_hang,
       ma_quy_cach: '',
       dvt: c.dvt,
-      chieu_dai: 0,
-      chieu_rong: 0,
+      chieu_dai: c.chieu_dai ?? 0,
+      chieu_rong: c.chieu_rong ?? 0,
       chieu_cao: 0,
       ban_kinh: 0,
-      luong: 0,
+      luong: c.luong ?? 0,
       so_luong: c.so_luong,
       so_luong_nhan: 0,
       don_gia: c.don_gia,
@@ -515,9 +756,9 @@ export function hopDongBanChungTuPost(payload: HopDongBanChungTuCreatePayload): 
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
-      dd_th_index: c.dd_th_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
+      dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
   saveToStorage()
@@ -539,18 +780,19 @@ export function hopDongBanChungTuPut(donHangBanId: string, payload: HopDongBanCh
     ngay_cam_ket_giao: payload.ngay_cam_ket_giao,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
+    dia_chi_nhan_hang: payload.dia_chi_nhan_hang,
     nguoi_giao_hang: payload.nguoi_giao_hang ?? undefined,
     ma_so_thue: payload.ma_so_thue ?? '',
     dien_giai: payload.dien_giai ?? '',
     nv_ban_hang: payload.nv_ban_hang ?? '',
     dieu_khoan_tt: payload.dieu_khoan_tt ?? '',
     so_ngay_duoc_no: payload.so_ngay_duoc_no ?? '0',
-    dia_diem_giao_hang: payload.dia_diem_giao_hang ?? '',
     dieu_khoan_khac: payload.dieu_khoan_khac ?? '',
     tong_tien_hang: payload.tong_tien_hang,
     tong_thue_gtgt: payload.tong_thue_gtgt,
     tong_thanh_toan: payload.tong_thanh_toan,
     ap_dung_vat_gtgt: payload.ap_dung_vat_gtgt,
+    hop_dong_nguyen_tac: payload.hop_dong_nguyen_tac,
     tl_ck: payload.tl_ck,
     tien_ck: payload.tien_ck,
     so_dien_thoai: payload.so_dien_thoai,
@@ -586,6 +828,12 @@ export function hopDongBanChungTuPut(donHangBanId: string, payload: HopDongBanCh
     phieu_chi_ngan_hang: payload.phieu_chi_ngan_hang,
     phieu_chi_ten_nguoi_nhan_ck: payload.phieu_chi_ten_nguoi_nhan_ck,
     phieu_chi_attachments: payload.phieu_chi_attachments ? [...payload.phieu_chi_attachments] : undefined,
+    thu_tien_bang_id: payload.thu_tien_bang_id,
+    thu_tien_bang_ids: payload.thu_tien_bang_ids?.length ? [...payload.thu_tien_bang_ids] : undefined,
+    tinh_trang_truoc_thu_tien: payload.tinh_trang_truoc_thu_tien,
+    chi_tien_bang_id: payload.chi_tien_bang_id,
+    chi_tien_bang_ids: payload.chi_tien_bang_ids?.length ? [...payload.chi_tien_bang_ids] : undefined,
+    tinh_trang_truoc_chi_tien: payload.tinh_trang_truoc_chi_tien,
   }
   _chiTietList = _chiTietList.filter((c) => c.hop_dong_ban_chung_tu_id !== donHangBanId)
   payload.chiTiet.forEach((c, i) => {
@@ -596,11 +844,11 @@ export function hopDongBanChungTuPut(donHangBanId: string, payload: HopDongBanCh
       ten_hang: c.ten_hang,
       ma_quy_cach: '',
       dvt: c.dvt,
-      chieu_dai: 0,
-      chieu_rong: 0,
+      chieu_dai: c.chieu_dai ?? 0,
+      chieu_rong: c.chieu_rong ?? 0,
       chieu_cao: 0,
       ban_kinh: 0,
-      luong: 0,
+      luong: c.luong ?? 0,
       so_luong: c.so_luong,
       so_luong_nhan: 0,
       don_gia: c.don_gia,
@@ -608,9 +856,9 @@ export function hopDongBanChungTuPut(donHangBanId: string, payload: HopDongBanCh
       pt_thue_gtgt: c.pt_thue_gtgt,
       tien_thue_gtgt: c.tien_thue_gtgt,
       lenh_san_xuat: '',
-      dd_th_index: c.dd_th_index ?? null,
       noi_dung: c.noi_dung ?? '',
       ghi_chu: c.ghi_chu ?? '',
+      dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
   saveToStorage()

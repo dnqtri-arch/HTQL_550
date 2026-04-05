@@ -21,6 +21,11 @@ function khachKhop(khRecord: string, khDisplay: string): boolean {
   return normTen(khRecord) === normTen(khDisplay)
 }
 
+/** Mã chứa đoạn `/BG/` là mã báo giá — không dùng làm mã ĐHB/HĐ (tránh hiển thị nhầm trong lịch sử). */
+function laMaCoDoanBaoGia(so: string): boolean {
+  return /\/BG\//i.test((so ?? '').trim())
+}
+
 export type LichSuBanHangDongChiTiet = {
   ten_hang: string
   dvt: string
@@ -50,8 +55,9 @@ export function layLichSuBanChoKhach(
   if (!t) return null
 
   const allBg = baoGiaGetAll(BAO_GIA_ALL)
+  const validBaoGiaIds = new Set(allBg.map((r) => r.id))
   const baoGia = allBg
-    .filter((r) => khachKhop(r.khach_hang, t) && r.id !== options?.excludeBaoGiaId)
+    .filter((r) => khachKhop(r.khach_hang, t) && r.id !== options?.excludeBaoGiaId && (r.tinh_trang ?? '').trim() !== 'Hủy bỏ')
     .sort((a, b) => (b.ngay_bao_gia ?? '').localeCompare(a.ngay_bao_gia ?? ''))
     .slice(0, 3)
     .map((r) => {
@@ -71,7 +77,15 @@ export function layLichSuBanChoKhach(
 
   const allDhb = donHangBanGetAll(DON_HANG_BAN_ALL)
   const donHangBan = allDhb
-    .filter((r) => khachKhop(r.khach_hang, t) && r.id !== options?.excludeDonHangBanId)
+    .filter((r) => {
+      if ((r.tinh_trang ?? '').trim() === 'Hủy bỏ') return false
+      const maDh = (r.so_don_hang ?? '').trim()
+      if (laMaCoDoanBaoGia(maDh)) return false
+      if (!khachKhop(r.khach_hang, t) || r.id === options?.excludeDonHangBanId) return false
+      const bid = (r.bao_gia_id ?? '').trim()
+      if (bid && !validBaoGiaIds.has(bid)) return false
+      return true
+    })
     .sort((a, b) => (b.ngay_don_hang ?? '').localeCompare(a.ngay_don_hang ?? ''))
     .slice(0, 3)
     .map((r) => {
@@ -91,7 +105,15 @@ export function layLichSuBanChoKhach(
 
   const allHd = hopDongBanChungTuGetAll(HOP_DONG_BAN_CHUNG_TU_ALL)
   const hopDong = allHd
-    .filter((r) => khachKhop(r.khach_hang, t))
+    .filter((r) => {
+      if ((r.tinh_trang ?? '').trim() === 'Hủy bỏ') return false
+      const maHd = (r.so_hop_dong ?? '').trim()
+      if (laMaCoDoanBaoGia(maHd)) return false
+      if (!khachKhop(r.khach_hang, t)) return false
+      const bid = (r.bao_gia_id ?? '').trim()
+      if (bid && !validBaoGiaIds.has(bid)) return false
+      return true
+    })
     .sort((a, b) => (b.ngay_lap_hop_dong ?? '').localeCompare(a.ngay_lap_hop_dong ?? ''))
     .slice(0, 3)
     .map((r) => ({

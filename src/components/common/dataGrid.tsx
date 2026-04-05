@@ -181,7 +181,7 @@ export function DataGrid<T extends object>({
                   const isSortable = sortableColumns.includes(colKey)
                   const activeSort = sortState?.find((s) => s.key === colKey)
                   const sortIcon =
-                    activeSort != null ? (activeSort.direction === 'asc' ? '▲' : '▼') : '⇅'
+                    activeSort != null ? (activeSort.direction === 'asc' ? '▴' : '▾') : '↕'
                   const isFilterable = col.filterable && columnFilterConfig?.[colKey]
                   return (
                 <th
@@ -217,9 +217,14 @@ export function DataGrid<T extends object>({
                     {isSortable && !isFilterable && (
                       <span
                         style={{
-                          fontSize: 10,
+                          fontSize: 9,
+                          lineHeight: 1,
+                          letterSpacing: -1,
                           color: activeSort ? 'var(--accent)' : 'var(--text-muted)',
+                          fontWeight: 700,
+                          flexShrink: 0,
                         }}
+                        title={activeSort ? (activeSort.direction === 'asc' ? 'Tăng dần' : 'Giảm dần') : 'Sắp xếp'}
                       >
                         {sortIcon}
                       </span>
@@ -338,12 +343,12 @@ export function DataGrid<T extends object>({
               top: rect.bottom + 4,
               background: 'var(--bg-primary)',
               border: '1px solid var(--border-strong)',
-              borderRadius: 4,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-              zIndex: 2000,
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+              zIndex: 4100,
               minWidth: 200,
               maxWidth: 280,
-              padding: '6px 8px',
+              padding: '8px 10px',
               display: 'flex',
               flexDirection: 'column',
               gap: 6,
@@ -363,7 +368,7 @@ export function DataGrid<T extends object>({
                 boxSizing: 'border-box',
               }}
             />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', fontSize: 11, cursor: 'pointer', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 4px', fontSize: 11, cursor: 'pointer', borderBottom: '1px solid var(--border-strong)', marginBottom: 2, color: 'var(--text-primary)' }}>
               <input
                 type="checkbox"
                 checked={allChecked}
@@ -376,7 +381,7 @@ export function DataGrid<T extends object>({
                   config.onChange(sel)
                 }}
               />
-              <span style={{ fontWeight: 600 }}>Chọn tất cả</span>
+              <span style={{ fontWeight: 700 }}>Tất cả</span>
             </label>
             <div style={{ maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
               {filteredOpts.length === 0 ? (

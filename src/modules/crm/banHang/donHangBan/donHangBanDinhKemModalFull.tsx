@@ -3,12 +3,12 @@ import { createPortal } from 'react-dom'
 import { FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import type { DonHangBanChungTuAttachmentItem } from '../../../../types/donHangBanChungTu'
 
-/** Đính kèm chứng từ — quy tắc Đơn hàng mua (dinhkem.mdc): .jpg, .png, .pdf, .docx */
-const ACCEPT_ATTR = '.jpg,.jpeg,.png,.pdf,.docx'
+/** Đính kèm thiết kế (dktk): đồng bộ báo giá — .ai, .eps, .svg, .pdf, .cdr, .psd, ảnh, TIFF */
+const ACCEPT_ATTR = '.ai,.eps,.svg,.pdf,.cdr,.psd,.jpg,.jpeg,.png,.tif,.tiff'
 
 function hopLeDinhDangFile(file: File): boolean {
   const n = file.name.toLowerCase()
-  return /\.(jpe?g|png|pdf|docx)$/i.test(n)
+  return /\.(ai|eps|svg|pdf|cdr|psd|jpe?g|png|tiff?)$/i.test(n)
 }
 
 /** 2026/DHB/3 → 2026_dhb_3; hỗ trợ legacy BG */
@@ -329,8 +329,8 @@ export type DonHangBanChungTuDinhKemModalProps = {
 
 const THUMB_STRIP = 52
 const BG_DINH_KEM_TOI_DA_TEP = 10
-/** Đính kèm chứng từ: tối đa 5 MB / file */
-const BG_DINH_KEM_TOI_DA_BYTES = 5 * 1024 * 1024
+/** Đính kèm thiết kế (dktk): tối đa 2000 MB / file — đồng bộ BaoGiaDinhKemModal */
+const BG_DINH_KEM_TOI_DA_BYTES = 2000 * 1024 * 1024
 /** Trên overlay modal HTQL (z-index 4000) — popover đính kèm phải cao hơn (htql550.mdc). */
 const PANEL_Z = 4100
 const VIEWER_Z = 12000
@@ -362,8 +362,8 @@ export function DonHangBanChungTuDinhKemModal({
   daDongBoLuuCsdl = true,
   pendingUploadRows: pendingUploadRowsProp,
   onPendingUploadRowsChange,
-  panelTitle = 'Đính kèm chứng từ',
-  panelSubtitle = 'Đính kèm tối đa 10 file — .jpg, .png, .pdf, .docx — mỗi file phải nhỏ hơn 5 MB',
+  panelTitle = 'Đính kèm file thiết kế',
+  panelSubtitle = 'Tối đa 10 file — .ai, .eps, .svg, .pdf, .cdr, .psd, .jpg, .png, .tif — mỗi file nhỏ hơn 2000 MB',
 }: DonHangBanChungTuDinhKemModalProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -504,12 +504,12 @@ export function DonHangBanChungTuDinhKemModal({
         const phan: string[] = []
         if (saiDinhDang.length > 0) {
           phan.push(
-            `Sai định dạng (chỉ .jpg, .png, .pdf, .docx) — sẽ bỏ qua, vẫn xử lý file hợp lệ:\n${saiDinhDang.map((n) => `• ${n}`).join('\n')}`
+            `Sai định dạng (chỉ file thiết kế: .ai, .eps, .svg, .pdf, .cdr, .psd, .jpg, .png, .tif/.tiff) — sẽ bỏ qua, vẫn xử lý file hợp lệ:\n${saiDinhDang.map((n) => `• ${n}`).join('\n')}`
           )
         }
         if (vuotDungLuong.length > 0) {
           phan.push(
-            `Dung lượng từ 5 MB trở lên — không được đính kèm (các file sau sẽ không được thêm):\n${vuotDungLuong.map((n) => `• ${n}`).join('\n')}`
+            `Dung lượng từ 2000 MB trở lên — không được đính kèm (các file sau sẽ không được thêm):\n${vuotDungLuong.map((n) => `• ${n}`).join('\n')}`
           )
         }
         baoLoiDinhKem(phan.join('\n\n'))

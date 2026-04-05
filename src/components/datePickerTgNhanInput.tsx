@@ -3,7 +3,7 @@ import { forwardRef } from 'react'
 const inputStyle: React.CSSProperties = {
   padding: '2px 6px',
   fontSize: 11,
-  background: 'var(--bg-primary)',
+  background: '#fff',
   border: '1px solid var(--border)',
   borderRadius: 4,
   color: 'var(--text-primary)',
@@ -14,7 +14,7 @@ const inputStyle: React.CSSProperties = {
   minWidth: 0,
 }
 
-/** Custom input cho TG nhận hàng: readOnly, onClick mở calendar. onOpen gọi khi click (cho controlled open). */
+/** Custom input cho TG nhận hàng: cho gõ tay (react-datepicker parse theo dateFormat); onClick vẫn mở lịch khi mở popper. onOpen khi cần controlled open. */
 export const DatePickerTgNhanInput = forwardRef<
   HTMLInputElement,
   React.ComponentPropsWithoutRef<'input'> & { onOpen?: () => void }
@@ -24,7 +24,6 @@ export const DatePickerTgNhanInput = forwardRef<
     <input
       {...rest}
       ref={ref}
-      readOnly
       onClick={(e) => {
         onClick?.(e)
         onOpen?.()
@@ -33,7 +32,7 @@ export const DatePickerTgNhanInput = forwardRef<
         ...inputStyle,
         width: '100%',
         boxSizing: 'border-box',
-        cursor: rest.disabled ? 'default' : 'pointer',
+        cursor: rest.disabled ? 'default' : 'text',
         textAlign: 'right',
         fontVariantNumeric: 'tabular-nums',
       }}

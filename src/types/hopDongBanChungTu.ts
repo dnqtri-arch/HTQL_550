@@ -24,6 +24,8 @@ export interface HopDongBanChungTuRecord {
   ngay_cam_ket_giao: string | null
   khach_hang: string
   dia_chi: string
+  /** Địa chỉ nhận hàng — nhiều dòng (\n): ĐCNH, ĐCNH 1, … (YC79). */
+  dia_chi_nhan_hang?: string
   /** Phiếu NVTHH — người giao hàng (cùng dòng Địa chỉ trên form). */
   nguoi_giao_hang?: string
   ma_so_thue: string
@@ -31,13 +33,14 @@ export interface HopDongBanChungTuRecord {
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
   /** `true` = có VAT (cột thuế trên lưới); `false` = không VAT. Bản ghi cũ thiếu trường → coi như `true`. */
   ap_dung_vat_gtgt?: boolean
+  /** Hợp đồng nguyên tắc — có thể bật cùng có VAT hoặc không VAT (YC74). */
+  hop_dong_nguyen_tac?: boolean
   tl_ck?: number | null
   tien_ck?: number | null
   so_dien_thoai?: string
@@ -85,6 +88,14 @@ export interface HopDongBanChungTuRecord {
   /** @deprecated Dùng phieu_chi_ten_chu_tk_nhan */
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: HopDongBanChungTuAttachmentItem[]
+  /** Phiếu thu gắn HĐ bán (id chính + danh sách). */
+  thu_tien_bang_id?: string
+  thu_tien_bang_ids?: string[]
+  /** Snapshot `tinh_trang` trước khi gắn phiếu thu — dùng khi hủy ghi sổ / xóa phiếu. */
+  tinh_trang_truoc_thu_tien?: string
+  chi_tien_bang_id?: string
+  chi_tien_bang_ids?: string[]
+  tinh_trang_truoc_chi_tien?: string
 }
 
 export interface HopDongBanChungTuChiTiet {
@@ -109,7 +120,7 @@ export interface HopDongBanChungTuChiTiet {
   lenh_san_xuat: string
   noi_dung?: string
   ghi_chu?: string
-  dd_th_index?: number | null
+  dcnh_index?: number | null
 }
 
 export interface HopDongBanChungTuCreatePayload {
@@ -122,18 +133,19 @@ export interface HopDongBanChungTuCreatePayload {
   ngay_cam_ket_giao: string | null
   khach_hang: string
   dia_chi: string
+  dia_chi_nhan_hang?: string
   nguoi_giao_hang?: string
   ma_so_thue: string
   dien_giai: string
   nv_ban_hang: string
   dieu_khoan_tt: string
   so_ngay_duoc_no: string
-  dia_diem_giao_hang: string
   dieu_khoan_khac: string
   tong_tien_hang: number
   tong_thue_gtgt: number
   tong_thanh_toan: number
   ap_dung_vat_gtgt?: boolean
+  hop_dong_nguyen_tac?: boolean
   tl_ck?: number | null
   tien_ck?: number | null
   so_dien_thoai?: string
@@ -169,6 +181,12 @@ export interface HopDongBanChungTuCreatePayload {
   phieu_chi_ngan_hang?: string
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: HopDongBanChungTuAttachmentItem[]
+  thu_tien_bang_id?: string
+  thu_tien_bang_ids?: string[]
+  tinh_trang_truoc_thu_tien?: string
+  chi_tien_bang_id?: string
+  chi_tien_bang_ids?: string[]
+  tinh_trang_truoc_chi_tien?: string
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string
@@ -178,9 +196,12 @@ export interface HopDongBanChungTuCreatePayload {
     thanh_tien: number
     pt_thue_gtgt: number | null
     tien_thue_gtgt: number | null
-    dd_th_index?: number | null
     noi_dung?: string
     ghi_chu?: string
+    chieu_dai?: number
+    chieu_rong?: number
+    luong?: number
+    dcnh_index?: number | null
   }>
 }
 
