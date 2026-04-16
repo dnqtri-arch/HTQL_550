@@ -7,11 +7,12 @@ import { mauHoaDonThemLuu } from './mauHoaDonApi'
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 4000,
+  pointerEvents: 'none',
 }
 
 const box: React.CSSProperties = {
@@ -21,6 +22,7 @@ const box: React.CSSProperties = {
   minWidth: 360,
   maxWidth: '90vw',
   boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -86,8 +88,8 @@ export function ThemMauHoaDonModal({ onClose, onSaved }: ThemMauHoaDonModalProps
   }
 
   return (
-    <div style={overlay} role="presentation" onMouseDown={onClose}>
-      <div style={box} role="dialog" aria-labelledby="them-mau-hd-title" onMouseDown={(e) => e.stopPropagation()}>
+    <div style={overlay} role="presentation">
+      <div style={box} role="dialog" aria-labelledby="them-mau-hd-title">
         <div style={headerStyle}>
           <span id="them-mau-hd-title">Thêm mẫu hóa đơn</span>
           <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)' }} onClick={onClose} aria-label="Đóng">

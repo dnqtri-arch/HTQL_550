@@ -9,6 +9,7 @@ alwaysApply: true
 > Đây là file quy chuẩn DUY NHẤT. Mọi file .mdc riêng lẻ đã được hợp nhất vào đây.
 > Nguồn: `o-nhap.mdc`, `nut.mdc`, `mau_gia.mdc`, `canh-le.mdc`, `imports-cau-truc.mdc`, `form.mdc`, `menu-ngu-canh.mdc`.
 > Bổ sung: **Tài khoản ngân hàng** — `nganhang.mdc`.
+> **Đồng bộ desktop (EXE/DMG):** `dongbodesktop.mdc` — `system_version`, ETag bundle, delta, đo & phát hành.
 
 ---
 
@@ -21,6 +22,8 @@ alwaysApply: true
 | 0.3 | **Toast 3200ms** | API: `showToast(message, type?)` — **không** có tham số thời lượng; 3200ms là hằng `TOAST_DURATION_MS` trong `src/context/toastContext.tsx`. |
 | 0.4 | **Lý do hủy** | Mọi hành động Hủy bỏ chứng từ (trạng thái → "Hủy bỏ") phải mở Modal yêu cầu nhập `ly_do_huy`. Không dùng `window.confirm` cho nghiệp vụ hủy. |
 | 0.5 | **TypeScript 0 lỗi** | `npx tsc --noEmit` phải trả về exit code 0 trước mọi commit. |
+| 0.6 | **Form popup nhập liệu (YC96)** | Nền phía sau form **không tối** (overlay trong suốt / không làm mờ toàn màn). **Không** đóng form khi click ra ngoài vùng form (backdrop). **Không** dùng phím Escape để đóng form nhập liệu nghiệp vụ (modal xác nhận xóa / captcha giữ quy tắc riêng). Chỉ đóng khi người dùng bấm **Đóng / Hủy bỏ** (hoặc luồng lưu xong đóng theo thiết kế màn hình). **Đổi tab hoặc trang / điều hướng** trong app: form popup đang mở **không** bị tắt — vẫn hiển thị và giữ trạng thái; tab hoặc vùng nội dung không active dùng `display: none` (hoặc tương đương) thay vì unmount. Cho phép **nhiều** form popup đồng thời. Datepicker / dropdown / lookup mở từ trong form: `z-index` cao hơn 4000 như mục 0.2. |
+| 0.7 | **Dữ liệu nghiệp vụ & MySQL** | **Fetch-on-demand**; **không** `localStorage.setItem` cho entity; **React Query** (`gcTime: 0`, `staleTime: 0`); cookie **HttpOnly** `htql_sess` + `withCredentials`; bộ lọc → bảng **`user_preferences`** (`GET/PUT /api/user-preferences`). Chi tiết: **`.cursor/rules/build.mdc`** mục **«Mô hình dữ liệu»**. |
 
 ---
 
@@ -216,6 +219,7 @@ Chuẩn tham chiếu: `src/modules/inventory/kho/VatTuHangHoaForm.tsx`.
 2. Ô dropdown + nút thêm: import `lookupControlStyles.ts`, chiều cao 24px.
 3. Validation: lỗi cùng dòng tiêu đề; focus ô thiếu sau khi set lỗi.
 4. **Form trong modal có thể kéo (drag):** dùng hook `useDraggable` từ `src/hooks/useDraggable.ts` — `containerRef` + `containerStyle` gắn vào **khối vỏ** (hộp form); `onMouseDown` kéo gắn vào **thanh tiêu đề** (handle), truyền xuống form qua prop tương ứng (ví dụ `onHeaderPointerDown`) để người dùng di chuyển cửa sổ nhập liệu.
+5. **Popup form nhập liệu:** tuân thủ mục **0.6** (nền không tối, không đóng click nền/Escape, giữ form khi đổi tab / chuyển trang, nhiều form đồng thời).
 
 ### 6.2 Ô Điều khoản TT (form Nhà cung cấp)
 

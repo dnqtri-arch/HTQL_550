@@ -182,7 +182,7 @@ export function VatTuHangHoaFormTabNgamDinh({
         <input {...register('tai_khoan_doanh_thu')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
         <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
       </div>
-      <LabelCell label="ĐG bán" />
+      <LabelCell label="ĐG bán tối thiểu" />
       <div className="misa-grid-item htql-don-gia-wrap">
         <InputWithLookup onLookup={() => {}}>
           <Controller

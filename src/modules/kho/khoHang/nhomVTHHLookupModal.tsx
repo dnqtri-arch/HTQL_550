@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { X, HelpCircle, Plus, Check, Ban, Search } from 'lucide-react'
 import { ThemNhomVTHHModal } from './themNhomVTHHModal'
 import { useDraggable } from '../../../hooks/useDraggable'
@@ -174,7 +174,6 @@ export function NhomVTHHLookupModal({
 }: NhomVTHHLookupModalProps) {
   const [filterMa, setFilterMa] = useState('')
   const [filterTen, setFilterTen] = useState('')
-  const overlayMouseDownRef = useRef(false)
   const { containerRef, containerStyle, dragHandleProps } = useDraggable()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     const ids = value.split(';').map((s) => s.trim()).filter(Boolean)
@@ -209,12 +208,8 @@ export function NhomVTHHLookupModal({
   }
 
   return (
-    <div
-      style={modalOverlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
-    >
-      <div ref={containerRef} style={{ ...modalBox, ...containerStyle }} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+    <div style={modalOverlay}>
+      <div ref={containerRef} style={{ ...modalBox, ...containerStyle }}>
         <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
           <span>{title}</span>
           <button

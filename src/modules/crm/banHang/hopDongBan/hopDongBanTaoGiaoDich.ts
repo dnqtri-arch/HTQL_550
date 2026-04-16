@@ -1,6 +1,6 @@
 /**
  * Tạo giao dịch từ Hợp đồng bán — logic cục bộ module `hopDongBan` (không import từ baoGia).
- * Payload chứng từ HĐ bán — localStorage key riêng.
+ * Payload chứng từ HĐ bán — khóa lưu tạm riêng.
  */
 
 import type { HopDongBanChungTuRecord, HopDongBanChungTuChiTiet } from '../../../../types/hopDongBanChungTu'

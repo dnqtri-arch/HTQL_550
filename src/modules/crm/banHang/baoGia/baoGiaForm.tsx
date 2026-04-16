@@ -113,6 +113,8 @@ import {
   partMccForPath,
   type BaoGiaDinhKemPendingRow,
 } from './baoGiaDinhKemModal'
+import { maKhPathPartTuKhachHangVaDanhBa } from '../../../../utils/htqlThietKeDktkNaming'
+import { htqlReconcileThietKeServerPaths } from '../../../../utils/htqlReconcileThietKeServerPaths'
 import { layLichSuBanChoKhach, coLichSuBan } from './lichSuBanHangKhach'
 import { useBaoGiaApi } from './baoGiaApiContext'
 import { setUnsavedChanges } from '../../../../context/unsavedChanges'
@@ -1827,10 +1829,10 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
       return
     }
     const so = (initialDon.so_bao_gia ?? '').trim() || 'BG'
-    const khPart = partMccForPath('')
+    const khPart = maKhPathPartTuKhachHangVaDanhBa(initialDon.khach_hang, khList)
     setAttachments(chuanHoaDuongDanDinhKemBaoGia(raw, so, khPart))
     setAttachmentsDirty(false)
-  }, [initialDon?.id])
+  }, [initialDon?.id, initialDon?.khach_hang, initialDon?.so_bao_gia, khList])
 
   /** Đồng bộ `name` + `virtual_path` khi đổi Mã BG / KH (đính kèm trước, nhập KH sau — tránh tên file vẫn `KH_unknown`). */
   useEffect(() => {
@@ -1945,12 +1947,12 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     if (rawAtt.length === 0) setAttachments([])
     else {
       const so = (initialDon.so_bao_gia ?? '').trim() || 'BG'
-      const khPart = partMccForPath('')
+      const khPart = maKhPathPartTuKhachHangVaDanhBa(initialDon.khach_hang, khList)
       setAttachments(chuanHoaDuongDanDinhKemBaoGia(rawAtt, so, khPart))
     }
     setAttachmentsDirty(false)
     setEditingFromView(false)
-  }, [readOnly, initialDon?.id, initialDon, initialChiTiet, laPhieuNhanNvthh, phieuNhanTuBaoGia])
+  }, [readOnly, initialDon?.id, initialDon, initialChiTiet, laPhieuNhanNvthh, phieuNhanTuBaoGia, khList])
 
   useEffect(() => {
     if (khDropdownOpen && refKhWrap.current) {
@@ -2378,11 +2380,22 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     if (!validateBeforeSave()) return
     setDangLuu(true)
     try {
+      const soD = soDonHang.trim() || 'DHM'
+      if (attachments.length > 0) {
+        const norm = chuanHoaDuongDanDinhKemBaoGia(attachments, soD, khPartDinhKem)
+        const moved = await htqlReconcileThietKeServerPaths(attachments, norm)
+        setAttachments(moved)
+      }
+      if (phieuChiAttachments.length > 0) {
+        const normPc = chuanHoaDuongDanDinhKemBaoGia(phieuChiAttachments, soD, khPartDinhKem)
+        const movedPc = await htqlReconcileThietKeServerPaths(phieuChiAttachments, normPc)
+        setPhieuChiAttachments(movedPc)
+      }
       const payload = buildPayload()
       if (initialDon) {
         api.put(initialDon.id, payload)
       } else {
-        api.post(payload)
+        await api.post(payload)
       }
       api.clearDraft()
       setUnsavedChanges(false)

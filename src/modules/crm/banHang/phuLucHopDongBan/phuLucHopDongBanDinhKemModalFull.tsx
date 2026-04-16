@@ -2,6 +2,16 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import type { PhuLucHopDongBanChungTuAttachmentItem } from '../../../../types/phuLucHopDongBanChungTu'
+import {
+  parseSoPhuLucHopDongBanChungTuForAttachmentFile as parseSoDonHangBanChungTuForAttachmentFile,
+  partMccForPath,
+  formatTgGiaoForAttachmentFile,
+  buildDktkAttachmentBaseName,
+  buildDktkFolderVirtualPath,
+  buildDktkFullVirtualPath,
+  rebuildDktkAttachmentStoredFileName,
+  chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu as chuanHoaPhuLucTuUtil,
+} from '../../../../utils/htqlThietKeDktkNaming'
 
 /** Đính kèm thiết kế (dktk): AI, EPS, SVG, PDF, Corel (CDR), PSD, ảnh, TIFF */
 const ACCEPT_ATTR = '.ai,.eps,.svg,.pdf,.cdr,.psd,.jpg,.jpeg,.png,.tif,.tiff'
@@ -11,114 +21,48 @@ function hopLeDinhDangFile(file: File): boolean {
   return /\.(ai|eps|svg|pdf|cdr|psd|jpe?g|png|tiff?)$/i.test(n)
 }
 
-/** 2026/BG/3 → 2026_bg_3; 2026/HDB/3 → 2026_hdb_3 */
-export function parseSoDonHangBanChungTuForAttachmentFile(soDon: string): string {
-  const t = soDon.trim()
-  const mBg = t.match(/^(\d{4})\s*\/\s*BG\s*\/\s*(\d+)$/i)
-  if (mBg) return `${mBg[1]}_bg_${mBg[2]}`
-  const mHdb = t.match(/^(\d{4})\s*\/\s*HDB\s*\/\s*(\d+)$/i)
-  if (mHdb) return `${mHdb[1]}_hdb_${mHdb[2]}`
-  const mPlhdb = t.match(/^(\d{4})\s*\/\s*PLHDB\s*\/\s*(\d+)$/i)
-  if (mPlhdb) return `${mPlhdb[1]}_plhdb_${mPlhdb[2]}`
-  const s = t.replace(/[\\/]+/g, '_').replace(/\s+/g, '_').replace(/_+/g, '_').toLowerCase()
-  return s || 'bg'
-}
+export { parseSoDonHangBanChungTuForAttachmentFile, partMccForPath, formatTgGiaoForAttachmentFile }
 
 /**
- * Phần thư mục/tên file cho KH: **chỉ** `ma_kh` (chuẩn hóa chữ thường, bỏ khoảng trắng).
- * Không dùng tên KH làm slug — chưa có mã thì `kh_unknown`.
- * Tham số thứ hai (nếu có) bỏ qua, giữ cho tương thích gọi cũ.
- */
-export function partMccForPath(maKh: string, _tenKhFallback?: string): string {
-  const m = (maKh || '').trim().replace(/\s+/g, '').toLowerCase()
-  return m || 'kh_unknown'
-}
-
-/** HH_mm_dd_MM_yyyy (vd 09_00_29_03_2026) */
-export function formatTgGiaoForAttachmentFile(d: Date): string {
-  const h = d.getHours()
-  const mi = d.getMinutes()
-  const day = d.getDate()
-  const mo = d.getMonth() + 1
-  const y = d.getFullYear()
-  return `${String(h).padStart(2, '0')}_${String(mi).padStart(2, '0')}_${String(day).padStart(2, '0')}_${String(mo).padStart(2, '0')}_${y}`
-}
-
-/**
- * `maKhPathPart`: kết quả `partMccForPath(ma_kh)` — chỉ mã KH; chưa có mã → `kh_unknown`.
- * Thời gian trong tên file: «Hiệu lực đến» (ngày hiệu lực báo giá) nếu có, không thì TG tạo báo giá, không thì thời điểm hiện tại.
+ * Tên file: mã phụ lục (`plhdb`) + TG tạo (ưu tiên) + chỉ số — không còn segment mã KH trong tên.
+ * `maKhPathPart` giữ cho tương thích gọi cũ (bỏ qua).
  */
 export function buildBgAttachmentBaseName(
   soDon: string,
-  maKhPathPart: string,
+  _maKhPathPart: string,
   ngayGiao: Date | null,
   ngayDonHangBanChungTu: Date | null,
   index: number
 ): string {
-  const bgPart = parseSoDonHangBanChungTuForAttachmentFile(soDon)
-  const khPart = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
-  const tgNgay = ngayGiao ?? ngayDonHangBanChungTu ?? new Date()
-  const tgPart = formatTgGiaoForAttachmentFile(tgNgay)
-  return `${bgPart}_${khPart}_${tgPart}_${index}`
+  const doc = parseSoDonHangBanChungTuForAttachmentFile(soDon)
+  return buildDktkAttachmentBaseName(doc, ngayDonHangBanChungTu, ngayGiao, index)
 }
 
-/** Thư mục module (slug) — đồng bộ quy tắc lưu đính kèm BG */
-export const BG_ATTACHMENT_MODULE_FOLDER = 'bao_gia'
-
-/** bao_gia / mã_kh / mã_bg — `maKhPathPart` đã qua partMccForPath */
+/** Dưới gốc thiết kế: mã_kh hoặc `_pending_dktk` / mã chứng từ */
 export function buildBgAttachmentFolderVirtualPath(soDonHangBanChungTu: string, maKhPathPart: string): string {
-  const kh = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
-  const bg = parseSoDonHangBanChungTuForAttachmentFile(soDonHangBanChungTu)
-  return `${BG_ATTACHMENT_MODULE_FOLDER}/${kh}/${bg}`
+  return buildDktkFolderVirtualPath(parseSoDonHangBanChungTuForAttachmentFile(soDonHangBanChungTu), maKhPathPart)
 }
 
 export function buildBgAttachmentFullVirtualPath(soDonHangBanChungTu: string, maKhPathPart: string, fileName: string): string {
-  const base = fileName.replace(/^\/+/, '')
-  return `${buildBgAttachmentFolderVirtualPath(soDonHangBanChungTu, maKhPathPart)}/${base}`
+  return buildDktkFullVirtualPath(parseSoDonHangBanChungTuForAttachmentFile(soDonHangBanChungTu), maKhPathPart, fileName)
 }
 
-/** Hậu tố chuẩn do `buildBgAttachmentBaseName`: _HH_mm_dd_MM_yyyy_index */
-const RE_BG_ATT_NAME_TAIL = /_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{4})_(\d+)$/
-
-/**
- * Khi đổi Mã BG / KH sau khi đã đính kèm: đổi lại `name` cho khớp (trước đó có thể là `…_kh_unknown_…`).
- * Giữ nguyên phần thời gian + chỉ số từ tên cũ; nếu không khớp định dạng hệ thống thì giữ nguyên tên.
- */
+/** `maKhPathPart` giữ cho tương thích gọi cũ (bỏ qua). */
 export function rebuildBgAttachmentStoredFileName(
   currentName: string,
   soDonHangBanChungTu: string,
-  maKhPathPart: string
+  _maKhPathPart: string
 ): string {
-  const raw = (currentName || '').trim()
-  const extMatch = raw.match(/(\.[^./\\]+)$/)
-  const ext = extMatch ? extMatch[1] : ''
-  const base = extMatch ? raw.slice(0, -ext.length) : raw
-  const m = base.match(RE_BG_ATT_NAME_TAIL)
-  if (!m) return raw
-  const tgPart = `${m[1]}_${m[2]}_${m[3]}_${m[4]}_${m[5]}`
-  const index = m[6]
-  const bgPart = parseSoDonHangBanChungTuForAttachmentFile(soDonHangBanChungTu)
-  const khPart = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
-  return `${bgPart}_${khPart}_${tgPart}_${index}${ext}`
+  return rebuildDktkAttachmentStoredFileName(currentName, parseSoDonHangBanChungTuForAttachmentFile, soDonHangBanChungTu)
 }
 
-/**
- * Trước khi lưu / khi đổi Mã BG hoặc mã KH: gán lại `name` (nếu đúng pattern) và `virtual_path` theo quy tắc hiện tại
- * (bao_gia / mã_kh / mã_bg / tên_file), tránh lệch khi user đính kèm trước rồi mới nhập KH/số đơn.
- */
 export function chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(
   items: PhuLucHopDongBanChungTuAttachmentItem[],
   soDonHangBanChungTu: string,
-  maKhPathPart: string
+  maKhPathPart: string,
+  options?: { soBaoGiaGoc?: string | null }
 ): PhuLucHopDongBanChungTuAttachmentItem[] {
-  return items.map((a) => {
-    const name = rebuildBgAttachmentStoredFileName(a.name, soDonHangBanChungTu, maKhPathPart)
-    return {
-      ...a,
-      name,
-      virtual_path: buildBgAttachmentFullVirtualPath(soDonHangBanChungTu, maKhPathPart, name),
-    }
-  })
+  return chuanHoaPhuLucTuUtil(items, soDonHangBanChungTu, maKhPathPart, options)
 }
 
 /** Bỏ phần tên file, chỉ giữ đường dẫn thư mục (có / cuối). */

@@ -1,4 +1,5 @@
-/** Key localStorage lưu danh mục kho (dùng chung cho Danh sách kho và form Vật tư hàng hóa) */
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
+/** Key htqlEntityStorage lưu danh mục kho (dùng chung cho Danh sách kho và form Vật tư hàng hóa) */
 export const STORAGE_KEY_KHO = 'htql550_danh_muc_kho'
 
 export interface KhoStorageItem {
@@ -12,7 +13,7 @@ export interface KhoStorageItem {
 
 export function loadKhoListFromStorage(): KhoStorageItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_KHO)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY_KHO)
     if (raw) {
       const parsed = JSON.parse(raw) as (KhoStorageItem & Record<string, unknown>)[]
       if (Array.isArray(parsed)) {
@@ -31,5 +32,5 @@ export function loadKhoListFromStorage(): KhoStorageItem[] {
 }
 
 export function saveKhoListToStorage(list: KhoStorageItem[]): void {
-  localStorage.setItem(STORAGE_KEY_KHO, JSON.stringify(list))
+  htqlEntityStorage.setItem(STORAGE_KEY_KHO, JSON.stringify(list))
 }

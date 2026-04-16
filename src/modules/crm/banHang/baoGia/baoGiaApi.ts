@@ -2,11 +2,13 @@
  * API và types cho Báo giá (header + chi tiết dòng).
  * Mã: {Năm}/BG/{Số} — rule ma-he-thong.mdc
  * 
- * [YC24 Mục 7] Endpoint backend (khi có): /api/sales/quotes
- * Hiện tại: localStorage-based (tách biệt khỏi /api/purchase/orders)
+ * Dữ liệu: JSON bundle `/api/htql-module-bundle/baoGia` (MySQL `htql_module_bundle` hoặc file fallback).
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
+import { htqlModuleBundleGet, htqlModuleBundlePut } from '@/utils/htqlModuleBundleApi'
 import type {
   BaoGiaAttachmentItem,
   BaoGiaChiTiet,
@@ -30,93 +32,13 @@ export type {
 /** Alias tương thích — cùng nghĩa với BaoGiaKyValue. */
 export type KyValue = BaoGiaKyValue
 
-/** Dữ liệu mẫu báo giá */
-const MOCK_DON: BaoGiaRecord[] = [
-  {
-    id: 'bg1',
-    tinh_trang: 'Chưa thực hiện',
-    ngay_bao_gia: '2026-03-10',
-    so_bao_gia: 'BG00001',
-    ngay_giao_hang: null,
-    khach_hang: 'CÔNG TY TNHH QUẢNG CÁO VAX',
-    dia_chi: '',
-    ma_so_thue: '',
-    dien_giai: '',
-    nv_ban_hang: '',
-    dieu_khoan_tt: '',
-    so_ngay_duoc_no: '0',
-    dieu_khoan_khac: '',
-    tong_tien_hang: 4000000,
-    tong_thue_gtgt: 0,
-    tong_thanh_toan: 4000000,
-    so_chung_tu_cukcuk: '',
-  },
-  {
-    id: 'bg2',
-    tinh_trang: 'Đang thực hiện',
-    ngay_bao_gia: '2026-03-12',
-    so_bao_gia: 'BG00002',
-    ngay_giao_hang: '2026-03-20',
-    khach_hang: 'CÔNG TY CP NGUYÊN VẬT LIỆU ABC',
-    dia_chi: '',
-    ma_so_thue: '',
-    dien_giai: 'Đơn hàng vật tư quý 1',
-    nv_ban_hang: '',
-    dieu_khoan_tt: '',
-    so_ngay_duoc_no: '0',
-    dieu_khoan_khac: '',
-    tong_tien_hang: 15000000,
-    tong_thue_gtgt: 0,
-    tong_thanh_toan: 15000000,
-    so_chung_tu_cukcuk: 'CUKCUK-2026-001',
-  },
-  {
-    id: 'bg3',
-    tinh_trang: 'Chưa thực hiện',
-    ngay_bao_gia: '2026-03-15',
-    so_bao_gia: 'BG00003',
-    ngay_giao_hang: null,
-    khach_hang: 'CÔNG TY TNHH DỊCH VỤ XYZ',
-    dia_chi: '',
-    ma_so_thue: '',
-    dien_giai: '',
-    nv_ban_hang: '',
-    dieu_khoan_tt: '',
-    so_ngay_duoc_no: '0',
-    dieu_khoan_khac: '',
-    tong_tien_hang: 8500000,
-    tong_thue_gtgt: 0,
-    tong_thanh_toan: 8500000,
-    so_chung_tu_cukcuk: '',
-  },
-]
 
-/** Chi tiết theo báo giá */
-const MOCK_CHI_TIET: BaoGiaChiTiet[] = [
-  {
-    id: 'ct1',
-    bao_gia_id: 'bg1',
-    ma_hang: 'VT00001',
-    ten_hang: 'decal trang sus',
-    ma_quy_cach: '',
-    dvt: 'Cây',
-    chieu_dai: 0,
-    chieu_rong: 0,
-    chieu_cao: 0,
-    ban_kinh: 0,
-    luong: 0,
-    so_luong: 5,
-    so_luong_nhan: 0,
-    don_gia: 800000,
-    thanh_tien: 4000000,
-    pt_thue_gtgt: null,
-    tien_thue_gtgt: null,
-    lenh_san_xuat: '',
-  },
-]
+export const BAO_GIA_MODULE_ID = 'baoGia' as const
+export const BAO_GIA_BUNDLE_QUERY_KEY = ['htql-module-bundle', BAO_GIA_MODULE_ID] as const
 
-const STORAGE_KEY_BAO_GIA = 'htql_bao_gia_list'
-const STORAGE_KEY_CHI_TIET = 'htql_bao_gia_chi_tiet'
+const BUNDLE_V = 2
+
+const MODULE_PREFIX = 'BG'
 
 /** [YC76] Loại bỏ bản ghi mock/dữ liệu cũ theo mã hệ thống. */
 const SO_BAO_GIA_LOAI_BO = new Set(['2026/BG/3', '2026/BG/5'])
@@ -203,75 +125,102 @@ function normalizeBaoGia(d: Partial<BaoGiaRecord> & { id: string; de_xuat_id?: s
   }
 }
 
-function loadFromStorage(): { baoGia: BaoGiaRecord[]; chiTiet: BaoGiaChiTiet[] } {
-  try {
-    const rawBaoGia = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_BAO_GIA) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
-    const baoGia = rawBaoGia ? JSON.parse(rawBaoGia) : null
-    const chiTiet = rawCt ? JSON.parse(rawCt) : null
-    if (Array.isArray(baoGia) && Array.isArray(chiTiet)) {
-      const normalized = baoGia.map((d: Partial<BaoGiaRecord> & { id: string }) => normalizeBaoGia(d))
-      return filterBaoGiaLoaiBoTheoMa(normalized, chiTiet)
-    }
-  } catch {
-    /* ignore */
-  }
-  return filterBaoGiaLoaiBoTheoMa([...MOCK_DON], [...MOCK_CHI_TIET])
-}
+let _baoGiaList: BaoGiaRecord[] = []
+let _chiTietList: BaoGiaChiTiet[] = []
+let _baoGiaDraft: BaoGiaDraftLine[] | null = null
 
-function saveToStorage(): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_BAO_GIA, JSON.stringify(_baoGiaList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
-    }
-  } catch {
-    /* ignore */
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+let persistInFlight = false
+const PERSIST_DEBOUNCE_MS = 450
+
+function buildBaoGiaBundleForPersist(): Record<string, unknown> {
+  return {
+    _v: BUNDLE_V,
+    baoGia: _baoGiaList,
+    chiTiet: _chiTietList,
+    draft: _baoGiaDraft,
   }
 }
 
-/** Draft các dòng đang nhập trong form (chỉ lưu cột hiển thị, bỏ _vthh để tránh object lớn). */
-const STORAGE_KEY_DRAFT = 'htql_bao_gia_draft'
+function baoGiaHasPendingPersist(): boolean {
+  return persistTimer != null || persistInFlight
+}
+
+function schedulePersistBaoGiaBundle(): void {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    persistInFlight = true
+    void htqlModuleBundlePut(BAO_GIA_MODULE_ID, buildBaoGiaBundleForPersist())
+      .catch(() => {
+        /* offline */
+      })
+      .finally(() => {
+        persistInFlight = false
+      })
+  }, PERSIST_DEBOUNCE_MS)
+}
+
+function applyBaoGiaBundlePayload(bundle: unknown | null): void {
+  /** Null/invalid bundle: empty lists (không khôi phục bản ghi MOCK). */
+  if (!bundle || typeof bundle !== 'object') {
+    _baoGiaList = []
+    _chiTietList = []
+    _baoGiaDraft = null
+    return
+  }
+  const o = bundle as { baoGia?: unknown; chiTiet?: unknown; draft?: unknown }
+  const baoGiaRaw = o.baoGia
+  const chiTietRaw = o.chiTiet
+  if (!Array.isArray(baoGiaRaw) || !Array.isArray(chiTietRaw)) {
+    _baoGiaList = []
+    _chiTietList = []
+    _baoGiaDraft = null
+    return
+  }
+  const normalized = (baoGiaRaw as (Partial<BaoGiaRecord> & { id: string })[]).map((d) => normalizeBaoGia(d))
+  const filtered = filterBaoGiaLoaiBoTheoMa(normalized, chiTietRaw as BaoGiaChiTiet[])
+  _baoGiaList = filtered.baoGia
+  _chiTietList = filtered.chiTiet
+  if (o.draft == null) _baoGiaDraft = null
+  else if (Array.isArray(o.draft)) _baoGiaDraft = o.draft as BaoGiaDraftLine[]
+  else _baoGiaDraft = null
+}
+
+export async function baoGiaFetchBundleAndApply(): Promise<number> {
+  try {
+    const { bundle, version, notModified } = await htqlModuleBundleGet(BAO_GIA_MODULE_ID)
+    if (notModified) return version
+    if (!baoGiaHasPendingPersist()) applyBaoGiaBundlePayload(bundle)
+    return version
+  } catch {
+    if (!baoGiaHasPendingPersist() && _baoGiaList.length === 0) applyBaoGiaBundlePayload(null)
+    return 0
+  }
+}
+
+export function baoGiaReloadFromStorage(): void {
+  void baoGiaFetchBundleAndApply()
+}
 
 export function getBaoGiaDraft(): BaoGiaDraftLine[] | null {
-  try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT) : null
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return _baoGiaDraft
 }
 
 export function setBaoGiaDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const toSave = lines.map((l) => {
-        const { _vthh, ...rest } = l
-        return rest
-      })
-      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
-    }
-  } catch {
-    /* ignore */
-  }
+  const toSave = lines.map((l) => {
+    const { _vthh: _drop, ...rest } = l
+    return rest
+  })
+  _baoGiaDraft = toSave as BaoGiaDraftLine[]
+  schedulePersistBaoGiaBundle()
 }
 
 export function clearBaoGiaDraft(): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY_DRAFT)
-  } catch {
-    /* ignore */
-  }
+  _baoGiaDraft = null
+  schedulePersistBaoGiaBundle()
 }
 
-/** Bản sao có thể xóa; khởi tạo từ localStorage (nếu có) hoặc dữ liệu mẫu */
-const _initial = loadFromStorage()
-let _baoGiaList: BaoGiaRecord[] = _initial.baoGia
-let _chiTietList: BaoGiaChiTiet[] = _initial.chiTiet
-
-/** Lấy từ/đến theo kỳ: "tat-ca" | "tuan-nay" | "thang-nay" | "quy-nay" | "nam-nay" */
 export function getDateRangeForKy(ky: string): { tu: string; den: string } {
   if (ky === 'tat-ca') return { tu: '', den: '' }
   const now = new Date()
@@ -405,10 +354,10 @@ const LS_PLHDB_CT_LIST = 'htql_phu_luc_hop_dong_ban_chung_tu_list'
 
 function conBanGhiLienKetBaoGiaTrongHdbVaPhuLucCt(baoGiaId: string): boolean {
   const id = baoGiaId.trim()
-  if (!id || typeof localStorage === 'undefined') return false
+  if (!id || typeof htqlEntityStorage === 'undefined') return false
   for (const key of [LS_HDB_CT_LIST, LS_PLHDB_CT_LIST]) {
     try {
-      const raw = localStorage.getItem(key)
+      const raw = htqlEntityStorage.getItem(key)
       if (!raw) continue
       const arr = JSON.parse(raw) as { bao_gia_id?: string }[]
       if (Array.isArray(arr) && arr.some((d) => (d.bao_gia_id ?? '').trim() === id)) return true
@@ -523,14 +472,22 @@ export function baoGiaSetTinhTrang(baoGiaId: string, tinh_trang: string): void {
 export function baoGiaDelete(baoGiaId: string): void {
   _baoGiaList = _baoGiaList.filter((d) => d.id !== baoGiaId)
   _chiTietList = _chiTietList.filter((c) => c.bao_gia_id !== baoGiaId)
-  saveToStorage()
+  schedulePersistBaoGiaBundle()
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
   }
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
-export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
+export async function baoGiaPost(payload: BaoGiaCreatePayload): Promise<BaoGiaRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _baoGiaList.map((d) => d.so_bao_gia))
+  const soBaoGia = await allocateMaHeThongFromServer({
+    seqKey: 'BG',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `bg${Date.now()}`
   const baoGiaRow: BaoGiaRecord = {
     id,
@@ -539,7 +496,7 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
     so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_bao_gia: payload.ngay_bao_gia,
-    so_bao_gia: payload.so_bao_gia,
+    so_bao_gia: soBaoGia,
     ngay_giao_hang: payload.ngay_giao_hang,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
@@ -615,7 +572,7 @@ export function baoGiaPost(payload: BaoGiaCreatePayload): BaoGiaRecord {
       dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
-  saveToStorage()
+  schedulePersistBaoGiaBundle()
   return baoGiaRow
 }
 
@@ -706,7 +663,7 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
       dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
-  saveToStorage()
+  schedulePersistBaoGiaBundle()
 }
 
 /** Báo giá có thể chọn khi lập ĐHB/HĐ bán từ form (loại trừ đã chuyển ĐHB/HĐ, KH không đồng ý). */
@@ -726,8 +683,6 @@ export function getDefaultBaoGiaFilter(): BaoGiaFilter {
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
-
-const MODULE_PREFIX = 'BG'
 
 /** Trả về số báo giá tiếp theo (2026/BG/1, 2026/BG/2...) — reset mỗi năm. */
 export function baoGiaSoDonHangTiepTheo(): string {

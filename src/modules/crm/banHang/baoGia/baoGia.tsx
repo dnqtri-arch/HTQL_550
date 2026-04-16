@@ -4,6 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import {
   Plus, Trash2, Eye, Mail, MessageCircle, ChevronDown,
   ChevronLeft, ChevronRight, FileText, Search,
@@ -43,6 +45,9 @@ import {
   TINH_TRANG_BG_KH_KHONG_DONG_Y,
   TINH_TRANG_BG_MOI_TAO,
   HTQL_BAO_GIA_RELOAD_EVENT,
+  baoGiaBuildCreatePayloadFromRecord,
+  baoGiaFetchBundleAndApply,
+  BAO_GIA_BUNDLE_QUERY_KEY,
 } from './baoGiaApi'
 import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
@@ -57,6 +62,7 @@ import {
   donHangBanGetAll,
   donHangBanGetChiTiet,
   donHangBanSoDonHangTiepTheo,
+  donHangBanReloadFromStorage,
 } from '../donHangBan/donHangBanChungTuApi'
 import { buildDonHangBanChungTuPrefillFromBaoGia } from '../donHangBan/baoGiaToDonHangBanChungTuPrefill'
 import { HopDongBanChungTuApiProvider } from '../hopDongBan/hopDongBanChungTuApiContext'
@@ -66,6 +72,7 @@ import {
   hopDongBanChungTuGetAll,
   hopDongBanChungTuGetChiTiet,
   hopDongBanSoHopDongTiepTheo,
+  hopDongBanChungTuReloadFromStorage,
 } from '../hopDongBan/hopDongBanChungTuApi'
 import { buildHopDongBanChungTuPrefillFromBaoGia } from '../hopDongBan/baoGiaToHopDongBanChungTuPrefill'
 import { HopDongBanForm } from '../hopDongBan/hopDongBanForm'
@@ -79,8 +86,66 @@ import {
 } from '../banHangTabEvent'
 import { useDraggable } from '../../../../hooks/useDraggable'
 import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
+import { KV_POLL_INTERVAL_MS } from '../../../../utils/htqlKvSync'
 
 registerLocale('vi', vi)
+
+/** Khớp `htql_phu_luc_hop_dong_ban_chung_tu_list` (cùng key trong baoGiaApi). */
+const LS_PHU_LUC_HDB_CT = 'htql_phu_luc_hop_dong_ban_chung_tu_list'
+
+function baoGiaCoPhuLucHopDongLienKet(baoGiaId: string): boolean {
+  const id = baoGiaId.trim()
+  if (!id || typeof htqlEntityStorage === 'undefined') return false
+  try {
+    const raw = htqlEntityStorage.getItem(LS_PHU_LUC_HDB_CT)
+    if (!raw) return false
+    const arr = JSON.parse(raw) as { bao_gia_id?: string }[]
+    return Array.isArray(arr) && arr.some((d) => (d.bao_gia_id ?? '').trim() === id)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Sửa «Đã chuyển ĐHB/HĐ» khi không còn chứng từ gắn `bao_gia_id` (hoặc đổi cho khớp khi chỉ còn ĐHB hoặc chỉ còn HĐ/phụ lục).
+ * Tránh hiển thị đã chuyển trong khi cột Giao dịch trống.
+ */
+function baoGiaDamBaoTinhTrangTheoLienKetDonHangHopDong(): void {
+  const filterTatCa = { ky: 'tat-ca' as const, tu: '', den: '' }
+  donHangBanReloadFromStorage()
+  hopDongBanChungTuReloadFromStorage()
+
+  const allDhb = donHangBanGetAll(filterTatCa)
+  const allHdb = hopDongBanChungTuGetAll(filterTatCa)
+  const bgCoDhb = new Set<string>()
+  for (const d of allDhb) {
+    const bid = (d.bao_gia_id ?? '').trim()
+    if (bid) bgCoDhb.add(bid)
+  }
+
+  const allBg = baoGiaGetAll(filterTatCa)
+  for (const row of allBg) {
+    const t = (row.tinh_trang ?? '').trim()
+    const id = row.id
+    const hasD = bgCoDhb.has(id)
+    const hasH =
+      allHdb.some((h) => (h.bao_gia_id ?? '').trim() === id) || baoGiaCoPhuLucHopDongLienKet(id)
+
+    let nextT: string | null = null
+    if (t === TINH_TRANG_BG_DA_CHUYEN_DHB) {
+      if (hasD) continue
+      nextT = hasH ? TINH_TRANG_BG_DA_CHUYEN_HD : TINH_TRANG_BG_MOI_TAO
+    } else if (t === TINH_TRANG_BG_DA_CHUYEN_HD) {
+      if (hasH) continue
+      nextT = hasD ? TINH_TRANG_BG_DA_CHUYEN_DHB : TINH_TRANG_BG_MOI_TAO
+    } else {
+      continue
+    }
+
+    const ct = baoGiaGetChiTiet(id)
+    baoGiaPut(id, { ...baoGiaBuildCreatePayloadFromRecord(row, ct), tinh_trang: nextT })
+  }
+}
 
 /** Tự chèn "/" thành dd/mm/yyyy khi gõ (đồng bộ Đơn hàng mua — YC34). */
 function formatDdMmYyyyInput(raw: string): string {
@@ -228,6 +293,11 @@ const apiBaoGia: BaoGiaApi = {
 
 // ─── Màn hình danh sách Báo giá (Content) ────────────────────────────────────
 function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string) => void }) {
+  const baoGiaBundleQ = useQuery({
+    queryKey: BAO_GIA_BUNDLE_QUERY_KEY,
+    queryFn: baoGiaFetchBundleAndApply,
+    refetchInterval: KV_POLL_INTERVAL_MS,
+  })
   const toast = useToastOptional()
   const [filter,      setFilter]      = useState<BaoGiaFilter>(getDefaultBaoGiaFilter)
   const [danhSach,    setDanhSach]    = useState<BaoGiaRecord[]>([])
@@ -288,11 +358,19 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
     return () => { c = true }
   }, [])
 
-  const loadData = useCallback(() => {
+  const refreshLocalDanhSach = useCallback(() => {
+    baoGiaDamBaoTinhTrangTheoLienKetDonHangHopDong()
     setDanhSach(baoGiaGetAll(filter))
-  }, [filter])
+  }, [filter, giaoDichEpoch])
 
-  useEffect(() => { loadData() }, [loadData])
+  const loadData = useCallback(() => {
+    refreshLocalDanhSach()
+  }, [refreshLocalDanhSach])
+
+  useEffect(() => {
+    if (!baoGiaBundleQ.isSuccess) return
+    refreshLocalDanhSach()
+  }, [baoGiaBundleQ.isSuccess, baoGiaBundleQ.dataUpdatedAt, giaoDichEpoch, refreshLocalDanhSach])
   useEffect(() => {
     const sync = () => loadData()
     window.addEventListener(HTQL_BAO_GIA_RELOAD_EVENT, sync)
@@ -1154,7 +1232,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
 
       {/* Modal form - maskClosable={false} */}
       {showForm && (
-        <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>
+        <div className={styles.modalOverlay}>
           <div
             ref={baoGiaFormDrag.containerRef}
             className={styles.modalBoxLarge}
@@ -1176,14 +1254,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
       )}
 
       {showDonHangTuBaoGia && donHangTuBaoGiaPrefill && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => {
-            pendingCapNhatBaoGiaDhbRef.current = null
-            setShowDonHangTuBaoGia(false)
-            setDonHangTuBaoGiaPrefill(null)
-          }}
-        >
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
@@ -1219,14 +1290,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
       )}
 
       {showHopDongTuBaoGia && hopDongTuBaoGiaPrefill && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => {
-            pendingCapNhatBaoGiaHdbRef.current = null
-            setShowHopDongTuBaoGia(false)
-            setHopDongTuBaoGiaPrefill(null)
-          }}
-        >
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
@@ -1262,7 +1326,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
       )}
 
       {xemDhbTuBang && (
-        <div className={styles.modalOverlay} onClick={() => setXemDhbTuBang(null)}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
@@ -1271,8 +1335,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             <DonHangBanChungTuApiProvider api={donHangBanChungTuApiImpl}>
               <DonHangBanForm
                 key={xemDhbKeyTuBang}
-                readOnly
-                viewOnlyLocked
+                readOnly={false}
                 initialDhb={xemDhbTuBang}
                 initialChiTiet={donHangBanGetChiTiet(xemDhbTuBang.id)}
                 onClose={() => setXemDhbTuBang(null)}
@@ -1287,7 +1350,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
         </div>
       )}
       {xemHdbTuBang && (
-        <div className={styles.modalOverlay} onClick={() => setXemHdbTuBang(null)}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
@@ -1296,8 +1359,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             <HopDongBanChungTuApiProvider api={hopDongBanChungTuApiImpl}>
               <HopDongBanForm
                 key={xemHdbKeyTuBang}
-                readOnly
-                viewOnlyLocked
+                readOnly={false}
                 initialHdbCt={xemHdbTuBang}
                 initialChiTiet={hopDongBanChungTuGetChiTiet(xemHdbTuBang.id)}
                 onClose={() => setXemHdbTuBang(null)}

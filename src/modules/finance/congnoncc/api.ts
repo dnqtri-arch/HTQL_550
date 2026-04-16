@@ -1,24 +1,25 @@
 /**
- * API Công nợ NCC — Phải trả người bán (localStorage)
+ * API Công nợ NCC — Phải trả người bán (htqlEntityStorage)
  * Tích hợp: tự động tạo khi NVTHH chuyển "Đã nhập kho" (gọi từ NhanVatTuHangHoa.tsx).
  * Tích hợp: thanh toán trừ số dư Quỹ/Ngân hàng (quy/Api.ts).
  */
 
 import type { PhaiTraNguoiBan, PhaiTraNguoiBanCreatePayload, TinhTrangCongNo } from './type'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { truxSoDuQuy } from '../quy/api'
 
 const LS_KEY = 'htql_congno_ncc'
 
 function loadAll(): PhaiTraNguoiBan[] {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = htqlEntityStorage.getItem(LS_KEY)
     if (raw) return JSON.parse(raw) as PhaiTraNguoiBan[]
   } catch { /* ignore */ }
   return []
 }
 
 function saveAll(data: PhaiTraNguoiBan[]): void {
-  localStorage.setItem(LS_KEY, JSON.stringify(data))
+  htqlEntityStorage.setItem(LS_KEY, JSON.stringify(data))
 }
 
 function genId(): string {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, Pencil, Trash2, RefreshCw, Download } from 'lucide-react'
 import { DataGrid } from '../../../components/common/dataGrid'
 import { Modal } from '../../../components/common/modal'
@@ -16,6 +16,7 @@ import {
   donViTinhDangDuongTrongVatTu,
 } from './donViTinhApi'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
+import { DANH_MUC_POLL_INTERVAL_MS } from '../../../constants/danhMucPoll'
 
 const COT: { key: keyof DonViTinhRecord | string; label: string; width?: number | string }[] = [
   { key: 'ma_dvt', label: 'Mã ĐVT', width: '12%' },
@@ -73,9 +74,43 @@ export function DonViTinh({ onQuayLai }: { onQuayLai?: () => void }) {
     }
   }
 
+  /** Làm mới nền giống KH/NCC — không bật «đang tải» (tránh giật khi máy khác sửa ĐVT). */
+  const refreshBangLang = useCallback(() => {
+    donViTinhNapLai()
+    void donViTinhGetAll().then((data) => {
+      setDanhSach(data)
+      setDongChon((prev) => {
+        if (!prev) return data[0] ?? null
+        const capNhat = data.find((r) => r.id === prev.id)
+        return capNhat ?? data[0] ?? null
+      })
+    })
+  }, [])
+
   useEffect(() => {
     napLai()
   }, [])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      refreshBangLang()
+    }, DANH_MUC_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [refreshBangLang])
+
+  useEffect(() => {
+    const run = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      refreshBangLang()
+    }
+    window.addEventListener('focus', run)
+    document.addEventListener('visibilitychange', run)
+    return () => {
+      window.removeEventListener('focus', run)
+      document.removeEventListener('visibilitychange', run)
+    }
+  }, [refreshBangLang])
 
   const moThem = async () => {
     setForm({ ma_dvt: await donViTinhMaTuDong(), ten_dvt: '', ky_hieu: '', dien_giai: '' })

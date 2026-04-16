@@ -1,4 +1,3 @@
-﻿import { useRef } from 'react'
 import { X } from 'lucide-react'
 
 interface DanhMucLookupModalProps {
@@ -9,20 +8,18 @@ interface DanhMucLookupModalProps {
 }
 
 export function DanhMucLookupModal({ title, items, onSelect, onClose }: DanhMucLookupModalProps) {
-  const overlayMouseDownRef = useRef(false)
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 4000,
+        pointerEvents: 'none',
       }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
     >
       <div
         style={{
@@ -35,9 +32,8 @@ export function DanhMucLookupModal({ title, items, onSelect, onClose }: DanhMucL
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto',
         }}
-        onMouseDown={() => { overlayMouseDownRef.current = false }}
-        onClick={(e) => e.stopPropagation()}
       >
         <div
           style={{

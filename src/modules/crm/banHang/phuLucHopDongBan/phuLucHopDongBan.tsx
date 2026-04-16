@@ -350,9 +350,9 @@ function PhuLucHopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (ta
 
   useEffect(() => {
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('htql_phu_luc_hop_dong_ban_from_baogia') : null
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('htql_phu_luc_hop_dong_ban_from_baogia') : null
       if (!raw) return
-      localStorage.removeItem('htql_phu_luc_hop_dong_ban_from_baogia')
+      sessionStorage.removeItem('htql_phu_luc_hop_dong_ban_from_baogia')
       const d = JSON.parse(raw) as { bao_gia_id?: string }
       if (!d?.bao_gia_id) return
       const bg = baoGiaGetAll(getDefaultBaoGiaFilter()).find((r) => r.id === d.bao_gia_id)
@@ -552,6 +552,8 @@ function PhuLucHopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (ta
           <span className={styles.filterLabel}>Kỳ</span>
           <select
             className={styles.filterInput}
+            title={KY_OPTIONS.find((o) => o.value === filter.ky)?.label ?? ''}
+            style={{ minWidth: 132 }}
             value={filter.ky}
             onChange={(e) => {
               const ky = e.target.value as PhuLucHopDongBanChungTuKyValue
@@ -963,7 +965,7 @@ function PhuLucHopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (ta
       )}
 
       {showForm && (
-        <div className={styles.modalOverlay} onClick={() => { resetFormPrefill(); setShowForm(false) }}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}

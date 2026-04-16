@@ -8,10 +8,13 @@ import {
   vatTuHangHoaPost,
   vatTuHangHoaPut,
   vatTuHangHoaDelete,
+  vatTuHangHoaDeleteWithChildren,
   vatTuHangHoaNapLai,
   vatTuHangHoaTrungMa,
   vatTuHangHoaMaTuDong,
   VATTU_IMAGE_BASE,
+  vatTuHinhAnhUrl,
+  vatTuHinhAnhPathLabel,
 } from './vatTuHangHoaApi'
 import { formatNumberDisplay, formatSoTienHienThi, formatSoThapPhan, parseFloatVN, parseDecimalFlex } from '../../../utils/numberFormat'
 import { exportCsv } from '../../../utils/exportCsv'
@@ -172,33 +175,32 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
   const modalBoxRef = useRef<HTMLDivElement>(null)
   const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | null>(null)
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null)
-  const overlayMouseDownRef = useRef(false)
   /** Dòng đang mở form cảnh báo xóa (null = đóng form) */
   const [deleteTarget, setDeleteTarget] = useState<VatTuHangHoaRecord | null>(null)
 
 
-  const napLai = useCallback(async () => {
-    setDangTai(true)
+  /** `silent`: đồng bộ từ máy khác — không bật «đang tải» (tránh giật layout). */
+  const napLai = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
+    if (!silent) setDangTai(true)
     vatTuHangHoaNapLai()
     try {
-      const [data, dvt] = await (async () => {
-        const d = await vatTuHangHoaGetAll()
-        const dv = await donViTinhGetAll()
-        return [d, dv] as const
-      })()
-      // [YC26] Filter theo module: 'ban' → chỉ la_vthh_ban = true
+      const data = await vatTuHangHoaGetAll()
+      if (!silent) {
+        const dvt = await donViTinhGetAll()
+        setDvtList(dvt.map((r) => ({ id: r.id, ma_dvt: r.ma_dvt, ten_dvt: r.ten_dvt, ky_hieu: r.ky_hieu })))
+      }
       const filtered = filterMode === 'ban' ? data.filter((r) => r.la_vthh_ban === true) : data
       setDanhSach(filtered)
-      setDvtList(dvt.map((r) => ({ id: r.id, ma_dvt: r.ma_dvt, ten_dvt: r.ten_dvt, ky_hieu: r.ky_hieu })))
-      if (!dongChon && filtered.length > 0) setDongChon(filtered[0])
-      else if (dongChon) {
-        const capNhat = filtered.find((r) => r.id === dongChon.id)
-        setDongChon(capNhat ?? filtered[0] ?? null)
-      }
+      setDongChon((prev) => {
+        if (!prev) return filtered[0] ?? null
+        const capNhat = filtered.find((r) => r.id === prev.id)
+        return capNhat ?? filtered[0] ?? null
+      })
     } finally {
-      setDangTai(false)
+      if (!silent) setDangTai(false)
     }
-  }, [dongChon, filterMode])
+  }, [filterMode])
 
   const refreshDvtList = useCallback(async () => {
     const dv = await donViTinhGetAll()
@@ -293,6 +295,15 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
   useEffect(() => {
     napLai()
   }, [])
+
+  /** Đồng bộ đa máy: cập nhật dữ liệu không flash «đang tải» để khung không co giãn. */
+  useEffect(() => {
+    const onVthhReload = () => {
+      void napLai({ silent: true })
+    }
+    window.addEventListener('htql-vthh-reload', onVthhReload)
+    return () => window.removeEventListener('htql-vthh-reload', onVthhReload)
+  }, [napLai])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -411,11 +422,17 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
   const thucHienXoa = async () => {
     if (!deleteTarget) return
     const idXoa = deleteTarget.id
+    const laCha = Boolean(deleteTarget.vt_chinh)
     setDeleteTarget(null)
     try {
-      await vatTuHangHoaDelete(idXoa)
-      setDanhSach((prev) => prev.filter((r) => r.id !== idXoa))
-      setDongChon((prev) => (prev?.id === idXoa ? null : prev))
+      if (laCha) {
+        const { deletedIds } = await vatTuHangHoaDeleteWithChildren(idXoa)
+        setDongChon((prev) => (prev && deletedIds.includes(prev.id) ? null : prev))
+      } else {
+        await vatTuHangHoaDelete(idXoa)
+        setDanhSach((prev) => prev.filter((r) => r.id !== idXoa))
+        setDongChon((prev) => (prev?.id === idXoa ? null : prev))
+      }
       await napLai()
     } catch (e) {
       showError(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
@@ -478,7 +495,15 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
       />
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 280,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           <DataGrid<VatTuHangHoaRecord>
             columns={columns}
             data={displayData}
@@ -711,9 +736,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
                 <div style={vungHinhAnh}>
                     {dongChon?.duong_dan_hinh_anh && !imageLoadError ? (
                       (() => {
-                        const src = dongChon.duong_dan_hinh_anh.startsWith('data:')
-                          ? dongChon.duong_dan_hinh_anh
-                          : VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh
+                        const src = vatTuHinhAnhUrl(dongChon.duong_dan_hinh_anh)
                         const isDataUrl = dongChon.duong_dan_hinh_anh.startsWith('data:')
                         const sizeBytes = isDataUrl
                           ? Math.floor((dongChon.duong_dan_hinh_anh.length - (dongChon.duong_dan_hinh_anh.indexOf(',') + 1)) * 0.75)
@@ -749,7 +772,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
                     <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta ? `${imageMeta.width}×${imageMeta.height}` : '—'}</span></div>
                     <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta && imageMeta.sizeMB > 0 ? `${imageMeta.sizeMB.toFixed(2)} MB` : '—'}</span></div>
                     <div style={{ minWidth: 0 }}>
-                      <span style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{dongChon?.duong_dan_hinh_anh ? (dongChon.duong_dan_hinh_anh.startsWith('data:') ? 'Base64' : (VATTU_IMAGE_BASE + dongChon.duong_dan_hinh_anh)) : '—'}</span>
+                      <span style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{vatTuHinhAnhPathLabel(dongChon?.duong_dan_hinh_anh)}</span>
                     </div>
                   </div>
                 </div>
@@ -761,21 +784,15 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
       </div>
 
       {modalOpen && (
-        <div
-          style={modalOverlay}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-          onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) dongModal(); overlayMouseDownRef.current = false }}
-        >
+        <div style={modalOverlay}>
           <div
             ref={modalBoxRef}
-            onMouseDown={() => { overlayMouseDownRef.current = false }}
             style={{
               ...modalBox,
               ...(modalPosition != null
                 ? { position: 'fixed' as const, left: modalPosition.x, top: modalPosition.y }
                 : {}),
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <VatTuHangHoaForm
               key={modalOpen === 'edit' ? `edit-${dongChon?.id ?? ''}` : `add-${addFormKey}`}
@@ -798,30 +815,42 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
       <Modal
         open={deleteTarget != null}
         onClose={() => setDeleteTarget(null)}
-        title={deleteTarget?.vt_chinh ? 'Cảnh báo' : 'Xác nhận xóa'}
+        title={deleteTarget?.vt_chinh ? 'Xóa vật tư cấp cha' : 'Xác nhận xóa'}
         size="sm"
         closeOnOverlayClick={false}
         footer={
-          deleteTarget?.vt_chinh ? (
-            <button type="button" onClick={() => setDeleteTarget(null)} style={{ padding: '4px 12px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+          <>
+            <button type="button" onClick={() => setDeleteTarget(null)} style={{ padding: '4px 12px', background: 'var(--bg-tab)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
               Đóng
             </button>
-          ) : (
-            <>
-              <button type="button" onClick={() => setDeleteTarget(null)} style={{ padding: '4px 12px', background: 'var(--bg-tab)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
-                Đóng
-              </button>
-              <button type="button" onClick={thucHienXoa} style={{ padding: '4px 12px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
-                Xóa
-              </button>
-            </>
-          )
+            <button type="button" onClick={thucHienXoa} style={{ padding: '4px 12px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              {deleteTarget?.vt_chinh ? 'Xóa cả cấp cha và cấp con' : 'Xóa'}
+            </button>
+          </>
         }
       >
         {deleteTarget?.vt_chinh ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>
-            Không được phép xóa vật tư cấp cha. Vật tư hàng hóa này đã được đánh dấu VT cấp cha.
-          </p>
+          <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+            <p style={{ margin: '0 0 8px' }}>
+              Vật tư &quot;{deleteTarget.ten}&quot; (Mã: {deleteTarget.ma}) là <strong>VT cấp cha</strong>.
+              {(() => {
+                const n = danhSach.filter(
+                  (r) =>
+                    r.id !== deleteTarget.id &&
+                    (r.ma_vthh_cap_cha ?? '').trim() === (deleteTarget.ma ?? '').trim(),
+                ).length
+                return n > 0 ? (
+                  <>
+                    {' '}
+                    Có <strong>{n}</strong> mã VTHH cấp con thuộc nhóm này.
+                  </>
+                ) : null
+              })()}
+            </p>
+            <p style={{ margin: 0 }}>
+              Nếu đồng ý, hệ thống sẽ <strong>xóa luôn toàn bộ vật tư cấp con</strong> trước khi xóa bản ghi cấp cha. Thao tác không hoàn tác.
+            </p>
+          </div>
         ) : deleteTarget ? (
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)' }}>
             Bạn có chắc chắn muốn xóa &quot;{deleteTarget.ten}&quot; (Mã: {deleteTarget.ma})?

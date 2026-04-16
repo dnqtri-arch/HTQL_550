@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Search } from 'lucide-react'
 import type { VatTuHangHoaRecord } from '../../kho/khoHang/vatTuHangHoaApi'
-import { vatTuHangHoaGetAll } from '../../kho/khoHang/vatTuHangHoaApi'
+import { vatTuHangHoaGetAll, vatTuHangHoaNapLai } from '../../kho/khoHang/vatTuHangHoaApi'
 import { formatNumberDisplay } from '../../../utils/numberFormat'
 import { useDraggable } from '../../../hooks/useDraggable'
 
@@ -78,11 +78,28 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
 
   useEffect(() => {
     let cancelled = false
-    vatTuHangHoaGetAll().then((data) => {
-      if (!cancelled && Array.isArray(data)) setList(data)
-      if (!cancelled) setLoading(false)
-    })
-    return () => { cancelled = true }
+    const load = (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true
+      if (!silent) setLoading(true)
+      vatTuHangHoaNapLai()
+      void vatTuHangHoaGetAll()
+        .then((data) => {
+          if (cancelled) return
+          if (Array.isArray(data)) setList(data)
+        })
+        .finally(() => {
+          if (!cancelled && !silent) setLoading(false)
+        })
+    }
+    load()
+    const onVthhReload = () => {
+      if (!cancelled) load({ silent: true })
+    }
+    window.addEventListener('htql-vthh-reload', onVthhReload)
+    return () => {
+      cancelled = true
+      window.removeEventListener('htql-vthh-reload', onVthhReload)
+    }
   }, [])
 
   const filtered = keyword.trim()

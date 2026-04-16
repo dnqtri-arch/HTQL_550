@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Context API cho Hợp đồng mua — form và danh sách trong module donhangmua.
  */
 
@@ -12,7 +12,7 @@ export interface HopDongMuaApi {
   getDefaultFilter: () => HopDongMuaFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: string; label: string }[]
-  post: (payload: HopDongMuaCreatePayload) => HopDongMuaRecord
+  post: (payload: HopDongMuaCreatePayload) => Promise<HopDongMuaRecord>
   put: (donId: string, payload: HopDongMuaCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => (Record<string, string> & { _dvtOptions?: string[] })[] | null

@@ -15,7 +15,7 @@ export interface ChiTienBangApi {
   getDefaultFilter: () => ChiTienBangFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: ChiTienBangKyValue; label: string }[]
-  post: (payload: ChiTienBangCreatePayload) => ChiTienBangRecord
+  post: (payload: ChiTienBangCreatePayload) => Promise<ChiTienBangRecord>
   put: (ChiTienBangId: string, payload: ChiTienBangCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => ChiTienBangDraftLine[] | null

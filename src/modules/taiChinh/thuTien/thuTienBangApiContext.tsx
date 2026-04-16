@@ -15,7 +15,7 @@ export interface ThuTienBangApi {
   getDefaultFilter: () => ThuTienBangFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: ThuTienBangKyValue; label: string }[]
-  post: (payload: ThuTienBangCreatePayload) => ThuTienBangRecord
+  post: (payload: ThuTienBangCreatePayload) => Promise<ThuTienBangRecord>
   put: (thuTienBangId: string, payload: ThuTienBangCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => ThuTienBangDraftLine[] | null

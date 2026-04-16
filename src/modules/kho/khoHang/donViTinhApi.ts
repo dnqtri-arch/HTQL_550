@@ -1,8 +1,11 @@
 /**
  * API cho Danh mục Đơn vị tính.
  * Khi chạy npm run dev: dùng API server (file JSON) — Web và Cursor đồng bộ dữ liệu.
- * Khi build/preview: fallback localStorage.
+ * Khi build/preview: fallback htqlEntityStorage.
  */
+
+import { htqlApiUrl } from '../../../config/htqlApiBase'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 export interface DonViTinhRecord {
   id: number
@@ -27,7 +30,7 @@ const API_BASE = '/api/don-vi-tinh'
 
 async function apiGet<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(url)
+    const r = await fetch(htqlApiUrl(url))
     if (!r.ok) return null
     return (await r.json()) as T
   } catch {
@@ -37,7 +40,7 @@ async function apiGet<T>(url: string): Promise<T | null> {
 
 async function apiPost<T>(url: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(htqlApiUrl(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!r.ok) return null
     return (await r.json()) as T
   } catch {
@@ -47,7 +50,7 @@ async function apiPost<T>(url: string, body: unknown): Promise<T | null> {
 
 async function apiPut<T>(url: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(htqlApiUrl(url), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!r.ok) return null
     return (await r.json()) as T
   } catch {
@@ -57,17 +60,17 @@ async function apiPut<T>(url: string, body: unknown): Promise<T | null> {
 
 async function apiDelete(url: string): Promise<boolean> {
   try {
-    const r = await fetch(url, { method: 'DELETE' })
+    const r = await fetch(htqlApiUrl(url), { method: 'DELETE' })
     return r.ok || r.status === 204
   } catch {
     return false
   }
 }
 
-// ——— localStorage fallback (khi không có API server) ———
+// ——— htqlEntityStorage fallback (khi không có API server) ———
 function loadFromStorage(): DonViTinhRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as DonViTinhRecord[]
       if (Array.isArray(parsed)) {
@@ -81,7 +84,7 @@ function loadFromStorage(): DonViTinhRecord[] {
 }
 
 function saveToStorage(data: DonViTinhRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
 let cache: DonViTinhRecord[] | null = null
@@ -92,6 +95,17 @@ async function checkApi(): Promise<boolean> {
   const data = await apiGet<DonViTinhRecord[]>(API_BASE)
   useApi = data !== null
   return useApi
+}
+
+if (typeof window !== 'undefined') {
+  const reProbeApi = () => {
+    useApi = null
+    cache = null
+  }
+  window.addEventListener('online', reProbeApi)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reProbeApi()
+  })
 }
 
 export async function donViTinhGetAll(): Promise<DonViTinhRecord[]> {
@@ -186,7 +200,7 @@ export function donViTinhTrungMa(ma_dvt: string, loaiTrungId?: number): boolean 
 
 export async function donViTinhDangDuongTrongVatTu(ma_dvt: string): Promise<boolean> {
   try {
-    const raw = localStorage.getItem('htql550_vat_tu_hang_hoa')
+    const raw = htqlEntityStorage.getItem('htql550_vat_tu_hang_hoa')
     if (!raw) return false
     const list = JSON.parse(raw) as { dvt_chinh?: string }[]
     return Array.isArray(list) && list.some((r) => r.dvt_chinh === ma_dvt)

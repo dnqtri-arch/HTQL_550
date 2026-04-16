@@ -1,12 +1,11 @@
 /**
- * Tra cứu thông tin doanh nghiệp theo mã số thuế (VietQR API).
+ * Tra cứu thông tin doanh nghiệp theo mã số thuế (VietQR qua GET /api/tax-business trên Node HTQL — giảm 429 theo IP trình duyệt).
  * Dùng để điền Tên, Địa chỉ, Tỉnh/TP, Xã/Phường, Địa chỉ liên hệ khi bấm "Lấy thông tin".
  * API hiện chỉ trả name, address — điện thoại/email/website/người đại diện không có; tỉnh/xã parse từ địa chỉ.
  */
 
 import { DANH_SACH_TINH_THANH_VIET_NAM } from '../../../constants/provincesVietnam'
-
-const VIETQR_BUSINESS_URL = 'https://api.vietqr.io/v2/business'
+import { htqlApiUrl } from '../../../config/htqlApiBase'
 
 export interface TaxLookupResult {
   name: string
@@ -200,34 +199,64 @@ function parsePhones(d: Record<string, unknown>): {
   }
 }
 
+/** VietQR / proxy tr\u1ea3 429 (gi\u1edbi h\u1ea1n t\u1ea7n su\u1ea5t). */
+export class TaxLookupRateLimitedError extends Error {
+  override readonly name = 'TaxLookupRateLimitedError'
+  constructor(message?: string) {
+    super(
+      message?.trim() ||
+        'D\u1ecbch v\u1ee5 tra c\u1ee9u MST t\u1ea1m gi\u1edbi h\u1ea1n t\u1ea7n su\u1ea5t. Vui l\u00f2ng th\u1eed l\u1ea1i sau 1\u20132 ph\u00fat.',
+    )
+  }
+}
+
 /**
- * Tra cứu doanh nghiệp theo mã số thuế.
- * Trả về name, address, tinh_tp, xa_phuong (parse từ address), dia_chi_lien_he (= address).
+ * Tra c\u1ee9u doanh nghi\u1ec7p theo m\u00e3 s\u1ed1 thu\u1ebf.
+ * @throws TaxLookupRateLimitedError khi proxy/VietQR tr\u1ea3 429.
  */
 export async function lookupTaxCode(mst: string): Promise<TaxLookupResult | null> {
   const code = (mst || '').trim().replace(/\s/g, '')
   if (!code) return null
   try {
-    const res = await fetch(`${VIETQR_BUSINESS_URL}/${encodeURIComponent(code)}`)
-    if (!res.ok) return null
-    const json = await res.json()
-    if (json?.code !== '00' || !json?.data) return null
-    const d = json.data
-    const addressRaw = (d.address ?? '').trim()
+    const res = await fetch(htqlApiUrl(`/api/tax-business/${encodeURIComponent(code)}`), {
+      credentials: 'include',
+    })
+    const text = await res.text()
+    let json: { code?: string; desc?: string; data?: Record<string, unknown> } | null = null
+    try {
+      json = text
+        ? (JSON.parse(text) as { code?: string; desc?: string; data?: Record<string, unknown> })
+        : null
+    } catch {
+      return null
+    }
+    if (res.status === 429 || json?.code === '429') {
+      throw new TaxLookupRateLimitedError(json?.desc)
+    }
+    if (!res.ok || !json) return null
+    if (json.code !== '00' || !json.data) return null
+    const d = json.data as Record<string, unknown>
+    const addressRaw = String(d.address ?? '').trim()
     const address = ensureTinhPrefixInAddress(addressRaw)
     const { tinh_tp, xa_phuong } = parseAddressParts(addressRaw)
-    const daiDien = (d.legalRepresentative ?? d.dai_dien ?? d.representative ?? d.director ?? d.nguoi_dai_dien ?? d.legal_representative ?? '').trim() || undefined
+    const daiDien =
+      String(
+        d.legalRepresentative ?? d.dai_dien ?? d.representative ?? d.director ?? d.nguoi_dai_dien ?? '',
+      ).trim() || undefined
     const xungHo = resolveXungHo(d, daiDien)
-    const chucDanh = (d.chuc_vu ?? d.directorTitle ?? d.position ?? d.legalRepresentativeTitle ?? d.chuc_danh ?? d.title ?? '').trim() || undefined
+    const chucDanh =
+      String(
+        d.chuc_vu ?? d.directorTitle ?? d.position ?? d.legalRepresentativeTitle ?? d.chuc_danh ?? d.title ?? '',
+      ).trim() || undefined
     const phones = parsePhones(d)
     return {
-      name: (d.name ?? '').trim() || (d.shortName ?? '').trim(),
+      name: String(d.name ?? '').trim() || String(d.shortName ?? '').trim(),
       address,
       tinh_tp,
       xa_phuong,
       dien_thoai: phones.dien_thoai,
-      email: (d.email ?? '').trim() || undefined,
-      website: (d.website ?? d.web ?? '').trim() || undefined,
+      email: String(d.email ?? '').trim() || undefined,
+      website: String(d.website ?? d.web ?? '').trim() || undefined,
       dai_dien_theo_pl: daiDien,
       xung_ho: xungHo,
       chuc_danh: chucDanh,
@@ -236,7 +265,8 @@ export async function lookupTaxCode(mst: string): Promise<TaxLookupResult | null
       dtdd_khac: phones.dtdd_khac,
       dia_chi_lien_he: address || undefined,
     }
-  } catch {
+  } catch (e) {
+    if (e instanceof TaxLookupRateLimitedError) throw e
     return null
   }
 }

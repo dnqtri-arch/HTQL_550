@@ -2,6 +2,17 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import type { BaoGiaAttachmentItem } from '../../../../types/baoGia'
+import { htqlFileDownloadUrl, htqlCanUploadToServer, htqlUploadFileToServer } from '../../../../utils/htqlServerFileUpload'
+import {
+  parseSoBaoGiaForAttachmentFile,
+  partMccForPath,
+  formatTgGiaoForAttachmentFile,
+  buildDktkAttachmentBaseName,
+  buildDktkFolderVirtualPath,
+  buildDktkFullVirtualPath,
+  rebuildDktkAttachmentStoredFileName,
+  chuanHoaDuongDanDinhKemBaoGia as chuanHoaDuongDanDinhKemBaoGiaTuUtil,
+} from '../../../../utils/htqlThietKeDktkNaming'
 
 /** Đính kèm thiết kế (dktk): AI, EPS, SVG, PDF, Corel (CDR), PSD, ảnh, TIFF */
 const ACCEPT_ATTR = '.ai,.eps,.svg,.pdf,.cdr,.psd,.jpg,.jpeg,.png,.tif,.tiff'
@@ -11,110 +22,51 @@ function hopLeDinhDangFile(file: File): boolean {
   return /\.(ai|eps|svg|pdf|cdr|psd|jpe?g|png|tiff?)$/i.test(n)
 }
 
-/** 2026/BG/3 → 2026_bg_3 */
-export function parseSoBaoGiaForAttachmentFile(soDon: string): string {
-  const t = soDon.trim()
-  const m = t.match(/^(\d{4})\s*\/\s*BG\s*\/\s*(\d+)$/i)
-  if (m) return `${m[1]}_bg_${m[2]}`
-  const s = t.replace(/[\\/]+/g, '_').replace(/\s+/g, '_').replace(/_+/g, '_').toLowerCase()
-  return s || 'bg'
+export {
+  parseSoBaoGiaForAttachmentFile,
+  partMccForPath,
+  formatTgGiaoForAttachmentFile,
 }
 
 /**
- * Phần thư mục/tên file cho KH: **chỉ** `ma_kh` (chuẩn hóa chữ thường, bỏ khoảng trắng).
- * Không dùng tên KH làm slug — chưa có mã thì `kh_unknown`.
- * Tham số thứ hai (nếu có) bỏ qua, giữ cho tương thích gọi cũ.
- */
-export function partMccForPath(maKh: string, _tenKhFallback?: string): string {
-  const m = (maKh || '').trim().replace(/\s+/g, '').toLowerCase()
-  return m || 'kh_unknown'
-}
-
-/** HH_mm_dd_MM_yyyy (vd 09_00_29_03_2026) */
-export function formatTgGiaoForAttachmentFile(d: Date): string {
-  const h = d.getHours()
-  const mi = d.getMinutes()
-  const day = d.getDate()
-  const mo = d.getMonth() + 1
-  const y = d.getFullYear()
-  return `${String(h).padStart(2, '0')}_${String(mi).padStart(2, '0')}_${String(day).padStart(2, '0')}_${String(mo).padStart(2, '0')}_${y}`
-}
-
-/**
- * `maKhPathPart`: kết quả `partMccForPath(ma_kh)` — chỉ mã KH; chưa có mã → `kh_unknown`.
- * Thời gian trong tên file: «Hiệu lực đến» (ngày hiệu lực báo giá) nếu có, không thì TG tạo báo giá, không thì thời điểm hiện tại.
+ * Tên file: mã BG + TG tạo báo giá (ưu tiên) + chỉ số — không còn segment mã KH trong tên.
+ * `maKhPathPart` giữ trong chữ ký để tương thích gọi cũ (bỏ qua).
  */
 export function buildBgAttachmentBaseName(
   soDon: string,
-  maKhPathPart: string,
+  _maKhPathPart: string,
   ngayGiao: Date | null,
   ngayBaoGia: Date | null,
   index: number
 ): string {
-  const bgPart = parseSoBaoGiaForAttachmentFile(soDon)
-  const khPart = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
-  const tgNgay = ngayGiao ?? ngayBaoGia ?? new Date()
-  const tgPart = formatTgGiaoForAttachmentFile(tgNgay)
-  return `${bgPart}_${khPart}_${tgPart}_${index}`
+  const doc = parseSoBaoGiaForAttachmentFile(soDon)
+  return buildDktkAttachmentBaseName(doc, ngayBaoGia, ngayGiao, index)
 }
 
-/** Thư mục module (slug) — đồng bộ quy tắc lưu đính kèm BG */
-export const BG_ATTACHMENT_MODULE_FOLDER = 'bao_gia'
-
-/** bao_gia / mã_kh / mã_bg — `maKhPathPart` đã qua partMccForPath */
+/** Đường dẫn logic dưới gốc thiết kế trên SSD: mã_kh hoặc `_pending_dktk` / mã_bg */
 export function buildBgAttachmentFolderVirtualPath(soBaoGia: string, maKhPathPart: string): string {
-  const kh = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
-  const bg = parseSoBaoGiaForAttachmentFile(soBaoGia)
-  return `${BG_ATTACHMENT_MODULE_FOLDER}/${kh}/${bg}`
+  return buildDktkFolderVirtualPath(parseSoBaoGiaForAttachmentFile(soBaoGia), maKhPathPart)
 }
 
 export function buildBgAttachmentFullVirtualPath(soBaoGia: string, maKhPathPart: string, fileName: string): string {
-  const base = fileName.replace(/^\/+/, '')
-  return `${buildBgAttachmentFolderVirtualPath(soBaoGia, maKhPathPart)}/${base}`
+  return buildDktkFullVirtualPath(parseSoBaoGiaForAttachmentFile(soBaoGia), maKhPathPart, fileName)
 }
 
-/** Hậu tố chuẩn do `buildBgAttachmentBaseName`: _HH_mm_dd_MM_yyyy_index */
-const RE_BG_ATT_NAME_TAIL = /_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{4})_(\d+)$/
-
-/**
- * Khi đổi Mã BG / KH sau khi đã đính kèm: đổi lại `name` cho khớp (trước đó có thể là `…_kh_unknown_…`).
- * Giữ nguyên phần thời gian + chỉ số từ tên cũ; nếu không khớp định dạng hệ thống thì giữ nguyên tên.
- */
+/** `maKhPathPart` giữ cho tương thích gọi cũ (bỏ qua). */
 export function rebuildBgAttachmentStoredFileName(
   currentName: string,
   soBaoGia: string,
-  maKhPathPart: string
+  _maKhPathPart: string
 ): string {
-  const raw = (currentName || '').trim()
-  const extMatch = raw.match(/(\.[^./\\]+)$/)
-  const ext = extMatch ? extMatch[1] : ''
-  const base = extMatch ? raw.slice(0, -ext.length) : raw
-  const m = base.match(RE_BG_ATT_NAME_TAIL)
-  if (!m) return raw
-  const tgPart = `${m[1]}_${m[2]}_${m[3]}_${m[4]}_${m[5]}`
-  const index = m[6]
-  const bgPart = parseSoBaoGiaForAttachmentFile(soBaoGia)
-  const khPart = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
-  return `${bgPart}_${khPart}_${tgPart}_${index}${ext}`
+  return rebuildDktkAttachmentStoredFileName(currentName, parseSoBaoGiaForAttachmentFile, soBaoGia)
 }
 
-/**
- * Trước khi lưu / khi đổi Mã BG hoặc mã KH: gán lại `name` (nếu đúng pattern) và `virtual_path` theo quy tắc hiện tại
- * (bao_gia / mã_kh / mã_bg / tên_file), tránh lệch khi user đính kèm trước rồi mới nhập KH/số đơn.
- */
 export function chuanHoaDuongDanDinhKemBaoGia(
   items: BaoGiaAttachmentItem[],
   soBaoGia: string,
   maKhPathPart: string
 ): BaoGiaAttachmentItem[] {
-  return items.map((a) => {
-    const name = rebuildBgAttachmentStoredFileName(a.name, soBaoGia, maKhPathPart)
-    return {
-      ...a,
-      name,
-      virtual_path: buildBgAttachmentFullVirtualPath(soBaoGia, maKhPathPart, name),
-    }
-  })
+  return chuanHoaDuongDanDinhKemBaoGiaTuUtil(items, soBaoGia, maKhPathPart)
 }
 
 /** Bỏ phần tên file, chỉ giữ đường dẫn thư mục (có / cuối). */
@@ -259,9 +211,15 @@ function iconDinhKemTheoTenTep(tenFile: string): React.ReactNode {
 
 function loaiXemTruocTuData(data: string, tenFile = ''): 'image' | 'pdf' | 'svg' | 'other' {
   if (laTiffTheoTenTep(tenFile)) return 'other'
-  if (laPdfDataUrl(data)) return 'pdf'
-  if (laSvgDataUrl(data)) return 'svg'
-  if (laAnhDataUrl(data)) return 'image'
+  if (data && data.length > 0) {
+    if (laPdfDataUrl(data)) return 'pdf'
+    if (laSvgDataUrl(data)) return 'svg'
+    if (laAnhDataUrl(data)) return 'image'
+  }
+  const n = (tenFile || '').toLowerCase()
+  if (/\.pdf$/i.test(n)) return 'pdf'
+  if (/\.(jpe?g|png)$/i.test(n)) return 'image'
+  if (/\.svg$/i.test(n)) return 'svg'
   return 'other'
 }
 
@@ -404,6 +362,8 @@ export function BaoGiaDinhKemModal({
   const panelRef = useRef<HTMLDivElement>(null)
   /** Index file đang xem trong popup toàn màn (null = đóng). */
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
+  const viewerItem = viewerIndex != null ? attachments[viewerIndex] ?? null : null
+  const [viewerResolvedSrc, setViewerResolvedSrc] = useState<string | null>(null)
   const [viewerMediaReady, setViewerMediaReady] = useState(false)
   /** Dòng danh sách đang hover — viền nhẹ (không đổi kích thước ô thumbnail). */
   const [hoverRowIdx, setHoverRowIdx] = useState<number | null>(null)
@@ -471,6 +431,46 @@ export function BaoGiaDinhKemModal({
   useEffect(() => {
     setViewerMediaReady(false)
   }, [viewerIndex])
+
+  useEffect(() => {
+    if (!viewerItem?.server_relative_path || !viewerItem?.server_kind || viewerItem.data) {
+      setViewerResolvedSrc((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      return
+    }
+    let cancelled = false
+    const url = htqlFileDownloadUrl(viewerItem.server_kind, viewerItem.server_relative_path)
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status))
+        return r.blob()
+      })
+      .then((blob) => {
+        if (cancelled) return
+        const u = URL.createObjectURL(blob)
+        setViewerResolvedSrc((prev) => {
+          if (prev) URL.revokeObjectURL(prev)
+          return u
+        })
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setViewerResolvedSrc((prev) => {
+            if (prev) URL.revokeObjectURL(prev)
+            return null
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+      setViewerResolvedSrc((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+  }, [viewerItem?.data, viewerItem?.server_relative_path, viewerItem?.server_kind])
 
   useEffect(() => {
     if (!open) return
@@ -580,6 +580,9 @@ export function BaoGiaDinhKemModal({
         )
       }
 
+      const relUploadDir = buildBgAttachmentFolderVirtualPath(soBaoGia, maKhPathPart)
+      const coApi = htqlCanUploadToServer()
+
       for (let i = 0; i < listXuLy.length; i++) {
         const file = listXuLy[i]
         const chiSo = attachments.length + hangMoi.length + 1
@@ -587,25 +590,68 @@ export function BaoGiaDinhKemModal({
         capNhatPending(i, 2, 'Đang xử lý…')
         try {
           const laAnhNen = /\.(jpe?g|png)$/i.test(file.name) || /^image\/(jpeg|png)$/i.test(file.type || '')
-          let dataUrl: string
-          let tenLuu: string
-          const sizeByte = file.size
           if (laAnhNen) {
             capNhatPending(i, 15, 'Đang nén ảnh…')
             const blob = await nenAnhThanhJpeg(file)
+            const tenLuu = `${tenGoc}.jpg`
+            const sizeByte = blob.size
+            const fileJpg = new File([blob], tenLuu, { type: 'image/jpeg' })
+            if (coApi) {
+              capNhatPending(i, 40, 'Đang tải lên máy chủ…')
+              try {
+                const up = await htqlUploadFileToServer(fileJpg, {
+                  kind: 'thiet_ke',
+                  relativeDir: relUploadDir,
+                  filename: tenLuu,
+                })
+                hangMoi.push({
+                  name: tenLuu,
+                  data: '',
+                  kich_thuoc_byte: up.size,
+                  server_kind: 'thiet_ke',
+                  server_relative_path: up.relativePath,
+                })
+                capNhatPending(i, 100, 'Đã lưu trên máy chủ')
+                continue
+              } catch {
+                capNhatPending(i, 60, 'Máy chủ lỗi — lưu cục bộ…')
+              }
+            }
             capNhatPending(i, 85, 'Đang đọc sau nén…')
-            dataUrl = await blobThanhDataUrl(blob)
-            tenLuu = `${tenGoc}.jpg`
+            const dataUrl = await blobThanhDataUrl(blob)
+            hangMoi.push({ name: tenLuu, data: dataUrl, kich_thuoc_byte: sizeByte })
           } else {
             capNhatPending(i, 5, 'Đang đọc file…')
-            dataUrl = await docFileThanhDataUrl(file, (loaded, total) => {
+            const ext = phanMoRongTheoMime(file.type || '', file.name)
+            const tenLuu = `${tenGoc}${ext}`
+            const sizeByte = file.size
+            if (coApi) {
+              capNhatPending(i, 25, 'Đang tải lên máy chủ…')
+              try {
+                const up = await htqlUploadFileToServer(file, {
+                  kind: 'thiet_ke',
+                  relativeDir: relUploadDir,
+                  filename: tenLuu,
+                })
+                hangMoi.push({
+                  name: tenLuu,
+                  data: '',
+                  kich_thuoc_byte: up.size,
+                  server_kind: 'thiet_ke',
+                  server_relative_path: up.relativePath,
+                })
+                capNhatPending(i, 100, 'Đã lưu trên máy chủ')
+                continue
+              } catch {
+                capNhatPending(i, 40, 'Máy chủ lỗi — lưu cục bộ…')
+              }
+            }
+            const dataUrl = await docFileThanhDataUrl(file, (loaded, total) => {
               const sub = total > 0 ? loaded / total : 0
               capNhatPending(i, Math.min(99, Math.round(5 + sub * 94)), `Đang tải ${Math.round(sub * 100)}%`)
             })
-            const ext = phanMoRongTheoMime(file.type || '', file.name)
-            tenLuu = `${tenGoc}${ext}`
+            hangMoi.push({ name: tenLuu, data: dataUrl, kich_thuoc_byte: sizeByte })
           }
-          hangMoi.push({ name: tenLuu, data: dataUrl, kich_thuoc_byte: sizeByte })
           capNhatPending(i, 100, 'Đã đọc xong')
         } catch {
           capNhatPending(i, 0, 'Lỗi xử lý')
@@ -659,8 +705,8 @@ export function BaoGiaDinhKemModal({
 
   const dongViewer = () => setViewerIndex(null)
 
-  const viewerItem = viewerIndex != null ? attachments[viewerIndex] : null
   const viewerKind = viewerItem ? loaiXemTruocTuData(viewerItem.data, viewerItem.name) : null
+  const viewerSrc = viewerResolvedSrc || viewerItem?.data || ''
 
   const xoaTai = (idx: number) => {
     if (readOnly) return
@@ -1062,7 +1108,7 @@ export function BaoGiaDinhKemModal({
                   </div>
                 )}
                 <img
-                  src={viewerItem.data}
+                  src={viewerSrc}
                   alt=""
                   decoding="async"
                   onLoad={() => setViewerMediaReady(true)}
@@ -1093,7 +1139,7 @@ export function BaoGiaDinhKemModal({
                   </div>
                 )}
                 <img
-                  src={viewerItem.data}
+                  src={viewerSrc}
                   alt=""
                   decoding="async"
                   onLoad={() => setViewerMediaReady(true)}
@@ -1109,7 +1155,7 @@ export function BaoGiaDinhKemModal({
             {viewerKind === 'pdf' && (
               <iframe
                 title="PDF"
-                src={viewerItem.data}
+                src={viewerSrc}
                 onLoad={() => setViewerMediaReady(true)}
                 style={{ width: '100%', height: '100%', minHeight: 400, border: 'none', background: '#fff' }}
               />

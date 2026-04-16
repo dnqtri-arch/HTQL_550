@@ -1,5 +1,5 @@
 /**
- * API Hợp đồng bán (nguyên tắc) — localStorage mock, tách biệt chứng từ `phuLucHopDongBanChungTuApi`.
+ * API Hợp đồng bán (nguyên tắc) — htqlEntityStorage mock, tách biệt chứng từ `phuLucHopDongBanChungTuApi`.
  * Cấu trúc song song `donHangBan/donHangBanApi.ts` cho module `phuLucHopDongBan/`.
  */
 
@@ -12,6 +12,7 @@ import type {
 } from '../../../../types/banHang'
 import type { BaoGiaRecord, BaoGiaChiTiet } from '../../../../types/baoGia'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 export type { HopDongBanRecord, HopDongBanChiTiet, HopDongBanCreatePayload, BanHangKyValue }
 
@@ -54,8 +55,8 @@ const MOCK_CT: HopDongBanChiTiet[] = [
 
 function loadFromStorage(): { hd: HopDongBanRecord[]; chiTiet: HopDongBanChiTiet[] } {
   try {
-    const rawHd = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_HD) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawHd = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_HD) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const hd = rawHd ? JSON.parse(rawHd) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(hd) && Array.isArray(chiTiet)) return { hd, chiTiet }
@@ -77,9 +78,9 @@ init()
 
 function save() {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_HD, JSON.stringify(_list))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_HD, JSON.stringify(_list))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch { /* ignore */ }
 }

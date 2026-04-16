@@ -9,6 +9,10 @@ export interface BaoGiaAttachmentItem {
   virtual_path?: string
   /** Dung lượng file gốc (byte) khi đính kèm — hiển thị chính xác khi data URL quá lớn / không ước lượng tốt. */
   kich_thuoc_byte?: number
+  /** Khi upload lên máy chủ — loại thư mục gốc trên SSD (thiết kế / chứng từ). */
+  server_kind?: 'thiet_ke' | 'chung_tu'
+  /** Đường dẫn con trong thư mục đó (GET /api/htql-files?kind=&rel=). */
+  server_relative_path?: string
 }
 
 export interface BaoGiaRecord {

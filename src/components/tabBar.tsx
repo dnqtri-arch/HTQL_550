@@ -11,8 +11,13 @@ export interface TabItem {
 
 function getModuleIconName(moduleId: ModuleId): string {
   for (const group of MODULE_GROUPS) {
-    const found = group.items.find((i) => i.id === moduleId)
-    if (found) return found.icon
+    for (const item of group.items) {
+      if (item.id === moduleId) return item.icon
+      if (item.children?.length) {
+        const ch = item.children.find((c) => c.id === moduleId)
+        if (ch) return ch.icon
+      }
+    }
   }
   return 'LayoutDashboard'
 }

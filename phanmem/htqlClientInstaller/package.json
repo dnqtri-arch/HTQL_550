@@ -1,0 +1,73 @@
+{
+  "name": "htql-550-client",
+  "version": "2026.4.17-6",
+  "private": true,
+  "author": "Nam Bac AD",
+  "description": "HTQL_550 Windows desktop client (Electron + NSIS x64)",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev --prefix ../..\" \"wait-on tcp:5173 && electron . --htql-dev\"",
+    "dev:electron": "electron . --htql-dev",
+    "ensure-assets": "node scripts/ensure-assets.cjs",
+    "copy-web-dist": "node scripts/copy-web-dist.cjs",
+    "build": "node scripts/sync-version.cjs && npm run ensure-assets && npm run copy-web-dist && electron-builder --win nsis:x64"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "vn.htql550.client",
+    "productName": "HTQL_550",
+    "copyright": "Copyright © Nam Bac AD",
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://14.224.152.48/htql-client-updates/"
+      }
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "web-dist/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "HTQL_550_Setup_V2026_04_17_06.exe",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "license": "build/LICENSE.txt",
+      "include": "build/installer.nsh",
+      "warningsAsErrors": false,
+      "differentialPackage": false
+    }
+  }
+}

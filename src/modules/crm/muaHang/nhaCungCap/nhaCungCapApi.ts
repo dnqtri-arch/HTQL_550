@@ -1,8 +1,11 @@
 /**
  * API danh mục Nhà cung cấp (phân hệ Mua hàng).
  * Khi chạy npm run dev: dùng API server (file JSON) — đồng bộ qua web, mở lại chương trình vẫn còn.
- * Khi build/preview hoặc không có server: fallback localStorage.
+ * Khi build/preview hoặc không có server: fallback htqlEntityStorage.
  */
+
+import { htqlApiUrl } from '../../../../config/htqlApiBase'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 export type LoaiNhaCungCap = 'to_chuc' | 'ca_nhan'
 
@@ -119,7 +122,7 @@ const API_BASE_NCC = '/api/nha-cung-cap'
 
 async function apiGet<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(url)
+    const r = await fetch(htqlApiUrl(url))
     if (!r.ok) return null
     return (await r.json()) as T
   } catch {
@@ -129,7 +132,7 @@ async function apiGet<T>(url: string): Promise<T | null> {
 
 async function apiPost<T>(url: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(htqlApiUrl(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!r.ok) return null
     return (await r.json()) as T
   } catch {
@@ -139,7 +142,7 @@ async function apiPost<T>(url: string, body: unknown): Promise<T | null> {
 
 async function apiPut<T>(url: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(htqlApiUrl(url), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!r.ok) return null
     return (await r.json()) as T
   } catch {
@@ -149,7 +152,7 @@ async function apiPut<T>(url: string, body: unknown): Promise<T | null> {
 
 async function apiDelete(url: string): Promise<boolean> {
   try {
-    const r = await fetch(url, { method: 'DELETE' })
+    const r = await fetch(htqlApiUrl(url), { method: 'DELETE' })
     return r.ok || r.status === 204
   } catch {
     return false
@@ -166,7 +169,7 @@ async function checkApiNcc(): Promise<boolean> {
 
 function loadFromStorage(): NhaCungCapRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as NhaCungCapRecord[]
       if (Array.isArray(parsed)) return parsed.map(normalizeRecord)
@@ -217,12 +220,12 @@ function normalizeRecord(r: NhaCungCapRecord): NhaCungCapRecord {
 }
 
 function saveToStorage(data: NhaCungCapRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
 export function loadNhomKhNcc(): NhomKhNccItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_NHOM)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY_NHOM)
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed)) {
@@ -240,12 +243,12 @@ export function loadNhomKhNcc(): NhomKhNccItem[] {
 }
 
 export function saveNhomKhNcc(nhom: NhomKhNccItem[]) {
-  localStorage.setItem(STORAGE_KEY_NHOM, JSON.stringify(nhom))
+  htqlEntityStorage.setItem(STORAGE_KEY_NHOM, JSON.stringify(nhom))
 }
 
 export function loadDieuKhoanThanhToan(): DieuKhoanThanhToanItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_DKTT)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY_DKTT)
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed)) {
@@ -268,10 +271,21 @@ export function loadDieuKhoanThanhToan(): DieuKhoanThanhToanItem[] {
 }
 
 export function saveDieuKhoanThanhToan(list: DieuKhoanThanhToanItem[]) {
-  localStorage.setItem(STORAGE_KEY_DKTT, JSON.stringify(list))
+  htqlEntityStorage.setItem(STORAGE_KEY_DKTT, JSON.stringify(list))
 }
 
 let cache: NhaCungCapRecord[] | null = null
+
+if (typeof window !== 'undefined') {
+  const reProbeApiNcc = () => {
+    useApiNcc = null
+    cache = null
+  }
+  window.addEventListener('online', reProbeApiNcc)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reProbeApiNcc()
+  })
+}
 
 export async function nhaCungCapGetAll(): Promise<NhaCungCapRecord[]> {
   if (await checkApiNcc()) {
@@ -286,12 +300,19 @@ export async function nhaCungCapGetAll(): Promise<NhaCungCapRecord[]> {
   return [...cache]
 }
 
-export async function nhaCungCapPost(payload: Omit<NhaCungCapRecord, 'id'>): Promise<NhaCungCapRecord> {
+export async function nhaCungCapPost(
+  payload: Omit<NhaCungCapRecord, 'id'>,
+  opts?: { skipPartnerMirror?: boolean },
+): Promise<NhaCungCapRecord> {
   if (await checkApiNcc()) {
     const res = await apiPost<NhaCungCapRecord>(API_BASE_NCC, payload)
     if (res) {
       cache = null
-      return normalizeRecord(res)
+      const n = normalizeRecord(res)
+      if (!opts?.skipPartnerMirror && n.khach_hang) {
+        void import('../../shared/khNccMirrorSync').then((m) => m.mirrorKhachHangFromNccAfterNccSave(n)).catch(() => {})
+      }
+      return n
     }
   }
   const list = loadFromStorage()
@@ -300,15 +321,26 @@ export async function nhaCungCapPost(payload: Omit<NhaCungCapRecord, 'id'>): Pro
   list.push(newRow)
   saveToStorage(list)
   cache = list
+  if (!opts?.skipPartnerMirror && newRow.khach_hang) {
+    void import('../../shared/khNccMirrorSync').then((m) => m.mirrorKhachHangFromNccAfterNccSave(newRow)).catch(() => {})
+  }
   return newRow
 }
 
-export async function nhaCungCapPut(id: number, payload: Omit<NhaCungCapRecord, 'id'>): Promise<NhaCungCapRecord> {
+export async function nhaCungCapPut(
+  id: number,
+  payload: Omit<NhaCungCapRecord, 'id'>,
+  opts?: { skipPartnerMirror?: boolean },
+): Promise<NhaCungCapRecord> {
   if (await checkApiNcc()) {
     const res = await apiPut<NhaCungCapRecord>(`${API_BASE_NCC}/${id}`, payload)
     if (res) {
       cache = null
-      return normalizeRecord(res)
+      const n = normalizeRecord(res)
+      if (!opts?.skipPartnerMirror && n.khach_hang) {
+        void import('../../shared/khNccMirrorSync').then((m) => m.mirrorKhachHangFromNccAfterNccSave(n)).catch(() => {})
+      }
+      return n
     }
   }
   const list = loadFromStorage()
@@ -318,20 +350,49 @@ export async function nhaCungCapPut(id: number, payload: Omit<NhaCungCapRecord, 
   list[idx] = updated
   saveToStorage(list)
   cache = list
+  if (!opts?.skipPartnerMirror && updated.khach_hang) {
+    void import('../../shared/khNccMirrorSync').then((m) => m.mirrorKhachHangFromNccAfterNccSave(updated)).catch(() => {})
+  }
   return updated
 }
 
-export async function nhaCungCapDelete(id: number): Promise<void> {
+export async function nhaCungCapDelete(id: number, opts?: { skipPartnerCascade?: boolean }): Promise<void> {
+  let partnerMa: string | null = null
+  if (!opts?.skipPartnerCascade) {
+    try {
+      const snapshot = await nhaCungCapGetAll()
+      partnerMa = snapshot.find((r) => r.id === id)?.ma_ncc?.trim() ?? null
+    } catch {
+      partnerMa = null
+    }
+  }
   if (await checkApiNcc()) {
     const ok = await apiDelete(`${API_BASE_NCC}/${id}`)
     if (ok) {
       cache = null
+      if (!opts?.skipPartnerCascade && partnerMa) {
+        const khApi = await import('../../banHang/khachHang/khachHangApi')
+        khApi.khachHangNapLai()
+        const khs = await khApi.khachHangGetAll()
+        const p = khs.find((r) => r.ma_kh === partnerMa)
+        if (p) await khApi.khachHangDelete(p.id, { skipPartnerCascade: true })
+      }
       return
     }
   }
-  const list = loadFromStorage().filter((r) => r.id !== id)
-  saveToStorage(list)
-  cache = list
+  const list = loadFromStorage()
+  const row = list.find((r) => r.id === id)
+  const ma = row?.ma_ncc?.trim()
+  const next = list.filter((r) => r.id !== id)
+  saveToStorage(next)
+  cache = next
+  if (!opts?.skipPartnerCascade && ma) {
+    const khApi = await import('../../banHang/khachHang/khachHangApi')
+    khApi.khachHangNapLai()
+    const khs = await khApi.khachHangGetAll()
+    const p = khs.find((r) => r.ma_kh === ma)
+    if (p) await khApi.khachHangDelete(p.id, { skipPartnerCascade: true })
+  }
 }
 
 export function nhaCungCapNapLai(): void {

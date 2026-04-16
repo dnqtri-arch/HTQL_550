@@ -1,4 +1,5 @@
 import type { KhoVthh, KhoVthhFilter, PhieuTonKho } from './type'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import {
   nhanVatTuHangHoaGetAll,
   nhanVatTuHangHoaGetChiTiet,
@@ -7,7 +8,7 @@ import {
 } from '../../crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Stub: xuất kho — đọc từ localStorage key htql_xuatkho_items
+   Stub: xuất kho — đọc từ htqlEntityStorage key htql_xuatkho_items
    Định dạng mỗi item: { mahang, tenvthh, dvt, soluong, giatri, ngay, sophieu, tinh_trang }
 ───────────────────────────────────────────────────────────────────────── */
 interface XuatKhoItem {
@@ -26,7 +27,7 @@ const LS_XUAT_KHO = 'htql_xuatkho_items'
 
 function docXuatKhoTuStorage(): XuatKhoItem[] {
   try {
-    const raw = localStorage.getItem(LS_XUAT_KHO)
+    const raw = htqlEntityStorage.getItem(LS_XUAT_KHO)
     if (raw) return JSON.parse(raw) as XuatKhoItem[]
   } catch { /* ignore */ }
   return []
@@ -64,7 +65,7 @@ function getInventoryReport(filter?: Partial<KhoVthhFilter>): KhoVthh[] {
     }
   }
 
-  /* ── Xuất kho: stub từ localStorage (trạng thái "Đã xuất kho") ── */
+  /* ── Xuất kho: stub từ htqlEntityStorage (trạng thái "Đã xuất kho") ── */
   const xuatItems = docXuatKhoTuStorage().filter((x) => x.tinh_trang === TINH_TRANG_DA_XUAT_KHO)
   const mapXuat = new Map<string, { sl: number; gt: number }>()
   for (const x of xuatItems) {
@@ -146,7 +147,7 @@ export function layPhieuTheoMaVthh(mavthh: string): { nhap: PhieuTonKho[]; xuat:
     }
   }
 
-  /* Phiếu xuất (từ localStorage stub) */
+  /* Phiếu xuất (từ htqlEntityStorage stub) */
   const xuatAll = docXuatKhoTuStorage()
   const xuat: PhieuTonKho[] = xuatAll
     .filter((x) => (x.mahang ?? '').trim().toUpperCase() === ma)

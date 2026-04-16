@@ -227,8 +227,8 @@ function ModalChiTiet({ row, dvtList, onClose }: { row: KhoVthh; dvtList: DonViT
   ].sort((a, b) => b.ngay.localeCompare(a.ngay))
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 }} onClick={onClose}>
-      <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)', borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', width: 'min(960px, 96vw)', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000, pointerEvents: 'none' }}>
+      <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)', borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', width: 'min(960px, 96vw)', maxHeight: '82vh', display: 'flex', flexDirection: 'column', pointerEvents: 'auto' }}>
 
         <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>

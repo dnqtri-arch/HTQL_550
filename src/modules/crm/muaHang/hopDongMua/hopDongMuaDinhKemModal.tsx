@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { HopDongMuaAttachmentItem } from './hopDongMuaAttachmentTypes'
+import { htqlPathPartAscii } from '../../../../utils/htqlPathPartAscii'
 
 const ACCEPT_ATTR = '.jpg,.jpeg,.png,.pdf,.docx'
 
@@ -25,7 +26,7 @@ export function parseSoDonHangForAttachmentFile(soDon: string): string {
  * Tham số thứ hai (nếu có) bỏ qua, giữ cho tương thích gọi cũ.
  */
 export function partMccForPath(maNcc: string, _tenNccFallback?: string): string {
-  const m = (maNcc || '').trim().replace(/\s+/g, '').toLowerCase()
+  const m = htqlPathPartAscii(maNcc)
   return m || 'ncc_unknown'
 }
 
@@ -57,14 +58,11 @@ export function buildDhmAttachmentBaseName(
   return `${dhmPart}_${nccPart}_${tgPart}_${index}`
 }
 
-/** Thư mục module (slug) — đồng bộ quy tắc lưu đính kèm HĐM */
-export const HDM_ATTACHMENT_MODULE_FOLDER = 'don_hang_mua'
-
-/** don_hang_mua / mã_ncc / mã_đhm — `maNccPathPart` đã qua partMccForPath */
+/** Dưới gốc đính kèm chứng từ (hdct): mã_ncc / mã_hđm */
 export function buildDhmAttachmentFolderVirtualPath(soDonHang: string, maNccPathPart: string): string {
   const ncc = (maNccPathPart || 'ncc_unknown').trim().toLowerCase()
   const dhm = parseSoDonHangForAttachmentFile(soDonHang)
-  return `${HDM_ATTACHMENT_MODULE_FOLDER}/${ncc}/${dhm}`
+  return `${ncc}/${dhm}`
 }
 
 export function buildDhmAttachmentFullVirtualPath(soDonHang: string, maNccPathPart: string, fileName: string): string {

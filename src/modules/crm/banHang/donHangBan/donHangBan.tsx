@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Plus, Trash2, Eye, Mail, MessageCircle, FileText, ChevronDown, ChevronRight, ListChecks, Package } from 'lucide-react'
 import { DataGrid, type DataGridColumn, type DataGridSortState } from '../../../../components/common/dataGrid'
 import { useToastOptional } from '../../../../context/toastContext'
@@ -28,6 +29,8 @@ import {
   donHangBanQuetChiTienOrphanVaHoanTac,
   donHangBanThuTienBangIdsLinked,
   donHangBanChiTienBangIdsLinked,
+  donHangBanChungTuFetchBundleAndApply,
+  DON_HANG_BAN_CHUNG_TU_BUNDLE_QUERY_KEY,
   type DonHangBanChungTuRecord,
   type DonHangBanChungTuChiTiet,
   type DonHangBanChungTuKyValue,
@@ -81,6 +84,7 @@ import { buildChiTienBangPrefillFromDonHangBan } from '../../../taiChinh/chiTien
 import { tinhDaThuVaConLaiChoDonHangBan as tinhDaChiVaConLaiChoDonHangBan } from '../../../taiChinh/chiTien/chungTuCongNoChiTien'
 import type { ChiTienBangChiTiet, ChiTienBangRecord } from '../../../../types/chiTienBang'
 import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
+import { KV_POLL_INTERVAL_MS } from '../../../../utils/htqlKvSync'
 
 const baoGiaApiModal: BaoGiaApi = {
   getAll: baoGiaGetAll,
@@ -145,6 +149,11 @@ function formatNgay(iso: string | null | undefined): string {
 // ─── Danh sách ───────────────────────────────────────────────────────────
 
 function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
+  const dhbBundleQ = useQuery({
+    queryKey: DON_HANG_BAN_CHUNG_TU_BUNDLE_QUERY_KEY,
+    queryFn: donHangBanChungTuFetchBundleAndApply,
+    refetchInterval: KV_POLL_INTERVAL_MS,
+  })
   const toast = useToastOptional()
   const [filter, setFilter] = useState<DonHangBanChungTuFilter>(getDefaultDonHangBanChungTuFilter)
   const [danhSach, setDanhSach] = useState<DonHangBanChungTuRecord[]>([])
@@ -402,7 +411,10 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     donHangBanQuetChiTienOrphanVaHoanTac(idPhieuChiConTonTai)
     setDanhSach(donHangBanGetAll(filter))
   }, [filter])
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    if (!dhbBundleQ.isSuccess) return
+    loadData()
+  }, [dhbBundleQ.isSuccess, dhbBundleQ.dataUpdatedAt, loadData])
   useEffect(() => {
     if (selectedId) setChiTiet(donHangBanGetChiTiet(selectedId))
     else setChiTiet([])
@@ -410,9 +422,9 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
 
   useEffect(() => {
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('htql_don_hang_ban_from_baogia') : null
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('htql_don_hang_ban_from_baogia') : null
       if (!raw) return
-      localStorage.removeItem('htql_don_hang_ban_from_baogia')
+      sessionStorage.removeItem('htql_don_hang_ban_from_baogia')
       const d = JSON.parse(raw) as { bao_gia_id?: string }
       if (!d?.bao_gia_id) return
       const bg = baoGiaGetAll(getDefaultBaoGiaFilter()).find((r) => r.id === d.bao_gia_id)
@@ -1067,7 +1079,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       />
 
       {showForm && (
-        <div className={styles.modalOverlay} onClick={() => { resetFormPrefill(); setShowForm(false) }}>
+        <div className={styles.modalOverlay}>
           <div
             ref={donHangBanFormDrag.containerRef}
             className={styles.modalBoxLarge}
@@ -1108,7 +1120,7 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       )}
 
       {baoGiaXemTuDhb && (
-        <div className={styles.modalOverlay} onClick={() => setBaoGiaXemTuDhb(null)}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}

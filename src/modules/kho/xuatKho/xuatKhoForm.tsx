@@ -56,14 +56,21 @@ const FormDateInput = forwardRef<HTMLInputElement, React.ComponentPropsWithoutRe
 
 /* ── Styles ─────────────────────────────────────────────────────── */
 const overlay: React.CSSProperties = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000,
+  position: 'fixed',
+  inset: 0,
+  background: 'transparent',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 4000,
+  pointerEvents: 'none',
 }
 const modal: React.CSSProperties = {
   background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)',
   borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
   width: 'min(860px, 96vw)', maxHeight: '90vh',
   display: 'flex', flexDirection: 'column',
+  pointerEvents: 'auto',
 }
 const headerSt: React.CSSProperties = {
   padding: '8px 14px', borderBottom: '1px solid var(--border-strong)',
@@ -210,8 +217,8 @@ export function XuatKhoForm({ mode, phieu, onLuu, onClose }: Props) {
   }
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={modal} onClick={(e) => e.stopPropagation()}>
+    <div style={overlay}>
+      <div style={modal}>
 
         {/* Header */}
         <div style={headerSt}>

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Context API cho Nhận vật tư hàng hóa (NVTHH) — form và danh sách trong module nhanvattuhanghoa.
  */
 
@@ -17,7 +17,7 @@ export interface NhanVatTuHangHoaApi {
   getDefaultFilter: () => NhanVatTuHangHoaFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: string; label: string }[]
-  post: (payload: NhanVatTuHangHoaCreatePayload) => NhanVatTuHangHoaRecord
+  post: (payload: NhanVatTuHangHoaCreatePayload) => Promise<NhanVatTuHangHoaRecord>
   put: (donId: string, payload: NhanVatTuHangHoaCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => (Record<string, string> & { _dvtOptions?: string[] })[] | null

@@ -22,22 +22,18 @@ function Placeholder({ title }: { title: string }) {
 
 export { ThuTien } from './thuTien/thuTien'
 export { ChiTien } from './chiTien/chiTien'
-export function ThuChiTien() {
-  return <Placeholder title="Thu/chi tiền" />
-}
+export { ChuyenTien } from './chuyenTien/chuyenTien'
+export { ThuChiTien } from './thuChiTien/thuChiTien'
 export function KiemKeQuy() {
   return <Placeholder title="Kiểm kê quỹ" />
 }
-export function SoChiTietTienMat() {
-  return <Placeholder title="Sổ chi tiết tiền mặt" />
-}
+export { SoChiTietTienMat } from './soTienMat/soTienMat'
 export function BaoCaoTaiChinh() {
   return <Placeholder title="Báo cáo tài chính" />
 }
 export function TyGiaXuatQuy() {
   return <Placeholder title="Tính tỷ giá xuất quỹ" />
 }
-export function SoTienGuiNganHang() {
-  return <Placeholder title="Sổ chi tiết tài khoản ngân hàng" />
-}
-export { TaiKhoanNganHang } from './taiKhoanNganHang/taiKhoanNganHang'
+export { SoTienGuiNganHang } from './soNganHang/soNganHang'
+export { TaiKhoan } from './taiKhoan/taiKhoan'
+export { LoaiThuChi } from './loaiThuChi/loaiThuChi'

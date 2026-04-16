@@ -5,6 +5,8 @@
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import type { GhiNhanDoanhThuAttachmentItem } from './ghiNhanDoanhThuAttachmentTypes'
 import { TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG } from '../../muaHang/donHangMua/donHangMuaApi'
 import { HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT } from '../../muaHang/muaHangTabEvent'
@@ -336,7 +338,7 @@ function migrateParsedDonChi(
 
 function loadFromStorage(): { don: GhiNhanDoanhThuRecord[]; chiTiet: GhiNhanDoanhThuChiTiet[] } {
   try {
-    const ls = typeof localStorage !== 'undefined' ? localStorage : null
+    const ls = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage : null
     if (!ls) throw new Error('no storage')
     const parsePair = (rawDon: string | null, rawCt: string | null) => {
       if (!rawDon || !rawCt) return null
@@ -367,9 +369,9 @@ function loadFromStorage(): { don: GhiNhanDoanhThuRecord[]; chiTiet: GhiNhanDoan
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_donList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_donList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch {
     /* ignore */
@@ -380,7 +382,7 @@ export type GhiNhanDoanhThuDraftLine = Record<string, string> & { _dvtOptions?: 
 
 export function getGhiNhanDoanhThuDraft(): GhiNhanDoanhThuDraftLine[] | null {
   try {
-    const ls = typeof localStorage !== 'undefined' ? localStorage : null
+    const ls = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage : null
     if (!ls) return null
     const raw = ls.getItem(STORAGE_KEY_DRAFT) ?? ls.getItem(LEGACY_STORAGE_KEY_DRAFT)
     if (!raw) return null
@@ -393,15 +395,15 @@ export function getGhiNhanDoanhThuDraft(): GhiNhanDoanhThuDraftLine[] | null {
 
 export function setGhiNhanDoanhThuDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof htqlEntityStorage !== 'undefined') {
       const toSave = lines.map((l) => {
         const { _vthh, ...rest } = l
         return rest
       })
-      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+      htqlEntityStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
     }
   } catch {
     /* ignore */
@@ -410,9 +412,9 @@ export function setGhiNhanDoanhThuDraft(lines: Array<Record<string, string> & { 
 
 export function clearGhiNhanDoanhThuDraft(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY_DRAFT)
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.removeItem(STORAGE_KEY_DRAFT)
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
     }
   } catch {
     /* ignore */
@@ -422,6 +424,12 @@ export function clearGhiNhanDoanhThuDraft(): void {
 const _initial = loadFromStorage()
 let _donList: GhiNhanDoanhThuRecord[] = _initial.don
 let _chiTietList: GhiNhanDoanhThuChiTiet[] = _initial.chiTiet
+
+export function ghiNhanDoanhThuReloadFromStorage(): void {
+  const { don, chiTiet } = loadFromStorage()
+  _donList = don
+  _chiTietList = chiTiet
+}
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -566,13 +574,23 @@ export function ghiNhanDoanhThuDelete(donId: string): void {
   saveToStorage()
 }
 
-export function ghiNhanDoanhThuPost(payload: GhiNhanDoanhThuCreatePayload): GhiNhanDoanhThuRecord {
+export async function ghiNhanDoanhThuPost(
+  payload: GhiNhanDoanhThuCreatePayload,
+): Promise<GhiNhanDoanhThuRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _donList.map((d) => d.so_don_hang))
+  const soDon = await allocateMaHeThongFromServer({
+    seqKey: 'NVTHH',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `nvthh${Date.now()}`
   const don: GhiNhanDoanhThuRecord = {
     id,
     tinh_trang: payload.tinh_trang,
     ngay_don_hang: payload.ngay_don_hang,
-    so_don_hang: payload.so_don_hang,
+    so_don_hang: soDon,
     ngay_giao_hang: payload.ngay_giao_hang,
     nha_cung_cap: payload.nha_cung_cap,
     dia_chi: payload.dia_chi ?? '',

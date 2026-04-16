@@ -3,10 +3,12 @@
  * Mã: {Năm}/BG/{Số} — rule ma-he-thong.mdc
  * 
  * [YC24 Mục 7] Endpoint backend (khi có): /api/sales/quotes
- * Hiện tại: localStorage-based (tách biệt khỏi /api/purchase/orders)
+ * Hiện tại: htqlEntityStorage-based (tách biệt khỏi /api/purchase/orders)
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { baoGiaHoanTacKhiHetLienKetHopDongBan } from '../baoGia/baoGiaApi'
 import { HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import { TINH_TRANG_HOP_DONG_BAN_DA_THU_TIEN, TINH_TRANG_HOP_DONG_BAN_DA_CHI_TIEN } from '../hopDongBan/hopDongBanChungTuApi'
@@ -33,6 +35,8 @@ export type {
 
 /** Alias tương thích — cùng nghĩa với PhuLucHopDongBanChungTuKyValue. */
 export type KyValue = PhuLucHopDongBanChungTuKyValue
+
+const MODULE_PREFIX = 'PLHDB'
 
 /** Dữ liệu mẫu báo giá */
 const MOCK_DON: PhuLucHopDongBanChungTuRecord[] = [
@@ -212,8 +216,8 @@ function normalizePhuLucHopDongBanChungTu(d: Partial<PhuLucHopDongBanChungTuReco
 
 function loadFromStorage(): { list: PhuLucHopDongBanChungTuRecord[]; chiTiet: PhuLucHopDongBanChungTuChiTiet[] } {
   try {
-    const rawList = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_PHU_LUC_HOP_DONG_BAN_CT_LIST) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawList = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_PHU_LUC_HOP_DONG_BAN_CT_LIST) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const list = rawList ? JSON.parse(rawList) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(list) && Array.isArray(chiTiet)) {
@@ -227,9 +231,9 @@ function loadFromStorage(): { list: PhuLucHopDongBanChungTuRecord[]; chiTiet: Ph
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_PHU_LUC_HOP_DONG_BAN_CT_LIST, JSON.stringify(_phuLucHopDongBanChungTuList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_PHU_LUC_HOP_DONG_BAN_CT_LIST, JSON.stringify(_phuLucHopDongBanChungTuList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch {
     /* ignore */
@@ -241,7 +245,7 @@ const STORAGE_KEY_DRAFT_PLHDB_CT = 'htql_phu_luc_hop_dong_ban_chung_tu_draft'
 
 export function getPhuLucHopDongBanChungTuDraft(): PhuLucHopDongBanChungTuDraftLine[] | null {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT_PLHDB_CT) : null
+    const raw = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_DRAFT_PLHDB_CT) : null
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : null
@@ -252,12 +256,12 @@ export function getPhuLucHopDongBanChungTuDraft(): PhuLucHopDongBanChungTuDraftL
 
 export function setPhuLucHopDongBanChungTuDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof htqlEntityStorage !== 'undefined') {
       const toSave = lines.map((l) => {
         const { _vthh, ...rest } = l
         return rest
       })
-      localStorage.setItem(STORAGE_KEY_DRAFT_PLHDB_CT, JSON.stringify(toSave))
+      htqlEntityStorage.setItem(STORAGE_KEY_DRAFT_PLHDB_CT, JSON.stringify(toSave))
     }
   } catch {
     /* ignore */
@@ -266,16 +270,23 @@ export function setPhuLucHopDongBanChungTuDraft(lines: Array<Record<string, stri
 
 export function clearPhuLucHopDongBanChungTuDraft(): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY_DRAFT_PLHDB_CT)
+    if (typeof htqlEntityStorage !== 'undefined') htqlEntityStorage.removeItem(STORAGE_KEY_DRAFT_PLHDB_CT)
   } catch {
     /* ignore */
   }
 }
 
-/** Bản sao có thể xóa; khởi tạo từ localStorage (nếu có) hoặc dữ liệu mẫu */
+/** Bản sao có thể xóa; khởi tạo từ htqlEntityStorage (nếu có) hoặc dữ liệu mẫu */
 const _initial = loadFromStorage()
 let _phuLucHopDongBanChungTuList: PhuLucHopDongBanChungTuRecord[] = _initial.list
 let _chiTietList: PhuLucHopDongBanChungTuChiTiet[] = _initial.chiTiet
+
+/** Sau poll KV / đồng bộ máy khác — nạp lại bộ nhớ từ htqlEntityStorage. */
+export function phuLucHopDongBanChungTuReloadFromStorage(): void {
+  const { list, chiTiet } = loadFromStorage()
+  _phuLucHopDongBanChungTuList = list
+  _chiTietList = chiTiet
+}
 
 /** Lấy từ/đến theo kỳ: "tat-ca" | "tuan-nay" | "thang-nay" | "quy-nay" | "nam-nay" */
 export function getDateRangeForKy(ky: string): { tu: string; den: string } {
@@ -658,7 +669,17 @@ export function phuLucHopDongBanChungTuDelete(donHangBanId: string): void {
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
-export function phuLucHopDongBanChungTuPost(payload: PhuLucHopDongBanChungTuCreatePayload): PhuLucHopDongBanChungTuRecord {
+export async function phuLucHopDongBanChungTuPost(
+  payload: PhuLucHopDongBanChungTuCreatePayload,
+): Promise<PhuLucHopDongBanChungTuRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _phuLucHopDongBanChungTuList.map((d) => d.so_hop_dong))
+  const soHopDong = await allocateMaHeThongFromServer({
+    seqKey: 'PLHDB',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `bg${Date.now()}`
   const phuLucHopDongBanChungTuRow: PhuLucHopDongBanChungTuRecord = {
     id,
@@ -667,7 +688,7 @@ export function phuLucHopDongBanChungTuPost(payload: PhuLucHopDongBanChungTuCrea
     so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_lap_hop_dong: payload.ngay_lap_hop_dong,
-    so_hop_dong: payload.so_hop_dong,
+    so_hop_dong: soHopDong,
     ngay_cam_ket_giao: payload.ngay_cam_ket_giao,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
@@ -862,8 +883,6 @@ export function getDefaultPhuLucHopDongBanChungTuFilter(): PhuLucHopDongBanChung
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
-
-const MODULE_PREFIX = 'PLHDB'
 
 /** Trả về số phụ lục HĐ bán tiếp theo (2026/PLHDB/1...) — reset mỗi năm. */
 export function phuLucHopDongBanSoHopDongTiepTheo(): string {

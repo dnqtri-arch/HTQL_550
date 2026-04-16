@@ -2,10 +2,18 @@
  * Ghi sổ từ phiếu thu — lưu local (module Thu/chi tiền + sổ chi tiết là placeholder).
  */
 import type { ThuTienBangRecord } from '../../../types/thuTienBang'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 const KEY_THU_CHI = 'htql550_thu_chi_tien_ghi_so'
 const KEY_SO_TM = 'htql550_so_chi_tiet_tien_mat_ghi_so'
 const KEY_SO_NH = 'htql550_so_chi_tiet_tk_nh_ghi_so'
+
+/** Bắn khi ghi sổ / hủy ghi sổ phiếu thu (hoặc chi — xem `ghiSoChiTienApi`) để module Tài khoản cập nhật tổng phát sinh. */
+export const HTQL_TAI_CHINH_GHI_SO_RELOAD_EVENT = 'htql:tai-chinh-ghi-so-reload'
+
+export function dispatchTaiChinhGhiSoReload(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(HTQL_TAI_CHINH_GHI_SO_RELOAD_EVENT))
+}
 
 export type ThuChiTienGhiSoEntry = {
   id: string
@@ -33,8 +41,8 @@ export type SoChiTietGhiSoEntry = {
 
 function readJson<T>(key: string, fallback: T): T {
   try {
-    if (typeof localStorage === 'undefined') return fallback
-    const raw = localStorage.getItem(key)
+    if (typeof htqlEntityStorage === 'undefined') return fallback
+    const raw = htqlEntityStorage.getItem(key)
     if (!raw) return fallback
     const p = JSON.parse(raw) as unknown
     return Array.isArray(p) ? (p as T) : fallback
@@ -45,7 +53,7 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson(key: string, data: unknown): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(data))
+    if (typeof htqlEntityStorage !== 'undefined') htqlEntityStorage.setItem(key, JSON.stringify(data))
   } catch {
     /* ignore */
   }
@@ -118,6 +126,7 @@ export function huyGhiSoPhieuThu(phieuThuId: string): void {
     KEY_SO_NH,
     soChiTietTaiKhoanNhGhiSoGetAll().filter((e) => e.phieu_thu_id !== phieuThuId),
   )
+  dispatchTaiChinhGhiSoReload()
 }
 
 export function daGhiSoPhieuThu(phieuThuId: string): boolean {

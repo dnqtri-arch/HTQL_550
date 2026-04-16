@@ -1,8 +1,11 @@
 /**
  * API danh mục Khách hàng — phân hệ Bán hàng.
- * Dữ liệu ĐỘC LẬP hoàn toàn với NhaCungCap (khác key localStorage, khác API endpoint).
+ * Dữ liệu ĐỘC LẬP hoàn toàn với NhaCungCap (khác key htqlEntityStorage, khác API endpoint).
  * Tuân thủ htql550.mdc: viết liền, zIndex 4000, Toast 3200ms.
  */
+
+import { htqlApiUrl } from '../../../../config/htqlApiBase'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 export type LoaiKhachHang = 'to_chuc' | 'ca_nhan'
 export type LoaiTaiKhoanNganHangKh = 'cong_ty' | 'ca_nhan'
@@ -83,14 +86,12 @@ export interface DieuKhoanThanhToanKhItem {
 const STORAGE_KEY = 'htql550_khach_hang'
 const STORAGE_KEY_NHOM = 'htql550_nhom_khach_hang'
 const STORAGE_KEY_DKTT = 'htql550_dktt_khach_hang'
-const STORAGE_KEY_NCC = 'htql550_nha_cung_cap'
-
 const API_BASE_KH = '/api/khach-hang'
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function apiGet<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(url)
+    const r = await fetch(htqlApiUrl(url))
     if (!r.ok) return null
     return (await r.json()) as T
   } catch { return null }
@@ -98,7 +99,7 @@ async function apiGet<T>(url: string): Promise<T | null> {
 
 async function apiPost<T>(url: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(htqlApiUrl(url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!r.ok) return null
     return (await r.json()) as T
   } catch { return null }
@@ -106,7 +107,7 @@ async function apiPost<T>(url: string, body: unknown): Promise<T | null> {
 
 async function apiPut<T>(url: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(htqlApiUrl(url), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!r.ok) return null
     return (await r.json()) as T
   } catch { return null }
@@ -114,7 +115,7 @@ async function apiPut<T>(url: string, body: unknown): Promise<T | null> {
 
 async function apiDelete(url: string): Promise<boolean> {
   try {
-    const r = await fetch(url, { method: 'DELETE' })
+    const r = await fetch(htqlApiUrl(url), { method: 'DELETE' })
     return r.ok || r.status === 204
   } catch { return false }
 }
@@ -156,6 +157,17 @@ const DKTT_MAU: DieuKhoanThanhToanKhItem[] = [
 // ─── Cache (giống NhaCungCap) ─────────────────────────────────────────────────
 let cache: KhachHangRecord[] | null = null
 
+if (typeof window !== 'undefined') {
+  const reProbeApiKh = () => {
+    useApiKh = null
+    cache = null
+  }
+  window.addEventListener('online', reProbeApiKh)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reProbeApiKh()
+  })
+}
+
 function normalizeRecord(r: KhachHangRecord): KhachHangRecord {
   const rawGiao = Array.isArray(r.dia_diem_giao_hang)
     ? r.dia_diem_giao_hang!.filter((s) => (s ?? '').trim() !== '')
@@ -196,7 +208,7 @@ function normalizeRecord(r: KhachHangRecord): KhachHangRecord {
 
 function loadFromStorage(): KhachHangRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as KhachHangRecord[]
       if (Array.isArray(parsed)) return parsed.map(normalizeRecord)
@@ -206,44 +218,9 @@ function loadFromStorage(): KhachHangRecord[] {
 }
 
 function saveToStorage(data: KhachHangRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
-// ─── Logic lưỡng tính: isNhaCungCap=true → tự sync sang bảng NCC ─────────────
-function syncNhaCungCapFromKhachHang(kh: KhachHangRecord): void {
-  if (!kh.isNhaCungCap) return
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_NCC)
-    const nccList: Record<string, unknown>[] = raw ? (JSON.parse(raw) as Record<string, unknown>[]) : []
-    const maNcc = `NCC-${kh.ma_kh}`
-    const idx = nccList.findIndex((n) => n['ma_ncc'] === maNcc)
-    const nccRecord: Record<string, unknown> = {
-      id: idx >= 0 ? nccList[idx]['id'] : Date.now(),
-      ma_ncc: maNcc,
-      ten_ncc: kh.ten_kh,
-      loai_ncc: kh.loai_kh,
-      khach_hang: true,
-      dia_chi: kh.dia_chi,
-      nhom_kh_ncc: kh.nhom_kh,
-      ma_so_thue: kh.ma_so_thue,
-      dien_thoai: kh.dien_thoai,
-      email: kh.email,
-      website: kh.website,
-      dieu_khoan_tt: kh.dieu_khoan_tt,
-      so_ngay_duoc_no: kh.so_ngay_duoc_no,
-      so_no_toi_da: kh.han_muc_no_kh,
-      ngung_theo_doi: kh.ngung_theo_doi,
-      quoc_gia: kh.quoc_gia,
-      tinh_tp: kh.tinh_tp,
-      xa_phuong: kh.xa_phuong,
-      dia_diem_giao_hang: kh.dia_diem_giao_hang,
-      dia_diem_nhan_hang: kh.dia_diem_nhan_hang,
-      dia_diem_giao_trung_nhan: kh.dia_diem_nhan_trung_giao,
-    }
-    if (idx >= 0) { nccList[idx] = nccRecord } else { nccList.push(nccRecord) }
-    localStorage.setItem(STORAGE_KEY_NCC, JSON.stringify(nccList))
-  } catch { /* không để lỗi sync block lưu chính */ }
-}
 
 // ─── CRUD — khớp chữ ký với nhaCungCapApi.ts gốc ────────────────────────────
 export async function khachHangGetAll(): Promise<KhachHangRecord[]> {
@@ -259,13 +236,18 @@ export async function khachHangGetAll(): Promise<KhachHangRecord[]> {
   return [...cache]
 }
 
-export async function khachHangPost(payload: Omit<KhachHangRecord, 'id'>): Promise<KhachHangRecord> {
+export async function khachHangPost(
+  payload: Omit<KhachHangRecord, 'id'>,
+  opts?: { skipPartnerMirror?: boolean },
+): Promise<KhachHangRecord> {
   if (await checkApiKh()) {
     const res = await apiPost<KhachHangRecord>(API_BASE_KH, payload)
     if (res) {
       cache = null
       const n = normalizeRecord(res)
-      syncNhaCungCapFromKhachHang(n)
+      if (!opts?.skipPartnerMirror) {
+        void import('../../shared/khNccMirrorSync').then((m) => m.mirrorNhaCungCapFromKhachHangAfterKhSave(n)).catch(() => {})
+      }
       return n
     }
   }
@@ -275,17 +257,25 @@ export async function khachHangPost(payload: Omit<KhachHangRecord, 'id'>): Promi
   list.push(newRow)
   saveToStorage(list)
   cache = list
-  syncNhaCungCapFromKhachHang(newRow)
+  if (!opts?.skipPartnerMirror) {
+    void import('../../shared/khNccMirrorSync').then((m) => m.mirrorNhaCungCapFromKhachHangAfterKhSave(newRow)).catch(() => {})
+  }
   return newRow
 }
 
-export async function khachHangPut(id: number, payload: Omit<KhachHangRecord, 'id'>): Promise<KhachHangRecord> {
+export async function khachHangPut(
+  id: number,
+  payload: Omit<KhachHangRecord, 'id'>,
+  opts?: { skipPartnerMirror?: boolean },
+): Promise<KhachHangRecord> {
   if (await checkApiKh()) {
     const res = await apiPut<KhachHangRecord>(`${API_BASE_KH}/${id}`, payload)
     if (res) {
       cache = null
       const n = normalizeRecord(res)
-      syncNhaCungCapFromKhachHang(n)
+      if (!opts?.skipPartnerMirror) {
+        void import('../../shared/khNccMirrorSync').then((m) => m.mirrorNhaCungCapFromKhachHangAfterKhSave(n)).catch(() => {})
+      }
       return n
     }
   }
@@ -296,18 +286,49 @@ export async function khachHangPut(id: number, payload: Omit<KhachHangRecord, 'i
   list[idx] = updated
   saveToStorage(list)
   cache = list
-  syncNhaCungCapFromKhachHang(updated)
+  if (!opts?.skipPartnerMirror) {
+    void import('../../shared/khNccMirrorSync').then((m) => m.mirrorNhaCungCapFromKhachHangAfterKhSave(updated)).catch(() => {})
+  }
   return updated
 }
 
-export async function khachHangDelete(id: number): Promise<void> {
+export async function khachHangDelete(id: number, opts?: { skipPartnerCascade?: boolean }): Promise<void> {
+  let partnerMa: string | null = null
+  if (!opts?.skipPartnerCascade) {
+    try {
+      const snapshot = await khachHangGetAll()
+      partnerMa = snapshot.find((r) => r.id === id)?.ma_kh?.trim() ?? null
+    } catch {
+      partnerMa = null
+    }
+  }
   if (await checkApiKh()) {
     const ok = await apiDelete(`${API_BASE_KH}/${id}`)
-    if (ok) { cache = null; return }
+    if (ok) {
+      cache = null
+      if (!opts?.skipPartnerCascade && partnerMa) {
+        const nccApi = await import('../../muaHang/nhaCungCap/nhaCungCapApi')
+        nccApi.nhaCungCapNapLai()
+        const nccs = await nccApi.nhaCungCapGetAll()
+        const p = nccs.find((r) => r.ma_ncc === partnerMa)
+        if (p) await nccApi.nhaCungCapDelete(p.id, { skipPartnerCascade: true })
+      }
+      return
+    }
   }
-  const list = loadFromStorage().filter((r) => r.id !== id)
-  saveToStorage(list)
-  cache = list
+  const list = loadFromStorage()
+  const row = list.find((r) => r.id === id)
+  const ma = row?.ma_kh?.trim()
+  const next = list.filter((r) => r.id !== id)
+  saveToStorage(next)
+  cache = next
+  if (!opts?.skipPartnerCascade && ma) {
+    const nccApi = await import('../../muaHang/nhaCungCap/nhaCungCapApi')
+    nccApi.nhaCungCapNapLai()
+    const nccs = await nccApi.nhaCungCapGetAll()
+    const p = nccs.find((r) => r.ma_ncc === ma)
+    if (p) await nccApi.nhaCungCapDelete(p.id, { skipPartnerCascade: true })
+  }
 }
 
 /** Sync function — clears cache like nhaCungCapNapLai */
@@ -385,7 +406,7 @@ export async function khachHangValidateTrung(
 // ─── Nhóm Khách hàng ──────────────────────────────────────────────────────────
 export function loadNhomKhachHang(): NhomKhachHangItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_NHOM)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY_NHOM)
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed)) {
@@ -404,13 +425,13 @@ export function loadNhomKhachHang(): NhomKhachHangItem[] {
 }
 
 export function saveNhomKhachHang(nhom: NhomKhachHangItem[]): void {
-  localStorage.setItem(STORAGE_KEY_NHOM, JSON.stringify(nhom))
+  htqlEntityStorage.setItem(STORAGE_KEY_NHOM, JSON.stringify(nhom))
 }
 
 // ─── Điều khoản thanh toán ────────────────────────────────────────────────────
 export function loadDieuKhoanThanhToanKh(): DieuKhoanThanhToanKhItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_DKTT)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY_DKTT)
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed)) {
@@ -431,5 +452,5 @@ export function loadDieuKhoanThanhToanKh(): DieuKhoanThanhToanKhItem[] {
 }
 
 export function saveDieuKhoanThanhToanKh(list: DieuKhoanThanhToanKhItem[]): void {
-  localStorage.setItem(STORAGE_KEY_DKTT, JSON.stringify(list))
+  htqlEntityStorage.setItem(STORAGE_KEY_DKTT, JSON.stringify(list))
 }

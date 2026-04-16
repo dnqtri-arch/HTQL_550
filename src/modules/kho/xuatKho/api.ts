@@ -1,4 +1,5 @@
 import type { PhieuXuatKho, ChiTietXuatKho, TonKhoSnapshot } from './type'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import {
   nhanVatTuHangHoaGetAll,
   nhanVatTuHangHoaGetChiTiet,
@@ -6,7 +7,7 @@ import {
   getDefaultNhanVatTuHangHoaFilter,
 } from '../../crm/muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaApi'
 
-/* ── localStorage keys ─────────────────────────────────────────── */
+/* ── htqlEntityStorage keys ─────────────────────────────────────────── */
 const LS_PHIEU_XUAT = 'htql_phieu_xuat_kho'
 /** Key chia sẻ với khovthh/Api.ts — phải nhất quán */
 const LS_XUAT_ITEMS = 'htql_xuatkho_items'
@@ -14,14 +15,14 @@ const LS_XUAT_ITEMS = 'htql_xuatkho_items'
 /* ── CRUD helpers ──────────────────────────────────────────────── */
 function docDuLieu(): PhieuXuatKho[] {
   try {
-    const raw = localStorage.getItem(LS_PHIEU_XUAT)
+    const raw = htqlEntityStorage.getItem(LS_PHIEU_XUAT)
     if (raw) return JSON.parse(raw) as PhieuXuatKho[]
   } catch { /* ignore */ }
   return []
 }
 
 function luuDuLieu(list: PhieuXuatKho[]): void {
-  localStorage.setItem(LS_PHIEU_XUAT, JSON.stringify(list))
+  htqlEntityStorage.setItem(LS_PHIEU_XUAT, JSON.stringify(list))
 }
 
 /* ── Task 5: Đồng bộ items sang htql_xuatkho_items ────────────── */
@@ -42,7 +43,7 @@ function syncXuatItems(tatCaPhieu: PhieuXuatKho[]): void {
       })
     }
   }
-  localStorage.setItem(LS_XUAT_ITEMS, JSON.stringify(items))
+  htqlEntityStorage.setItem(LS_XUAT_ITEMS, JSON.stringify(items))
 }
 
 interface XuatKhoItem {
@@ -86,7 +87,7 @@ export function layTonKhoHienTai(makho?: string): Map<string, TonKhoSnapshot> {
   /* Trừ đã xuất kho */
   let xuatItems: XuatKhoItem[] = []
   try {
-    const raw = localStorage.getItem(LS_XUAT_ITEMS)
+    const raw = htqlEntityStorage.getItem(LS_XUAT_ITEMS)
     if (raw) xuatItems = JSON.parse(raw) as XuatKhoItem[]
   } catch { /* ignore */ }
 

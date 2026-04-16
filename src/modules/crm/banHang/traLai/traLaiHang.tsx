@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { Plus, Trash2, X } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
 import { Modal } from '../../../../components/common/modal'
@@ -30,8 +31,8 @@ const MOCK_CT: TraLaiHangBanChiTiet[] = []
 
 function loadFromStorage() {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CT) : null
+    const raw = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CT) : null
     const d = raw ? JSON.parse(raw) : null
     const ct = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(d) && Array.isArray(ct)) return { list: d as TraLaiHangBanRecord[], chiTiet: ct as TraLaiHangBanChiTiet[] }
@@ -52,9 +53,9 @@ initStore()
 
 function saveStore() {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(_list))
-      localStorage.setItem(STORAGE_KEY_CT, JSON.stringify(_chiTiet))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(_list))
+      htqlEntityStorage.setItem(STORAGE_KEY_CT, JSON.stringify(_chiTiet))
     }
   } catch { /* ignore */ }
 }
@@ -452,7 +453,7 @@ export function TraLaiHang() {
       />
 
       {showForm && (
-        <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modalBoxLarge} style={{ height: '86vh' }} onClick={(e) => e.stopPropagation()}>
             <TraLaiForm
               key={formKey} mode={formMode}

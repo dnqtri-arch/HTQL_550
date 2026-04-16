@@ -82,13 +82,16 @@ export interface ThuTienBangRecord {
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: ThuTienBangAttachmentItem[]
   /** Phiếu thu tiền (module Thu tiền): lý do thu — dropdown. */
-  ly_do_thu_phieu?: 'thu_khach_hang' | 'thu_khac' | null
+  /** Chuỗi hiển thị (hoặc mã legacy thu_khach_hang / … khi đọc dữ liệu cũ). */
+  ly_do_thu_phieu?: string | null
   /** Phiếu thu: Thu tiền mặt */
   thu_tien_mat?: boolean
   /** Phiếu thu: Thu qua ngân hàng */
   thu_qua_ngan_hang?: boolean
   /** Phiếu thu: ngày hạch toán (yyyy-mm-dd), có thể khác TG tạo */
   ngay_hach_toan?: string
+  /** Phiếu thu — id bản ghi TK công ty (thu vào TK này) — dùng tính số dư hiện tại. */
+  phieu_tai_khoan_id?: string
 }
 
 export interface ThuTienBangChiTiet {
@@ -170,11 +173,13 @@ export interface ThuTienBangCreatePayload {
   phieu_chi_ngan_hang?: string
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: ThuTienBangAttachmentItem[]
-  ly_do_thu_phieu?: 'thu_khach_hang' | 'thu_khac' | null
+  /** Chuỗi hiển thị (hoặc mã legacy thu_khach_hang / … khi đọc dữ liệu cũ). */
+  ly_do_thu_phieu?: string | null
   thu_tien_mat?: boolean
   thu_qua_ngan_hang?: boolean
   /** Phiếu thu — ngày hạch toán */
   ngay_hach_toan?: string
+  phieu_tai_khoan_id?: string
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string

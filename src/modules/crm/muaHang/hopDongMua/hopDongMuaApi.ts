@@ -4,6 +4,8 @@
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import type {
   HopDongMuaAttachmentItem,
   HopDongMuaChiTiet,
@@ -26,6 +28,8 @@ export type {
 
 /** Alias tương thích — cùng nghĩa với HopDongMuaKyValue. */
 export type KyValue = HopDongMuaKyValue
+
+const MODULE_PREFIX = 'HDM'
 
 /** Dữ liệu mẫu hợp đồng mua */
 const MOCK_DON: HopDongMuaRecord[] = [
@@ -173,8 +177,8 @@ function normalizeDon(d: Partial<HopDongMuaRecord> & { id: string; de_xuat_id?: 
 
 function loadFromStorage(): { don: HopDongMuaRecord[]; chiTiet: HopDongMuaChiTiet[] } {
   try {
-    const rawDon = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DON) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawDon = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_DON) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const don = rawDon ? JSON.parse(rawDon) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(don) && Array.isArray(chiTiet)) {
@@ -188,9 +192,9 @@ function loadFromStorage(): { don: HopDongMuaRecord[]; chiTiet: HopDongMuaChiTie
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_donList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_donList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch {
     /* ignore */
@@ -202,7 +206,7 @@ const STORAGE_KEY_DRAFT = 'htql_hop_dong_mua_draft'
 
 export function getHopDongMuaDraft(): HopDongMuaDraftLine[] | null {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT) : null
+    const raw = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_DRAFT) : null
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : null
@@ -213,12 +217,12 @@ export function getHopDongMuaDraft(): HopDongMuaDraftLine[] | null {
 
 export function setHopDongMuaDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof htqlEntityStorage !== 'undefined') {
       const toSave = lines.map((l) => {
         const { _vthh, ...rest } = l
         return rest
       })
-      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
+      htqlEntityStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
     }
   } catch {
     /* ignore */
@@ -227,16 +231,22 @@ export function setHopDongMuaDraft(lines: Array<Record<string, string> & { _dvtO
 
 export function clearHopDongMuaDraft(): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY_DRAFT)
+    if (typeof htqlEntityStorage !== 'undefined') htqlEntityStorage.removeItem(STORAGE_KEY_DRAFT)
   } catch {
     /* ignore */
   }
 }
 
-/** Bản sao có thể xóa; khởi tạo từ localStorage (nếu có) hoặc dữ liệu mẫu */
+/** Bản sao có thể xóa; khởi tạo từ htqlEntityStorage (nếu có) hoặc dữ liệu mẫu */
 const _initial = loadFromStorage()
 let _donList: HopDongMuaRecord[] = _initial.don
 let _chiTietList: HopDongMuaChiTiet[] = _initial.chiTiet
+
+export function hopDongMuaReloadFromStorage(): void {
+  const { don, chiTiet } = loadFromStorage()
+  _donList = don
+  _chiTietList = chiTiet
+}
 
 /** Lấy từ/đến theo kỳ: "tat-ca" | "tuan-nay" | "thang-nay" | "quy-nay" | "nam-nay" */
 export function getDateRangeForKy(ky: string): { tu: string; den: string } {
@@ -386,13 +396,21 @@ export function hopDongMuaDelete(donId: string): void {
 }
 
 /** Tạo hợp đồng mua mới (thêm vào danh sách nội bộ). Trả về bản ghi đơn vừa tạo. */
-export function hopDongMuaPost(payload: HopDongMuaCreatePayload): HopDongMuaRecord {
+export async function hopDongMuaPost(payload: HopDongMuaCreatePayload): Promise<HopDongMuaRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _donList.map((d) => d.so_don_hang))
+  const soDon = await allocateMaHeThongFromServer({
+    seqKey: 'HDM',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `dhm${Date.now()}`
   const don: HopDongMuaRecord = {
     id,
     tinh_trang: payload.tinh_trang,
     ngay_don_hang: payload.ngay_don_hang,
-    so_don_hang: payload.so_don_hang,
+    so_don_hang: soDon,
     ngay_giao_hang: payload.ngay_giao_hang,
     nha_cung_cap: payload.nha_cung_cap,
     dia_chi: payload.dia_chi ?? '',
@@ -556,8 +574,6 @@ export function getDefaultHopDongMuaFilter(): HopDongMuaFilter {
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
-
-const MODULE_PREFIX = 'HDM'
 
 /** Trả về số đơn hàng tiếp theo (2026/HDM/1, 2026/HDM/2...) — reset mỗi năm. */
 export function hopDongMuaSoDonHangTiepTheo(): string {

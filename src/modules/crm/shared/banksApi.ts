@@ -1,6 +1,6 @@
 /**
  * API danh sách ngân hàng Việt Nam (VietQR).
- * Dùng cho gợi ý Tên ngân hàng trong form Tài khoản ngân hàng.
+ * Dùng cho gợi ý Tên ngân hàng trong form module Tài khoản (tài chính).
  */
 
 const VIETQR_BANKS_URL = 'https://api.vietqr.io/v2/banks'

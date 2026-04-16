@@ -1,0 +1,19 @@
+{
+  "name": "htql-550-server",
+  "version": "2026.04.23",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node donViTinhServer.js",
+    "migrate-storage": "node migrateStorageLayout.js",
+    "wipe-data": "node scripts/wipeAllHtqlData.mjs"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.14.0"
+  }
+}

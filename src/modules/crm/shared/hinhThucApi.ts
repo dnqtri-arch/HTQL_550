@@ -1,3 +1,4 @@
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 /**
  * API và storage cho Hình thức mua hàng.
  * Mã: HT + số nguyên tăng dần (HT1, HT2...)
@@ -16,7 +17,7 @@ const MA_PREFIX = 'HT'
 
 function loadFromStorage(): HinhThucRecord[] {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
+    const raw = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY) : null
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) return parsed
@@ -34,8 +35,8 @@ let _list: HinhThucRecord[] = loadFromStorage()
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(_list))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(_list))
     }
   } catch {
     /* ignore */

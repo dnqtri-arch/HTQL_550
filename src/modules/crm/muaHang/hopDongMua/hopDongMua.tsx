@@ -36,7 +36,7 @@ import {
   MUA_HANG_MODAL_FOOTER_DONG_Y,
   MUA_HANG_MODAL_TITLE_XOA,
 } from '../../../../components/muaHangXoaModalBody'
-import { HTQL_MUA_HANG_TAB_EVENT } from '../muaHangTabEvent'
+import { HTQL_HOP_DONG_MUA_LIST_REFRESH_EVENT, HTQL_MUA_HANG_TAB_EVENT } from '../muaHangTabEvent'
 import { HopDongMuaApiProvider, useHopDongMuaApi, type HopDongMuaApi } from './hopDongMuaApiContext'
 import { Modal } from '../../../../components/common/modal'
 import {
@@ -387,6 +387,15 @@ function HopDongMuaContent() {
   }, [filter, api])
 
   useEffect(() => {
+    const onRemote = () => {
+      setDanhSach(api.getAll(filter))
+      if (selectedId) setChiTiet(api.getChiTiet(selectedId))
+    }
+    window.addEventListener(HTQL_HOP_DONG_MUA_LIST_REFRESH_EVENT, onRemote)
+    return () => window.removeEventListener(HTQL_HOP_DONG_MUA_LIST_REFRESH_EVENT, onRemote)
+  }, [filter, api, selectedId])
+
+  useEffect(() => {
     if (selectedId) setChiTiet(api.getChiTiet(selectedId))
     else setChiTiet([])
   }, [selectedId, api])
@@ -421,14 +430,6 @@ function HopDongMuaContent() {
   }, [contextMenu.open])
 
   const thaoTacSubmenuOnLeft = contextMenu.open && (contextMenu.x + 180 + 2 + 180) > (typeof window !== 'undefined' ? window.innerWidth - 16 : 9999)
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showForm) setShowForm(false)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [showForm])
 
   useEffect(() => {
     if (showForm) {

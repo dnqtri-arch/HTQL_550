@@ -4,6 +4,8 @@
  * Trả về: mã số thuế, ĐT di động, ĐT cố định, email, ngày cấp, nơi cấp.
  */
 
+import { htqlApiUrl } from '../../../config/htqlApiBase'
+
 const API_CCCD_LOOKUP = '/api/cccd-lookup'
 
 export interface CccdLookupResult {
@@ -22,7 +24,7 @@ export async function lookupByCccd(cccd: string): Promise<CccdLookupResult | nul
   const so = (cccd || '').trim().replace(/\s/g, '')
   if (!so) return null
   try {
-    const res = await fetch(`${API_CCCD_LOOKUP}?cccd=${encodeURIComponent(so)}`)
+    const res = await fetch(htqlApiUrl(`${API_CCCD_LOOKUP}?cccd=${encodeURIComponent(so)}`))
     if (!res.ok) return null
     const data = await res.json()
     if (!data || typeof data !== 'object') return null

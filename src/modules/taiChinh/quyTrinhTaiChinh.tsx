@@ -1,7 +1,7 @@
 /**
  * Quy trình Nghiệp vụ Quỹ (YC59/YC60, YC62 khôi phục line backbone):
  * - Backbone ngang liền mạch từ cột 0 → cột Sổ, mũi tên ở cuối backbone.
- * - Cột 0: Thu tiền | Chi tiền; cột Sổ: hai đoạn dọc nối backbone với hai nút Sổ.
+ * - Cột 0: Thu tiền | Chi tiền; cột Sổ: Sổ tiền mặt | Sổ ngân hàng.
  * - Nhánh dưới trước Thu/chi: Chuyển tiền — line đứng lên backbone.
  * - Kiểm kê quỹ: nhánh xuống giữa Thu/chi và cột Sổ.
  */
@@ -19,6 +19,7 @@ import {
   UserCog,
   TableProperties,
   Landmark,
+  Tags,
   Wallet,
 } from 'lucide-react'
 import type { ModuleId } from '../../config/sidebarConfig'
@@ -259,7 +260,7 @@ export function QuyTrinhTaiChinh() {
 
               {renderNode('thutien', 'Thu tiền', undefined, TrendingUp, CLR.green, COL0, ROW1Y, nav('thuTien'))}
               {renderNode('chitien', 'Chi tiền', undefined, TrendingDown, CLR.red, COL0, ROW2Y, nav('chiTien'))}
-              {renderNode('quy_dm', 'Chuyển tiền', undefined, Wallet, CLR.gray, PRE_LEFT, ROW2Y, nav('quy'))}
+              {renderNode('quy_dm', 'Chuyển tiền', undefined, Wallet, CLR.gray, PRE_LEFT, ROW2Y, nav('chuyenTien'))}
               {renderNode(
                 'thuchitien',
                 'Thu/chi tiền',
@@ -285,8 +286,8 @@ export function QuyTrinhTaiChinh() {
               )}
               {renderNode(
                 'sochitiet',
-                'Sổ chi tiết',
-                'tiền mặt',
+                'Sổ tiền mặt',
+                undefined,
                 BookMarked,
                 CLR.amber,
                 COL_SO,
@@ -295,8 +296,8 @@ export function QuyTrinhTaiChinh() {
               )}
               {renderNode(
                 'sotienguinh',
-                'Sổ chi tiết tài khoản',
-                'ngân hàng',
+                'Sổ ngân hàng',
+                undefined,
                 Building2,
                 CLR.teal,
                 COL_SO,
@@ -398,7 +399,8 @@ export function QuyTrinhTaiChinh() {
           { id: 'khachHang' as ModuleId, label: 'Khách hàng', Icon: Users, color: CLR.blue },
           { id: 'nhaCungCap' as ModuleId, label: 'Nhà cung cấp', Icon: Briefcase, color: CLR.orange },
           { id: 'tienLuong' as ModuleId, label: 'Nhân viên', Icon: UserCog, color: CLR.green },
-          { id: 'taiKhoanNganHang' as ModuleId, label: 'Tài khoản ngân hàng', Icon: Landmark, color: CLR.teal },
+          { id: 'taiKhoan' as ModuleId, label: 'Tài khoản', Icon: Landmark, color: CLR.teal },
+          { id: 'loaiThuChi' as ModuleId, label: 'Loại thu/chi', Icon: Tags, color: CLR.purple },
           { id: 'tyGiaXuatQuy' as ModuleId, label: 'Tính tỷ giá xuất quỹ', Icon: TableProperties, color: CLR.gray },
         ].map(({ id, label, Icon, color }) => (
           <button

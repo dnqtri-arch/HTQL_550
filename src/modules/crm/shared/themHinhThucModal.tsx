@@ -6,11 +6,12 @@ import { formFooterButtonCancel, formFooterButtonSave } from '../../../constants
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 4000,
+  pointerEvents: 'none',
 }
 
 const box: React.CSSProperties = {
@@ -20,6 +21,7 @@ const box: React.CSSProperties = {
   minWidth: 320,
   maxWidth: '90vw',
   boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -80,7 +82,6 @@ export interface ThemHinhThucModalProps {
 }
 
 export function ThemHinhThucModal({ onClose, onSave, initialData }: ThemHinhThucModalProps) {
-  const overlayMouseDownRef = useRef(false)
   const isEditMode = !!initialData
   const [ma, setMa] = useState('')
   const [ten, setTen] = useState('')
@@ -131,12 +132,8 @@ export function ThemHinhThucModal({ onClose, onSave, initialData }: ThemHinhThuc
   }
 
   return (
-    <div
-      style={overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
-    >
-      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+    <div style={overlay}>
+      <div style={box}>
         <div style={headerStyle}>
           <span>{isEditMode ? 'Sửa hình thức' : 'Thêm mới hình thức'}</span>
           <button type="button" onClick={onClose} style={{ padding: 2, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex' }} aria-label="Đóng">

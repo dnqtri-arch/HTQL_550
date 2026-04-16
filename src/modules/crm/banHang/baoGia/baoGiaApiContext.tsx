@@ -15,7 +15,7 @@ export interface BaoGiaApi {
   getDefaultFilter: () => BaoGiaFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: BaoGiaKyValue; label: string }[]
-  post: (payload: BaoGiaCreatePayload) => BaoGiaRecord
+  post: (payload: BaoGiaCreatePayload) => Promise<BaoGiaRecord>
   put: (baoGiaId: string, payload: BaoGiaCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => BaoGiaDraftLine[] | null

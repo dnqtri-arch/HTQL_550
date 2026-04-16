@@ -6,6 +6,9 @@ export const HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT = 'htql-nvthh-sync-dhm-tinh-tr
 /** ĐHM cần làm mới danh sách (sau xóa phiếu NVTHH / đồng bộ tình trạng). */
 export const HTQL_DHM_LIST_REFRESH_EVENT = 'htql-dhm-list-refresh'
 
+/** Hợp đồng mua — làm mới danh sách khi máy khác ghi KV. */
+export const HTQL_HOP_DONG_MUA_LIST_REFRESH_EVENT = 'htql-hop-dong-mua-list-refresh'
+
 /** Chuyển tab phân hệ Mua hàng — `CustomEvent` với `detail` là id tab (chuỗi) hoặc object có `tab` + tùy chọn prefill. */
 export const HTQL_MUA_HANG_TAB_EVENT = 'htql-mua-hang-tab'
 

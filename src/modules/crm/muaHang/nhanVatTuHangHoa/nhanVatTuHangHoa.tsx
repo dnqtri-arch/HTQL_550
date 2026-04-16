@@ -77,6 +77,7 @@ import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
 import { exportCsv } from '../../../../utils/exportCsv'
 import styles from './NhanVatTuHangHoa.module.css'
+import { HTQL_DHM_LIST_REFRESH_EVENT } from '../muaHangTabEvent'
 import {
   MuaHangXoaModalBody,
   MUA_HANG_MODAL_FOOTER_HUY,
@@ -428,6 +429,15 @@ function NhanVatTuHangHoaContent({
   useEffect(() => {
     setDanhSach(api.getAll(filter))
   }, [filter, api])
+
+  useEffect(() => {
+    const refresh = () => {
+      setDanhSach(api.getAll(filter))
+      if (selectedId) setChiTiet(api.getChiTiet(selectedId))
+    }
+    window.addEventListener(HTQL_DHM_LIST_REFRESH_EVENT, refresh)
+    return () => window.removeEventListener(HTQL_DHM_LIST_REFRESH_EVENT, refresh)
+  }, [api, filter, selectedId])
 
   useEffect(() => {
     if (selectedId) setChiTiet(api.getChiTiet(selectedId))
@@ -1295,12 +1305,7 @@ function NhanVatTuHangHoaContent({
       </Modal>
 
       {dhmXemModal != null && (
-        <div
-          className={styles.modalOverlay}
-          style={{ zIndex: 3500 }}
-          onClick={() => setDhmXemModal(null)}
-          role="presentation"
-        >
+        <div className={styles.modalOverlay} style={{ zIndex: 3500 }} role="presentation">
           <div
             className={styles.modalBox}
             style={{
@@ -1311,7 +1316,6 @@ function NhanVatTuHangHoaContent({
               display: 'flex',
               flexDirection: 'column',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <DonHangMuaApiProvider api={API_DHM_XEM}>
               <DonHangMuaForm
@@ -1353,10 +1357,8 @@ function NhanVatTuHangHoaContent({
 
       {/* ─── Task 4: Modal xác nhận Nhập hàng ────────────────── */}
       {modalNhapHang && selectedRow && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 /* Task 11 */ }}
-          onClick={() => setModalNhapHang(false)}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)', borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', width: 'min(420px, 94vw)', padding: '18px 20px' }}
-            onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000, pointerEvents: 'none' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)', borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', width: 'min(420px, 94vw)', padding: '18px 20px', pointerEvents: 'auto' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>Xác nhận Nhập hàng</div>
             <p style={{ margin: '0 0 14px', fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)' }}>
               Phiếu <strong>{selectedRow.so_don_hang}</strong>
@@ -1383,10 +1385,8 @@ function NhanVatTuHangHoaContent({
 
       {/* ─── Task 5: Modal Hủy nhập — bắt buộc lý do ─────────── */}
       {modalHuyNhap.open && selectedRow && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 /* Task 11 */ }}
-          onClick={() => setModalHuyNhap({ open: false, lydo: '' })}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)', borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', width: 'min(460px, 94vw)', padding: '18px 20px' }}
-            onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000, pointerEvents: 'none' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-strong)', borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', width: 'min(460px, 94vw)', padding: '18px 20px', pointerEvents: 'auto' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#B71C1C', marginBottom: 10 }}>Hủy nhập hàng</div>
             <p style={{ margin: '0 0 10px', fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)' }}>
               Phiếu <strong>{selectedRow.so_don_hang}</strong> sẽ bị đặt thành <strong style={{ color: '#B71C1C' }}>Hủy nhập kho</strong> và trừ khỏi Tồn kho.

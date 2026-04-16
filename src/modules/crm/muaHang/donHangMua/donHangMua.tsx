@@ -441,14 +441,6 @@ function DonHangMuaContent() {
   const thaoTacSubmenuOnLeft = contextMenu.open && (contextMenu.x + 180 + 2 + 180) > (typeof window !== 'undefined' ? window.innerWidth - 16 : 9999)
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showForm) setShowForm(false)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [showForm])
-
-  useEffect(() => {
     if (showForm) {
       setModalPosition(null)
       setFormMinimized(false)

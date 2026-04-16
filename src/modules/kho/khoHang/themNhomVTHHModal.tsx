@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { X } from 'lucide-react'
 import type { NhomVTHHItem } from './nhomVTHHLookupModal'
 import { useDraggable } from '../../../hooks/useDraggable'
@@ -117,7 +117,6 @@ export function ThemNhomVTHHModal({
   onSaveAndAdd,
   parentOptions = [],
 }: ThemNhomVTHHModalProps) {
-  const overlayMouseDownRef = useRef(false)
   const { containerRef, containerStyle, dragHandleProps } = useDraggable()
   const [ten, setTen] = useState('')
   const [thuoc, setThuoc] = useState('')
@@ -145,12 +144,8 @@ export function ThemNhomVTHHModal({
   }
 
   return (
-    <div
-      style={overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
-    >
-      <div ref={containerRef} style={{ ...box, ...containerStyle }} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+    <div style={overlay}>
+      <div ref={containerRef} style={{ ...box, ...containerStyle }}>
         <div style={{ ...headerStyle, ...dragHandleProps.style }} onMouseDown={dragHandleProps.onMouseDown}>
           <span>Thêm nhóm Vật tư, hàng hóa</span>
           <button

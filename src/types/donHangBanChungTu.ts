@@ -9,6 +9,8 @@ export interface DonHangBanChungTuAttachmentItem {
   virtual_path?: string
   /** Dung lượng file gốc (byte) khi đính kèm — hiển thị chính xác khi data URL quá lớn / không ước lượng tốt. */
   kich_thuoc_byte?: number
+  server_kind?: 'thiet_ke' | 'chung_tu'
+  server_relative_path?: string
 }
 
 export interface DonHangBanChungTuRecord {

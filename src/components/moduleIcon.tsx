@@ -35,6 +35,8 @@ import {
   BookMarked,
   TableProperties,
   Building2,
+  Tags,
+  Server,
   LucideIcon,
 } from 'lucide-react'
 
@@ -75,6 +77,8 @@ const iconMap: Record<string, LucideIcon> = {
   BookMarked,
   TableProperties,
   Building2,
+  Tags,
+  Server,
 }
 
 export function getModuleIcon(iconName: string): LucideIcon {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { X, Check, Ban, Search } from 'lucide-react'
 import type { NhaCungCapRecord } from '../muaHang/nhaCungCap/nhaCungCapApi'
 import { nhaCungCapGetAll } from '../muaHang/nhaCungCap/nhaCungCapApi'
@@ -14,11 +14,12 @@ interface ChonKhachHangNccModalProps {
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 4000,
+  pointerEvents: 'none',
 }
 
 const box: React.CSSProperties = {
@@ -33,6 +34,7 @@ const box: React.CSSProperties = {
   flexDirection: 'column',
   boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
   overflow: 'hidden',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -114,8 +116,6 @@ export function ChonKhachHangNccModal({
   const [filterDiaChi, setFilterDiaChi] = useState('')
   const [filterMST, setFilterMST] = useState('')
   const [filterDT, setFilterDT] = useState('')
-  const overlayMouseDownRef = useRef(false)
-
   useEffect(() => {
     let cancelled = false
     nhaCungCapGetAll().then((data) => {
@@ -160,12 +160,8 @@ export function ChonKhachHangNccModal({
   }
 
   return (
-    <div
-      style={overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
-    >
-      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+    <div style={overlay}>
+      <div style={box}>
         <div style={headerStyle}>
           <span>{title}</span>
           <button type="button" onClick={onClose} style={{ padding: 2, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex' }} aria-label="Đóng">

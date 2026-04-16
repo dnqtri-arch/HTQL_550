@@ -1,9 +1,10 @@
 /**
  * Danh mục Điều khoản thanh toán dùng chung — hiển thị trong context Bán hàng.
- * Dữ liệu độc lập với module Mua hàng (localStorage key riêng).
+ * Dữ liệu độc lập với module Mua hàng (htqlEntityStorage key riêng).
  */
 
 import { useState, useEffect } from 'react'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
 import { useToastOptional } from '../../../../context/toastContext'
@@ -21,7 +22,7 @@ const STORAGE_KEY = 'htql_dieu_khoan_tt_ban_hang'
 
 function loadDieuKhoan(): DieuKhoanRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw) as DieuKhoanRecord[]
   } catch { /* ignore */ }
   return [
@@ -32,7 +33,7 @@ function loadDieuKhoan(): DieuKhoanRecord[] {
 }
 
 function saveDieuKhoan(list: DieuKhoanRecord[]): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch { /* ignore */ }
+  try { htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch { /* ignore */ }
 }
 
 const columns: DataGridColumn<DieuKhoanRecord>[] = [
@@ -163,14 +164,28 @@ export function DieuKhoanThanhToanBanHangView({ onQuayLai }: Props) {
       </div>
 
       {showForm && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000,
-        }} onClick={() => setShowForm(false)}>
-          <div style={{
-            background: 'var(--bg-primary)', borderRadius: 8, padding: 20,
-            width: 440, boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
-          }} onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--bg-primary)',
+              borderRadius: 8,
+              padding: 20,
+              width: 440,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
+              pointerEvents: 'auto',
+            }}
+          >
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14 }}>
               {editId ? 'Sửa' : 'Thêm'} Điều khoản thanh toán
             </div>

@@ -13,6 +13,20 @@ import { VatTuHangHoaFormTabNgamDinh, LabelCell } from './vatTuHangHoaFormTabNga
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../../constants/formFooterButtons'
 import { lookupActionButtonStyle } from '../../../constants/lookupControlStyles'
 import './VatTuHangHoaForm.css'
+import { htqlCanUploadToServer, htqlDeleteFileOnServer, htqlFileDownloadUrl, htqlUploadFileToServer } from '../../../utils/htqlServerFileUpload'
+import { htqlPathPartAscii } from '../../../utils/htqlPathPartAscii'
+
+/** Ảnh đã upload API — lưu `htql-vthh:` + relativePath (GET /api/htql-files?kind=vthh_hinh). */
+const HTQL_VTHH_HINH_PREFIX = 'htql-vthh:'
+
+function vthhImageDisplayUrl(stored: string | undefined | null): string {
+  if (!stored) return ''
+  if (stored.startsWith('data:')) return stored
+  if (stored.startsWith(HTQL_VTHH_HINH_PREFIX)) {
+    return htqlFileDownloadUrl('vthh_hinh', stored.slice(HTQL_VTHH_HINH_PREFIX.length))
+  }
+  return stored
+}
 
 export type FormValues = {
   ma_vthh: string
@@ -124,6 +138,20 @@ function generateMoTaQuyDoi(opts: {
     return `1 ${dvtQuyDoiDisplay} = ${tiLe} ${dvtChinhDisplay}`
   }
   return `1 ${dvtChinhDisplay} = ${tiLe} ${dvtQuyDoiDisplay}`
+}
+
+/** Nối hậu tố kích thước (mD / mR) vào tên trước khi chuẩn hóa tên file — đồng bộ với diễn giải mua/bán. */
+function kichThuocSuffixForFileName(md: string, mr: string): string {
+  const mdT = (md ?? '').trim()
+  const mrT = (mr ?? '').trim()
+  if (mdT) return ` ${mdT}m`
+  if (mrT) return ` ${mrT}m`
+  return ''
+}
+
+function tenVthhImageBaseNameFromParts(ten: string, md: string, mr: string): string {
+  const base = `${(ten ?? '').trim()}${kichThuocSuffixForFileName(md, mr)}`
+  return tenVatTuToFileName(base)
 }
 
 /** Chuyển chuỗi tiếng Việt thành không dấu, viết liền (không khoảng trắng) để dùng làm tên file. */
@@ -546,8 +574,16 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const nvlDropdownRef = useRef<HTMLDivElement>(null)
   const nvlOptions = useMemo(() => (vatTuList ?? []).filter((r) => r.tinh_chat === 'Vật tư' || r.tinh_chat === 'Vật tư hàng hóa'), [vatTuList])
 
-  /** Khi sửa bản ghi có VT cấp cha: checkbox VT cấp cha phải luôn tick và không cho bỏ (disabled); vẫn cho phép chỉnh sửa mọi trường khác và được phép lưu */
-  const vtChinhLocked = mode === 'edit' && initialData?.vt_chinh === true
+  /** Khóa bỏ tick «VT cấp cha» chỉ khi đã có VTHH con trỏ về mã này — còn không thì cho bỏ tick / chỉnh sửa bình thường. */
+  const coVtConThuocCha = useMemo(() => {
+    if (mode !== 'edit' || !initialData?.vt_chinh) return false
+    const maCha = (initialData.ma ?? '').trim()
+    if (!maCha) return false
+    return (vatTuList ?? []).some(
+      (r) => r.id !== initialData.id && (r.ma_vthh_cap_cha ?? '').trim() === maCha,
+    )
+  }, [mode, initialData?.id, initialData?.vt_chinh, initialData?.ma, vatTuList])
+  const vtChinhLocked = mode === 'edit' && initialData?.vt_chinh === true && coVtConThuocCha
   const inputMaRef = useRef<HTMLInputElement>(null)
   const inputTenRef = useRef<HTMLInputElement>(null)
   const khoNgamDinhRef = useRef<HTMLDivElement>(null)
@@ -982,9 +1018,24 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     setImageUploading(true)
     try {
       const dataUrl = await resizeImageToFit(file)
-      setValue('duong_dan_hinh_anh', dataUrl)
       const ext = getImageExtension(file) ?? 'jpg'
-      const tenFile = tenVatTuToFileName(getValues('ten_vthh')) + '.' + ext
+      const tenFile =
+        tenVthhImageBaseNameFromParts(
+          String(getValues('ten_vthh') ?? ''),
+          String(getValues('kich_thuoc_md') ?? ''),
+          String(getValues('kich_thuoc_mr') ?? '')
+        ) +
+        '.' +
+        ext
+      if (htqlCanUploadToServer()) {
+        const blob = await (await fetch(dataUrl)).blob()
+        const maRaw = (getValues('ma_vthh') ?? '').trim() || `moi_${Date.now()}`
+        const dir = htqlPathPartAscii(maRaw) || 'chua_co_ma'
+        const up = await htqlUploadFileToServer(blob, { kind: 'vthh_hinh', relativeDir: dir, filename: tenFile })
+        setValue('duong_dan_hinh_anh', `${HTQL_VTHH_HINH_PREFIX}${up.relativePath}`)
+      } else {
+        setValue('duong_dan_hinh_anh', dataUrl)
+      }
       setValue('ten_file_hinh_anh', tenFile)
     } catch (e) {
       setImageUploadError(e instanceof Error ? e.message : 'Lỗi xử lý ảnh')
@@ -1061,12 +1112,14 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const watchedTenVthh = watch('ten_vthh')
   const watchedTenFile = watch('ten_file_hinh_anh')
   const watchedHinhAnh = watch('duong_dan_hinh_anh')
+  const watchedKichMdImg = watch('kich_thuoc_md')
+  const watchedKichMrImg = watch('kich_thuoc_mr')
   useEffect(() => {
     if (!watchedHinhAnh || !watchedTenFile) return
     const ext = watchedTenFile.includes('.') ? watchedTenFile.slice(watchedTenFile.lastIndexOf('.') + 1) : 'jpg'
-    const newTenFile = tenVatTuToFileName(watchedTenVthh) + '.' + ext
+    const newTenFile = tenVthhImageBaseNameFromParts(watchedTenVthh ?? '', watchedKichMdImg ?? '', watchedKichMrImg ?? '') + '.' + ext
     if (newTenFile !== watchedTenFile) setValue('ten_file_hinh_anh', newTenFile)
-  }, [watchedTenVthh, watchedHinhAnh, watchedTenFile, setValue])
+  }, [watchedTenVthh, watchedKichMdImg, watchedKichMrImg, watchedHinhAnh, watchedTenFile, setValue])
 
   /* Diễn giải khi mua và Diễn giải khi bán lấy nội dung từ Tên (bao gồm phần kích thước phía sau) */
   const watchedKichThuocMd = watch('kich_thuoc_md')
@@ -2549,7 +2602,7 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       ) : imagePreview ? (
                         <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 100, maxWidth: 140, maxHeight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <img
-                            src={imagePreview}
+                            src={vthhImageDisplayUrl(imagePreview)}
                             alt="Preview"
                             style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                             onLoad={(e) => {
@@ -2567,7 +2620,21 @@ const kichThuocSuffix = (md: string, mr: string) => {
                           />
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setValue('duong_dan_hinh_anh', ''); setValue('ten_file_hinh_anh', ''); }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void (async () => {
+                                const prev = (getValues('duong_dan_hinh_anh') ?? '').trim()
+                                if (prev.startsWith(HTQL_VTHH_HINH_PREFIX) && htqlCanUploadToServer()) {
+                                  try {
+                                    await htqlDeleteFileOnServer('vthh_hinh', prev.slice(HTQL_VTHH_HINH_PREFIX.length))
+                                  } catch {
+                                    /* vẫn gỡ khỏi form */
+                                  }
+                                }
+                                setValue('duong_dan_hinh_anh', '')
+                                setValue('ten_file_hinh_anh', '')
+                              })()
+                            }}
                             style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 4, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
                             title="Xóa ảnh"
                           >
@@ -2583,11 +2650,11 @@ const kichThuocSuffix = (md: string, mr: string) => {
                       )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10, color: 'var(--text-muted)', minWidth: 0, flex: 1 }}>
-                      <div><span style={{ color: 'var(--text-primary)' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Ảnh nhúng (Base64)' : (watch('ten_file_hinh_anh') || imagePreview.split(/[/\\]/).pop() || '—')) : '—'}</span></div>
+                      <div><span style={{ color: 'var(--text-primary)' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Ảnh nhúng (Base64)' : imagePreview.startsWith(HTQL_VTHH_HINH_PREFIX) ? 'Ảnh trên máy chủ (vthh)' : (watch('ten_file_hinh_anh') || imagePreview.split(/[/\\]/).pop() || '—')) : '—'}</span></div>
                       <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta ? `${imageMeta.width}×${imageMeta.height}` : '—'}</span></div>
                       <div><span style={{ color: 'var(--text-primary)' }}>{imageMeta && imageMeta.sizeMB > 0 ? `${imageMeta.sizeMB.toFixed(2)} MB` : '—'}</span></div>
                       <div style={{ minWidth: 0 }}>
-                        <span style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Base64' : (imagePreview.split(/[/\\]/).pop() ?? '—')) : '—'}</span>
+                        <span style={{ color: 'var(--text-primary)', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{imagePreview ? (imagePreview.startsWith('data:') ? 'Base64' : imagePreview.startsWith(HTQL_VTHH_HINH_PREFIX) ? `SSD …/vthh/${imagePreview.slice(HTQL_VTHH_HINH_PREFIX.length)}` : (imagePreview.split(/[/\\]/).pop() ?? '—')) : '—'}</span>
                       </div>
                     </div>
                     </div>

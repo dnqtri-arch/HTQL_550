@@ -5,6 +5,8 @@
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import type { NhanVatTuHangHoaAttachmentItem } from './nhanVatTuHangHoaAttachmentTypes'
 import { TINH_TRANG_DON_HANG_MUA_DA_NHAN_HANG, donHangMuaSetTinhTrang } from '../donHangMua/donHangMuaApi'
 import { HTQL_DHM_LIST_REFRESH_EVENT } from '../muaHangTabEvent'
@@ -339,7 +341,7 @@ function migrateParsedDonChi(
 
 function loadFromStorage(): { don: NhanVatTuHangHoaRecord[]; chiTiet: NhanVatTuHangHoaChiTiet[] } {
   try {
-    const ls = typeof localStorage !== 'undefined' ? localStorage : null
+    const ls = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage : null
     if (!ls) throw new Error('no storage')
     const parsePair = (rawDon: string | null, rawCt: string | null) => {
       if (!rawDon || !rawCt) return null
@@ -370,9 +372,9 @@ function loadFromStorage(): { don: NhanVatTuHangHoaRecord[]; chiTiet: NhanVatTuH
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_donList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_donList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch {
     /* ignore */
@@ -383,7 +385,7 @@ export type NhanVatTuHangHoaDraftLine = Record<string, string> & { _dvtOptions?:
 
 export function getNhanVatTuHangHoaDraft(): NhanVatTuHangHoaDraftLine[] | null {
   try {
-    const ls = typeof localStorage !== 'undefined' ? localStorage : null
+    const ls = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage : null
     if (!ls) return null
     const raw = ls.getItem(STORAGE_KEY_DRAFT) ?? ls.getItem(LEGACY_STORAGE_KEY_DRAFT)
     if (!raw) return null
@@ -396,15 +398,15 @@ export function getNhanVatTuHangHoaDraft(): NhanVatTuHangHoaDraftLine[] | null {
 
 export function setNhanVatTuHangHoaDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof htqlEntityStorage !== 'undefined') {
       const toSave = lines.map((l) => {
         const { _vthh, ...rest } = l
         return rest
       })
-      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+      htqlEntityStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
     }
   } catch {
     /* ignore */
@@ -413,9 +415,9 @@ export function setNhanVatTuHangHoaDraft(lines: Array<Record<string, string> & {
 
 export function clearNhanVatTuHangHoaDraft(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY_DRAFT)
-      localStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.removeItem(STORAGE_KEY_DRAFT)
+      htqlEntityStorage.removeItem(LEGACY_STORAGE_KEY_DRAFT)
     }
   } catch {
     /* ignore */
@@ -580,13 +582,23 @@ export function nhanVatTuHangHoaDelete(donId: string): void {
   }
 }
 
-export function nhanVatTuHangHoaPost(payload: NhanVatTuHangHoaCreatePayload): NhanVatTuHangHoaRecord {
+export async function nhanVatTuHangHoaPost(
+  payload: NhanVatTuHangHoaCreatePayload,
+): Promise<NhanVatTuHangHoaRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _donList.map((d) => d.so_don_hang))
+  const soDon = await allocateMaHeThongFromServer({
+    seqKey: 'NVTHH',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `nvthh${Date.now()}`
   const don: NhanVatTuHangHoaRecord = {
     id,
     tinh_trang: payload.tinh_trang,
     ngay_don_hang: payload.ngay_don_hang,
-    so_don_hang: payload.so_don_hang,
+    so_don_hang: soDon,
     ngay_giao_hang: payload.ngay_giao_hang,
     nha_cung_cap: payload.nha_cung_cap,
     dia_chi: payload.dia_chi ?? '',

@@ -345,9 +345,9 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
 
   useEffect(() => {
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('htql_hop_dong_ban_from_baogia') : null
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('htql_hop_dong_ban_from_baogia') : null
       if (!raw) return
-      localStorage.removeItem('htql_hop_dong_ban_from_baogia')
+      sessionStorage.removeItem('htql_hop_dong_ban_from_baogia')
       const d = JSON.parse(raw) as { bao_gia_id?: string }
       if (!d?.bao_gia_id) return
       const bg = baoGiaGetAll(getDefaultBaoGiaFilter()).find((r) => r.id === d.bao_gia_id)
@@ -970,7 +970,7 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       )}
 
       {showPhuLucModal && phuLucPrefill && (
-        <div className={styles.modalOverlay} onClick={() => { setShowPhuLucModal(false); setPhuLucPrefill(null) }}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}
@@ -997,7 +997,7 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
       )}
 
       {showForm && (
-        <div className={styles.modalOverlay} onClick={() => { resetFormPrefill(); setShowForm(false) }}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modalBoxLarge}
             style={{ height: '90vh', width: 'min(99vw, 1580px)', maxWidth: 'min(99vw, 1580px)' }}

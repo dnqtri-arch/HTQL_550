@@ -3,10 +3,12 @@
  * Mã: {Năm}/BG/{Số} — rule ma-he-thong.mdc
  * 
  * [YC24 Mục 7] Endpoint backend (khi có): /api/sales/quotes
- * Hiện tại: localStorage-based (tách biệt khỏi /api/purchase/orders)
+ * Hiện tại: htqlEntityStorage-based (tách biệt khỏi /api/purchase/orders)
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { formatSoTienHienThi, parseFloatVN } from '../../../utils/numberFormat'
 import { donHangBanGetAll } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
 import type {
@@ -35,6 +37,8 @@ export type {
 
 /** Alias tương thích — cùng nghĩa với ChiTienBangKyValue. */
 export type KyValue = ChiTienBangKyValue
+
+const MODULE_PREFIX = 'PC'
 
 /** Dữ liệu mẫu báo giá */
 const MOCK_DON: ChiTienBangRecord[] = [
@@ -187,13 +191,15 @@ function normalizeChiTienBang(d: Partial<ChiTienBangRecord> & { id: string; de_x
     ly_do_chi_phieu: d.ly_do_chi_phieu ?? undefined,
     chi_tien_mat: typeof d.chi_tien_mat === 'boolean' ? d.chi_tien_mat : undefined,
     chi_qua_ngan_hang: typeof d.chi_qua_ngan_hang === 'boolean' ? d.chi_qua_ngan_hang : undefined,
+    ngay_hach_toan: d.ngay_hach_toan,
+    phieu_tai_khoan_id: d.phieu_tai_khoan_id?.trim() || undefined,
   }
 }
 
 function loadFromStorage(): { ChiTienBang: ChiTienBangRecord[]; chiTiet: ChiTienBangChiTiet[] } {
   try {
-    const rawChiTienBang = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_THU_TIEN_BANG) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawChiTienBang = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_THU_TIEN_BANG) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const ChiTienBang = rawChiTienBang ? JSON.parse(rawChiTienBang) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(ChiTienBang) && Array.isArray(chiTiet)) {
@@ -207,9 +213,9 @@ function loadFromStorage(): { ChiTienBang: ChiTienBangRecord[]; chiTiet: ChiTien
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_THU_TIEN_BANG, JSON.stringify(_ChiTienBangList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_THU_TIEN_BANG, JSON.stringify(_ChiTienBangList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch {
     /* ignore */
@@ -221,7 +227,7 @@ const STORAGE_KEY_DRAFT = 'htql_chi_tien_bang_draft'
 
 export function getChiTienBangDraft(): ChiTienBangDraftLine[] | null {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT) : null
+    const raw = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_DRAFT) : null
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : null
@@ -232,12 +238,12 @@ export function getChiTienBangDraft(): ChiTienBangDraftLine[] | null {
 
 export function setChiTienBangDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof htqlEntityStorage !== 'undefined') {
       const toSave = lines.map((l) => {
         const { _vthh, ...rest } = l
         return rest
       })
-      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
+      htqlEntityStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
     }
   } catch {
     /* ignore */
@@ -246,16 +252,22 @@ export function setChiTienBangDraft(lines: Array<Record<string, string> & { _dvt
 
 export function clearChiTienBangDraft(): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY_DRAFT)
+    if (typeof htqlEntityStorage !== 'undefined') htqlEntityStorage.removeItem(STORAGE_KEY_DRAFT)
   } catch {
     /* ignore */
   }
 }
 
-/** Bản sao có thể xóa; khởi tạo từ localStorage (nếu có) hoặc dữ liệu mẫu */
+/** Bản sao có thể xóa; khởi tạo từ htqlEntityStorage (nếu có) hoặc dữ liệu mẫu */
 const _initial = loadFromStorage()
 let _ChiTienBangList: ChiTienBangRecord[] = _initial.ChiTienBang
 let _chiTietList: ChiTienBangChiTiet[] = _initial.chiTiet
+
+export function chiTienBangReloadFromStorage(): void {
+  const { ChiTienBang, chiTiet } = loadFromStorage()
+  _ChiTienBangList = ChiTienBang
+  _chiTietList = chiTiet
+}
 
 /** Lấy từ/đến theo kỳ: "tat-ca" | "tuan-nay" | "thang-nay" | "quy-nay" | "nam-nay" */
 export function getDateRangeForKy(ky: string): { tu: string; den: string } {
@@ -460,6 +472,7 @@ export function chiTienBangBuildCreatePayloadFromRecord(row: ChiTienBangRecord, 
     chi_tien_mat: row.chi_tien_mat,
     chi_qua_ngan_hang: row.chi_qua_ngan_hang,
     ngay_hach_toan: row.ngay_hach_toan,
+    phieu_tai_khoan_id: row.phieu_tai_khoan_id,
     chiTiet: ct.map((c) => ({
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
@@ -630,7 +643,15 @@ export function chiTienBangDelete(chiTienBangId: string): void {
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
-export function chiTienBangPost(payload: ChiTienBangCreatePayload): ChiTienBangRecord {
+export async function chiTienBangPost(payload: ChiTienBangCreatePayload): Promise<ChiTienBangRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _ChiTienBangList.map((d) => d.so_chi_tien_bang))
+  const soCt = await allocateMaHeThongFromServer({
+    seqKey: 'PC',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `bg${Date.now()}`
   const ChiTienBangRow: ChiTienBangRecord = {
     id,
@@ -639,7 +660,7 @@ export function chiTienBangPost(payload: ChiTienBangCreatePayload): ChiTienBangR
     so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_chi_tien_bang: payload.ngay_chi_tien_bang,
-    so_chi_tien_bang: payload.so_chi_tien_bang,
+    so_chi_tien_bang: soCt,
     ngay_giao_hang: payload.ngay_giao_hang,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
@@ -691,6 +712,7 @@ export function chiTienBangPost(payload: ChiTienBangCreatePayload): ChiTienBangR
     chi_tien_mat: payload.chi_tien_mat,
     chi_qua_ngan_hang: payload.chi_qua_ngan_hang,
     ngay_hach_toan: payload.ngay_hach_toan,
+    phieu_tai_khoan_id: payload.phieu_tai_khoan_id?.trim() || undefined,
   }
   _ChiTienBangList.push(ChiTienBangRow)
   payload.chiTiet.forEach((c, i) => {
@@ -718,6 +740,9 @@ export function chiTienBangPost(payload: ChiTienBangCreatePayload): ChiTienBangR
     })
   })
   saveToStorage()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_CHI_TIEN_BANG_RELOAD_EVENT))
+  }
   return ChiTienBangRow
 }
 
@@ -784,6 +809,7 @@ export function chiTienBangPut(chiTienBangId: string, payload: ChiTienBangCreate
     chi_tien_mat: payload.chi_tien_mat,
     chi_qua_ngan_hang: payload.chi_qua_ngan_hang,
     ngay_hach_toan: payload.ngay_hach_toan,
+    phieu_tai_khoan_id: payload.phieu_tai_khoan_id?.trim() || undefined,
   }
   _chiTietList = _chiTietList.filter((c) => c.chi_tien_bang_id !== chiTienBangId)
   payload.chiTiet.forEach((c, i) => {
@@ -811,6 +837,9 @@ export function chiTienBangPut(chiTienBangId: string, payload: ChiTienBangCreate
     })
   })
   saveToStorage()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_CHI_TIEN_BANG_RELOAD_EVENT))
+  }
 }
 
 export function getDefaultChiTienBangFilter(): ChiTienBangFilter {
@@ -818,8 +847,6 @@ export function getDefaultChiTienBangFilter(): ChiTienBangFilter {
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
-
-const MODULE_PREFIX = 'PC'
 
 /** Trả về số báo giá tiếp theo (2026/BG/1, 2026/BG/2...) — reset mỗi năm. */
 export function chiTienBangSoDonHangTiepTheo(): string {

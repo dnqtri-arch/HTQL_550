@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"node server/donViTinhServer.js\" \"vite\"",
+    "dev:remote": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "wipe-data": "node server/scripts/wipeAllHtqlData.mjs"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.99.0",
+    "axios": "^1.14.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "lucide-react": "^0.460.0",

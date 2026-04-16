@@ -2,6 +2,8 @@
  * Ghi sổ từ phiếu chi — lưu local riêng khỏi phiếu thu (YC88).
  */
 import type { ChiTienBangRecord } from '../../../types/chiTienBang'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
+import { dispatchTaiChinhGhiSoReload } from '../thuTien/ghiSoTaiChinhApi'
 
 const KEY_CHI_GHI_SO = 'htql550_chi_tien_bang_ghi_so'
 const KEY_SO_TM_CHI = 'htql550_chi_tien_so_chi_tiet_tien_mat'
@@ -33,8 +35,8 @@ export type SoChiTietChiGhiSoEntry = {
 
 function readJson<T>(key: string, fallback: T): T {
   try {
-    if (typeof localStorage === 'undefined') return fallback
-    const raw = localStorage.getItem(key)
+    if (typeof htqlEntityStorage === 'undefined') return fallback
+    const raw = htqlEntityStorage.getItem(key)
     if (!raw) return fallback
     const p = JSON.parse(raw) as unknown
     return Array.isArray(p) ? (p as T) : fallback
@@ -45,7 +47,7 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson(key: string, data: unknown): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(data))
+    if (typeof htqlEntityStorage !== 'undefined') htqlEntityStorage.setItem(key, JSON.stringify(data))
   } catch {
     /* ignore */
   }
@@ -118,6 +120,7 @@ export function huyGhiSoPhieuChi(phieuChiId: string): void {
     KEY_SO_NH_CHI,
     soChiTietTaiKhoanNhChiGhiSoGetAll().filter((e) => e.phieu_chi_id !== phieuChiId),
   )
+  dispatchTaiChinhGhiSoReload()
 }
 
 export function daGhiSoPhieuChi(phieuChiId: string): boolean {

@@ -1,0 +1,47 @@
+---
+description: Đồng bộ HTTP desktop EXE/DMG — system_version, ETag bundle, delta, đo & phát hành
+alwaysApply: false
+---
+
+# Đồng bộ desktop HTQL (EXE/DMG) — không dựa Chrome disk cache
+
+Áp dụng cho **Electron** (renderer gọi API Node giống production). Web dev (`npm run dev`) chỉ là kênh phụ; đo tải thật nên dùng **bản cài** hoặc Electron packaged.
+
+## Bước 1 — Chuẩn bị & đo
+
+- **Server:** API production (`pm2`, cổng **3001**).
+- **Máy trạm:** cấu hình giống thật (LAN `192.168.x.x:3001`).
+- **Đo kích thước:** `GET /api/htql-kv?prefix=htql`, từng `GET /api/htql-module-bundle/:moduleId`, (nếu có) `GET /api/htql-module-bundle-versions`, `GET /api/htql-sync-state`.
+- **Ghi chép nội bộ:** module nào còn **KV**, module nào **bundle**, module nào **REST/SQL** — tránh tối ưu nhầm chỗ.
+
+## Bước 2 — Global sync pointer (`system_version`)
+
+- **Server:** bảng `htql_system_state` (`singleton='x'`, `system_version` BIGINT). Mỗi lần ghi **KV** (batch PUT) hoặc **module bundle** (PUT): trong transaction MySQL — `system_version + 1` + ghi `htql_sync_log` (scope `kv` / `bundle`). Fallback JSON: `data/htql_system_state.json` + `htql_sync_log.json`.
+- **API:** `GET /api/htql-sync-state` → `{ systemVersion, maxSyncLogId }`.
+- **Client:** `src/utils/htqlSyncStateClient.ts` + `sessionStorage` `htql_local_system_version`. Trong `htqlKvSync.ts`, trước `GET /api/htql-kv` nặng: nếu `local === server` thì **bỏ qua** pull KV. Phản hồi `GET/PUT /api/htql-kv` có `systemVersion` để cập nhật con trỏ.
+- **Kiểm thử:** hai máy trạm cùng server — sửa ở A, B chỉ tải nặng khi `system_version` tăng.
+
+## Bước 3 — ETag + 304 (bundle)
+
+- **Server:** `GET /api/htql-module-bundle/:moduleId` — header `ETag: W/"<moduleId>:<version>"`; `If-None-Match` khớp → **304** empty.
+- **Client:** `htqlModuleBundleApi.ts` — lưu ETag trong `sessionStorage`, gửi `If-None-Match`; **304** → `notModified`, không parse JSON / không apply payload.
+
+## Bước 4 — Changelog / delta
+
+- **Server:** `htql_sync_log`; `GET /api/sync/delta?after_id=` (tối đa 5000 dòng); retention: xóa gói cũ khi > ~200k dòng (giữ ~100k gần nhất).
+- **Client:** `src/utils/htqlSyncDeltaClient.ts` — `localStorage` `htql_sync_log_last_id`. **`htqlKvSync.ts`** trong mỗi vòng poll gọi **`fetchHtqlSyncDelta`** (phân trang tới 40 lần × 5000 dòng): scope **kv** → buộc **GET KV đầy đủ** khi cần; scope **bundle** → dispatch **`htql-sync-delta-bundle`** → `htqlModuleBundleSyncPoll` nạp bundle tương ứng. Sau **pull KV** thành công: **`alignLastSyncLogIdFromServer()`** (căn đuôi log với `maxSyncLogId`). Offline lâu / log bị prune: vẫn dựa vào **full KV** + sync-state.
+
+## Bước 5 — Danh mục / chứng từ
+
+- **Danh mục (VTHH, DVT, …):** đồng bộ nền / MySQL + API (fetch-on-demand).
+- **Chứng từ:** danh sách mỏng; chi tiết khi mở dòng — HTTP tới server; form/modal giữ rule HTQL (backdrop, v.v.).
+
+## Bước 6 — Phát hành
+
+- **Server:** deploy route mới → `pm2 restart … --update-env`.
+- **Client:** bump `VERSION_TAG` → `scripts/build-htql-client.ps1` → `phanmem/client` + Tool → `update/client` + manifest.
+- **Tương thích:** `GET /api/htql-meta` có `htqlSyncStateApi: true`. Phiên bản API tối thiểu cho client có sync state / ETag / delta: gói server chứa `server/db/htqlSyncRoutes.js`, `htqlSyncBump.js`, schema `htql_system_state` + `htql_sync_log` (xem `ensureSchema.js`).
+
+## Tóm tắt
+
+Mọi tối ưu nằm ở **HTTP API + logic Electron**; không phụ thuộc cache HTTP ngầm của trình duyệt — ETag và con trỏ `system_version` do **code chủ động** quản lý.

@@ -1,5 +1,5 @@
 /**
- * API Hóa đơn bán — localStorage mock, prefix HDB.
+ * API Hóa đơn bán — htqlEntityStorage mock, prefix HDB.
  * Có thể kế thừa từ Đơn hàng bán hoặc Hợp đồng.
  * Quản lý công nợ: tự động tính so_tien_da_thu và con_lai.
  */
@@ -16,6 +16,8 @@ import type {
 } from '../../../../types/banHang'
 import type { HopDongBanChungTuRecord, HopDongBanChungTuChiTiet } from '../../../../types/hopDongBanChungTu'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 export type { HoaDonBanRecord, HoaDonBanChiTiet, HoaDonBanCreatePayload, BanHangKyValue, PhieuThuKhachHangRecord }
 
@@ -76,9 +78,9 @@ function loadFromStorage(): {
   phieuThu: PhieuThuKhachHangRecord[]
 } {
   try {
-    const rawHd = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_HOA_DON) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
-    const rawPt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_PHIEU_THU) : null
+    const rawHd = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_HOA_DON) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawPt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_PHIEU_THU) : null
     const hoaDon = rawHd ? JSON.parse(rawHd) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     const phieuThu = rawPt ? JSON.parse(rawPt) : null
@@ -103,12 +105,19 @@ function init() {
 }
 init()
 
+export function hoaDonBanReloadFromStorage(): void {
+  const loaded = loadFromStorage()
+  _hoaDonList = loaded.hoaDon
+  _chiTietList = loaded.chiTiet
+  _phieuThuList = loaded.phieuThu
+}
+
 function save() {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_HOA_DON, JSON.stringify(_hoaDonList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
-      localStorage.setItem(STORAGE_KEY_PHIEU_THU, JSON.stringify(_phieuThuList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_HOA_DON, JSON.stringify(_hoaDonList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+      htqlEntityStorage.setItem(STORAGE_KEY_PHIEU_THU, JSON.stringify(_phieuThuList))
     }
   } catch { /* ignore */ }
 }
@@ -203,13 +212,25 @@ function calcTinhTrang(tongThanhToan: number, soTienDaThu: number): HoaDonBanRec
   return 'Thanh toán 1 phần'
 }
 
-export function hoaDonBanPost(payload: HoaDonBanCreatePayload): HoaDonBanRecord {
+export async function hoaDonBanPost(payload: HoaDonBanCreatePayload): Promise<HoaDonBanRecord> {
   init()
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(
+    year,
+    'HDB',
+    _hoaDonList.map((r) => r.so_hoa_don),
+  )
+  const soHoaDon = await allocateMaHeThongFromServer({
+    seqKey: 'HDB_BAN_HD',
+    modulePrefix: 'HDB',
+    hintMaxSerial: hint,
+    year,
+  })
   const id = genId()
   const conLai = payload.tong_thanh_toan - payload.so_tien_da_thu
   const record: HoaDonBanRecord = {
     id,
-    so_hoa_don: payload.so_hoa_don,
+    so_hoa_don: soHoaDon,
     ngay_hoa_don: payload.ngay_hoa_don,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi,

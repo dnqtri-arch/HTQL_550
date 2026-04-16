@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, type SetStateAction } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import ReactDOM from 'react-dom'
 import {
   Plus,
@@ -113,8 +114,12 @@ import {
   demSoLanThuTruocDoChoMa,
   type ChungTuCongNoRow,
 } from './chungTuCongNoKhach'
-import { taiKhoanNganHangGetAll } from '../taiKhoanNganHang/taiKhoanNganHangApi'
-import type { TaiKhoanNganHangRecord } from '../../../types/taiKhoanNganHang'
+import {
+  taiKhoanGetAll,
+  taiKhoanLaTkNganHang,
+  taiKhoanLaTienMat,
+} from '../taiKhoan/taiKhoanApi'
+import type { TaiKhoanRecord } from '../../../types/taiKhoan'
 import { buildDienGiaiPhieuThu } from '../../../utils/dienGiaiPhieuThu'
 import { getCongTyTaiKhoanNganHang } from '../../../utils/congTyTaiKhoanNganHang'
 import { useThuTienBangApi } from './thuTienBangApiContext'
@@ -124,6 +129,14 @@ import { Modal } from '../../../components/common/modal'
 import { useToastOptional } from '../../../context/toastContext'
 import { HTQL_FORM_ERROR_BORDER, htqlFocusAndScrollIntoView } from '../../../utils/formValidationFocus'
 import { preserveTimeWhenCalendarDayChanges } from '../../../utils/reactDatepickerPreserveTime'
+import {
+  loaiThuChiQueryKey,
+  loaiThuChiQueryFn,
+  loaiThuChiLyDoPhieuThuOptions,
+  loaiThuChiChuanHoaLyDoPhieuThu,
+  laLyDoPhieuThuKhachHang,
+  loaiThuChiLyDoPhieuChiOptions,
+} from '../loaiThuChi/loaiThuChiApi'
 import { ThemDieuKhoanThanhToanModal } from '../../crm/shared/themDieuKhoanThanhToanModal'
 import { hinhThucGetAll, type HinhThucRecord } from '../../crm/shared/hinhThucApi'
 import { getBanksVietnam, type BankItem } from '../../crm/shared/banksApi'
@@ -1372,11 +1385,9 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
   const refThuLanNayPhieu0 = useRef<HTMLInputElement | null>(null)
   /** Làm mới danh sách công nợ khi ĐHB/HĐ/thu tiền thay đổi ở module khác. */
   const [chungTuCongNoTick, setChungTuCongNoTick] = useState(0)
-  const [lyDoThuPhieu, setLyDoThuPhieu] = useState<'thu_khach_hang' | 'thu_khac'>(() => {
-    const r = (initialDon ?? prefillDon) as ThuTienBangRecord | undefined
-    if (r?.ly_do_thu_phieu === 'thu_khach_hang' || r?.ly_do_thu_phieu === 'thu_khac') return r.ly_do_thu_phieu
-    return 'thu_khach_hang'
-  })
+  const [lyDoThuPhieu, setLyDoThuPhieu] = useState(() =>
+    loaiThuChiChuanHoaLyDoPhieuThu((initialDon ?? prefillDon)?.ly_do_thu_phieu),
+  )
   const [thuTienMatPhieu, setThuTienMatPhieu] = useState(() => {
     const r = (initialDon ?? prefillDon) as ThuTienBangRecord | undefined
     if (typeof r?.thu_tien_mat === 'boolean') return r.thu_tien_mat
@@ -1387,15 +1398,18 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
     return Boolean(r?.thu_qua_ngan_hang)
   })
   const [congTyTkHienThi, setCongTyTkHienThi] = useState(() => getCongTyTaiKhoanNganHang())
-  /** Chọn TK NH khi có nhiều dòng «Thu qua NH» trong module Tài khoản ngân hàng. */
-  const [tknhThuQuaNhId, setTknhThuQuaNhId] = useState<string | null>(null)
-  const tkThuQuaNhCandidates = useMemo((): TaiKhoanNganHangRecord[] => {
-    return taiKhoanNganHangGetAll().filter((r) => (r.ngam_dinh_khi ?? '').trim() === 'Thu qua NH')
+  /** Chọn TK NH khi có nhiều dòng «Thu qua NH» trong module Tài khoản. */
+  const [tknhThuQuaNhId, setTknhThuQuaNhId] = useState<string | null>(() => {
+    const r = (initialDon ?? prefillDon) as ThuTienBangRecord | undefined
+    return r?.phieu_tai_khoan_id?.trim() || null
+  })
+  const tkThuQuaNhCandidates = useMemo((): TaiKhoanRecord[] => {
+    return taiKhoanGetAll().filter((r) => taiKhoanLaTkNganHang(r))
   }, [])
   const [khList, setkhList] = useState<KhachHangRecord[]>([])
   /** Phiếu thu + thu KH: chỉ gợi ý KH còn chứng từ có công nợ (YC82). */
   const khListPhieuThuLocCongNo = useMemo(() => {
-    if (!thuTienPhieu || lyDoThuPhieu !== 'thu_khach_hang') return khList
+    if (!thuTienPhieu || !laLyDoPhieuThuKhachHang(lyDoThuPhieu)) return khList
     const ex = initialDon?.id
     return khList.filter((kh) =>
       layChungTuConNoTheoKhach((kh.ten_kh ?? '').trim(), { excludeThuTienBangId: ex }).length > 0,
@@ -1573,6 +1587,24 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
     const b = phieuChiTaiKhoanNhan.trim().length
     return Math.min(28, Math.max(11, Math.max(a, b, 10) + 2))
   }, [phieuChiTaiKhoanChi, phieuChiTaiKhoanNhan])
+
+  const { data: loaiThuChiQueryData } = useQuery({
+    queryKey: loaiThuChiQueryKey,
+    queryFn: loaiThuChiQueryFn,
+  })
+  const loaiThuChiRows = loaiThuChiQueryData?.rows ?? []
+
+  const lyDoPhieuThuOptions = useMemo(
+    () => loaiThuChiLyDoPhieuThuOptions(loaiThuChiRows),
+    [loaiThuChiRows],
+  )
+
+  const phieuChiLyDoOptions = useMemo(() => {
+    const base = loaiThuChiLyDoPhieuChiOptions(loaiThuChiRows)
+    const v = phieuChiLyDo.trim()
+    if (v && !base.includes(v)) return [v, ...base]
+    return base
+  }, [phieuChiLyDo, loaiThuChiRows])
 
   const soDonLabelHienThi = useMemo(() => {
     if (!phieuNhanTuThuTienBang) return soDonLabel
@@ -2109,6 +2141,12 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
     setEditingFromView(false)
   }, [readOnly, initialDon?.id, initialDon, initialChiTiet, laPhieuNhanNvthh, phieuNhanTuThuTienBang, thuTienPhieu])
 
+  useEffect(() => {
+    if (!thuTienPhieu) return
+    const id = initialDon?.phieu_tai_khoan_id?.trim()
+    if (id) setTknhThuQuaNhId(id)
+  }, [thuTienPhieu, initialDon?.id, initialDon?.phieu_tai_khoan_id])
+
   /** Đồng bộ «chưa thu»/«còn lại» trong JSON dòng khi mở phiếu hoặc có thay đổi phiếu khác (vd. xóa phiếu trước). */
   useEffect(() => {
     if (!thuTienPhieu || !initialDon?.id) return
@@ -2460,6 +2498,18 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
       thu_tien_mat: thuTienPhieu ? thuTienMatPhieu : undefined,
       thu_qua_ngan_hang: thuTienPhieu ? thuQuaNHPhieu : undefined,
       ngay_hach_toan: thuTienPhieu && ngayHachToan ? toIsoDate(ngayHachToan) : undefined,
+      phieu_tai_khoan_id: (() => {
+        if (!thuTienPhieu) return undefined
+        if (thuQuaNHPhieu) {
+          const id = (tknhThuQuaNhId ?? tkThuQuaNhCandidates[0]?.id)?.trim()
+          return id || undefined
+        }
+        if (thuTienMatPhieu && !thuQuaNHPhieu) {
+          const tms = taiKhoanGetAll().filter((x) => taiKhoanLaTienMat(x))
+          if (tms.length === 1) return tms[0].id
+        }
+        return undefined
+      })(),
       so_chung_tu_cukcuk: thuTienPhieu ? '' : thamChieu.trim(),
       // [ThuTienBang] Bỏ logic đối chiếu đơn mua
       // doi_chieu_don_mua_id: undefined,
@@ -2625,7 +2675,7 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
         api.put(initialDon.id, payload)
         savedRecord = thuTienBangGetAll({ ...getDefaultThuTienBangFilter(), tu: '', den: '' }).find((x) => x.id === initialDon.id)
       } else {
-        savedRecord = api.post(payload)
+        savedRecord = await api.post(payload)
       }
       api.clearDraft()
       setUnsavedChanges(false)
@@ -3397,12 +3447,21 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
                   <div style={{ flex: '0 1 200px', minWidth: 140, maxWidth: 280, position: 'relative', display: 'flex', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}>
                     <select
                       style={{ ...inputStyle, ...lookupInputWithChevronStyle, flex: 1, minWidth: 0, appearance: 'none', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}
-                      value={lyDoThuPhieu}
-                      onChange={(e) => setLyDoThuPhieu(e.target.value as 'thu_khach_hang' | 'thu_khac')}
+                      value={
+                        lyDoPhieuThuOptions.length === 0
+                          ? lyDoThuPhieu
+                          : lyDoPhieuThuOptions.includes(lyDoThuPhieu)
+                            ? lyDoThuPhieu
+                            : (lyDoPhieuThuOptions[0] ?? '')
+                      }
+                      onChange={(e) => setLyDoThuPhieu(e.target.value)}
                       disabled={effectiveReadOnly}
                     >
-                      <option value="thu_khach_hang">Thu tiền khách hàng</option>
-                      <option value="thu_khac">Thu khác</option>
+                      {lyDoPhieuThuOptions.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
                     </select>
                     <span style={lookupChevronOverlayStyle} aria-hidden>
                       <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
@@ -3545,7 +3604,7 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
                     ))}
                   {khListPhieuThuLocCongNo.filter((kh) => matchSearchKeyword(`${kh.ma_kh} ${kh.ten_kh}`, khSearchKeyword)).length === 0 && (
                     <div style={{ padding: '10px', fontSize: 11, color: 'var(--text-muted)' }}>
-                      {thuTienPhieu && lyDoThuPhieu === 'thu_khach_hang'
+                      {thuTienPhieu && laLyDoPhieuThuKhachHang(lyDoThuPhieu)
                         ? 'Không có khách hàng nào còn chứng từ công nợ (hoặc không khớp từ khóa).'
                         : 'Không tìm thấy Khách hàng phù hợp.'}
                     </div>
@@ -4044,21 +4103,38 @@ export function ThuTienForm({ onClose, onSaved, onHeaderPointerDown, headerDragS
                     )}
                     <div style={{ ...fieldRowDyn, alignItems: 'center', width: '100%', minWidth: 0 }}>
                       <label style={labelStyle}>Lý do chi</label>
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <input
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, position: 'relative', height: LOOKUP_CONTROL_HEIGHT, minHeight: LOOKUP_CONTROL_HEIGHT }}>
+                        <select
                           style={{
                             ...inputStyle,
+                            ...lookupInputWithChevronStyle,
                             flex: 1,
                             minWidth: 0,
-                            height: FORM_FIELD_HEIGHT,
-                            minHeight: FORM_FIELD_HEIGHT,
+                            appearance: 'none',
+                            height: LOOKUP_CONTROL_HEIGHT,
+                            minHeight: LOOKUP_CONTROL_HEIGHT,
                             boxSizing: 'border-box',
                           }}
-                          value={phieuChiLyDo}
+                          value={
+                            phieuChiLyDo.trim() === ''
+                              ? ''
+                              : phieuChiLyDoOptions.includes(phieuChiLyDo)
+                                ? phieuChiLyDo
+                                : phieuChiLyDo
+                          }
                           onChange={(e) => setPhieuChiLyDo(e.target.value)}
-                          readOnly={effectiveReadOnly}
                           disabled={effectiveReadOnly}
-                        />
+                        >
+                          <option value="">— Chọn lý do —</option>
+                          {phieuChiLyDoOptions.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                        <span style={lookupChevronOverlayStyle} aria-hidden>
+                          <ChevronDown size={12} style={{ color: 'var(--accent-text)' }} />
+                        </span>
                         <div style={toolbarDinhKemWrap}>
                           <button
                             ref={refPhieuChiDinhKemBtn}

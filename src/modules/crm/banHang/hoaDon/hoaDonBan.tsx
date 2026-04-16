@@ -38,6 +38,7 @@ import type { HopDongBanChungTuRecord } from '../../../../types/hopDongBanChungT
 import type { DonHangBanChungTuRecord } from '../../../../types/donHangBanChungTu'
 import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
+import { HTQL_HOA_DON_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import styles from '../BanHang.module.css'
 
 function Badge({ value }: { value: string }) {
@@ -241,19 +242,19 @@ function HoaDonBanForm({ mode, initialRecord, initialChiTiet, onClose, onSaved, 
     })),
   })
 
-  const handleLuu = () => {
+  const handleLuu = async () => {
     if (!validate()) return
     if (mode === 'edit' && initialRecord) {
       hoaDonBanPut(initialRecord.id, buildPayload()); toast?.showToast('Đã lưu hóa đơn.', 'success')
     } else {
-      hoaDonBanPost(buildPayload()); toast?.showToast('Đã thêm hóa đơn.', 'success')
+      await hoaDonBanPost(buildPayload()); toast?.showToast('Đã thêm hóa đơn.', 'success')
     }
     onSaved()
   }
 
-  const handleLuuVaTiepTuc = () => {
+  const handleLuuVaTiepTuc = async () => {
     if (!validate()) return
-    hoaDonBanPost(buildPayload()); toast?.showToast('Đã lưu. Tiếp tục thêm.', 'success')
+    await hoaDonBanPost(buildPayload()); toast?.showToast('Đã lưu. Tiếp tục thêm.', 'success')
     setSoHoaDon(hoaDonBanSoTiepTheo()); setKhachHang(''); setDiaChi(''); setMaSoThue('')
     setDienGiai(''); setTinhTrang('Chưa thanh toán'); setNvBanHang(''); setSoTienDaThu('0')
     setDonHangBanId(''); setSoDonHangGoc(''); setHopDongBanId(''); setSoHopDongGoc('')
@@ -469,6 +470,14 @@ export function HoaDonBan() {
   const loadData = useCallback(() => setDanhSach(hoaDonBanGetAll(filter)), [filter])
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => {
+    const onRemote = () => {
+      loadData()
+      if (selectedId) setChiTiet(hoaDonBanGetChiTiet(selectedId))
+    }
+    window.addEventListener(HTQL_HOA_DON_BAN_LIST_REFRESH_EVENT, onRemote)
+    return () => window.removeEventListener(HTQL_HOA_DON_BAN_LIST_REFRESH_EVENT, onRemote)
+  }, [loadData, selectedId])
+  useEffect(() => {
     if (selectedId) setChiTiet(hoaDonBanGetChiTiet(selectedId))
     else setChiTiet([])
   }, [selectedId])
@@ -561,7 +570,7 @@ export function HoaDonBan() {
       />
 
       {showForm && (
-        <div className={styles.modalOverlay} onClick={() => setShowForm(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modalBoxLarge} style={{ height: '90vh' }} onClick={(e) => e.stopPropagation()}>
             <HoaDonBanForm
               key={formKey} mode={formMode}

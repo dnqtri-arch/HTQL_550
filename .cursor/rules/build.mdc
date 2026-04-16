@@ -1,0 +1,478 @@
+# Quy tắc build — HTQL_550 (Tool Server Windows + gói server Ubuntu + Máy trạm NSIS)
+
+## Kiến trúc 64-bit (bắt buộc)
+
+- **Toàn bộ** bản build phân phối (tool Windows, gói server, Node trên máy dev khi build) phải **64-bit (x64)** để tận dụng phần cứng và nhất quán môi trường.
+- **Tool Server (`HTQL_550 Server`):** `electron-builder` — `win` → `arch: ["x64"]` (trong `phanmem\controlCenter\package.json`).
+- **Máy trạm (client installer):** `phanmem\htqlClientInstaller\package.json` — `win.target` → `nsis`, `arch: ["x64"]`.
+- **Không** phát hành bản 32-bit cho tool hoặc gói chính thức.
+
+---
+
+## Mô hình triển khai người dùng (bắt buộc)
+
+- **Client:** chỉ phân phối và vận hành **bản cài desktop** — **Windows (.exe / NSIS)** và **macOS (.dmg)**. **Không** dùng **webapp trình duyệt** làm kênh làm việc chính cho máy trạm / nhân viên.
+- **`src/` + Vite:** là **UI nhúng trong Electron** (đóng gói vào EXE/DMG), không phải sản phẩm «chỉ truy cập bằng trình duyệt mở URL công khai» cho nghiệp vụ HTQL.
+- **Tool Server (Windows) ↔ máy chủ Ubuntu:** **ưu tiên LAN** tới IP tĩnh nội bộ **`192.168.1.68`**, sau đó **WAN / IP tĩnh nhà mạng** **`14.224.152.48`** (cổng **3001** API; **22** SSH cho tool). Hai IP là **mặc định hiện tại**; khi đổi hạ tầng phải **cập nhật đồng bộ**: `build.mdc`, `phanmem/controlCenter/electron/main.cjs` (`IP_LAN`, `IP_WAN`), `.env.production` / `.env.development`, `src/config/htqlApiBase.ts`, `deploy/env.server.example`, tài liệu triển khai.
+- **Máy trạm (EXE/DMG) ↔ Server:** cùng thứ tự — **LAN `192.168.1.68:3001` trước**, **WAN `14.224.152.48:3001` sau** (mode **`smart`**, biến `VITE_HTQL_*`).
+
+### Nginx khi server có aaPanel (cập nhật server sau này)
+
+- **Không** coi Nginx là bước «cài mới bằng `apt`» nếu máy đã có **aaPanel** (Nginx đi kèm panel, thường `/www/server/nginx/`). `setup_server.sh` **không** thêm `nginx` vào `apt install`; chỉ **kiểm tra** và **tái sử dụng** site trong panel.
+- Dán khối **`location /api/`** từ **`deploy/nginx-htql550-location-snippet.conf.example`** vào **Website → Conf** trong aaPanel, rồi **Reload Nginx**. Máy không aaPanel: tham chiếu **`deploy/nginx-htql550.conf.example`** hoặc site `sites-available/htql550` nếu script hỗ trợ.
+- Mỗi lần **cập nhật zip server** sau này: đồng bộ mã + `pm2 restart`; **không** cài lại Nginx; giữ nguyên snippet proxy trừ khi đổi domain / cấu hình site. Chi tiết: **`deploy/HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md`** (mục 2.4).
+
+### Tool — khối «Tình trạng HTQL_550 trên server (SSH)»
+
+- Làm mới định kỳ / nút **Làm mới** **không** xóa toàn bộ nội dung bằng cách reset «chưa sẵn sàng» mỗi lần poll (tránh nháy «Đang tải…» toàn khối, cảm giác giật trang).
+- Dùng **`statusFetching`**: giữ text/status cũ đến khi có kết quả mới; hiển thị gợi ý **đang làm mới…** và `animate-spin` trên nút refresh; vô hiệu hóa nút trong lúc fetch; bọc fetch bằng **`try` / `finally`** để luôn tắt cờ khi xong. Mã: **`phanmem/controlCenter/src/App.tsx`**.
+
+### Tool Control Center — 4 tab dọc + phục hồi + backup + log 2/3–1/3
+
+- **Tab (trên → dưới):** **CẤU HÌNH CÀI ĐẶT** (SSH + MySQL + nút PM2 + khối **Tình trạng** `/api/htql-meta`), **CẬP NHẬT PHIÊN BẢN** (zip server + installer client), **PHỤC HỒI PHIÊN BẢN** (chọn zip `htql_server_v*.zip` hoặc `.exe`/`.dmg` đã lưu trên server → phục hồi), **BACKUP HỆ THỐNG** (SSH: `du`/`ls` backup HTQL + thư mục legacy `/hdd_4tb/backup` nếu có).
+- **Phân phối trên máy chủ:** `${HTQL_INSTALL_ROOT}/update/server` và `update/client` do tool/rsync quản lý — **không** nhầm với thư mục **`phanmem\`** trên máy build Windows (ở đó mỗi loại **chỉ giữ đúng một file** bản mới nhất; xem mục Checklist phát hành).
+- **Máy trạm (API):** chỉ liệt kê máy đã gửi **`X-HTQL-Client-Version`** hợp lệ (bỏ trống / `unknown`). **Phiên bản máy trạm** trong khối tình trạng chỉ tính từ các máy đó (không cộng «máy chưa gửi»).
+- **Phiên bản API trên meta:** `GET /api/htql-meta` → `version` ưu tiên **`VERSION.txt`** tại gốc cài (`INSTALL_ROOT`); `serverPackageJsonVersion` = `server/package.json` (tham chiếu). Zip build phải gồm **`VERSION.txt`**; script **`package-htql-server.ps1`** đồng bộ **`version`** trong `package.json` gốc + `server/package.json` với tag `YYYY.MM.BUILD`; sau **Cập nhật server** trên Ubuntu phải **`cp`** `VERSION.txt` (và `PACKAGE_INFO.txt`) vào `/opt/htql550` (đã có trong lệnh SSH cập nhật).
+- **Nhật ký SSH / journal:** cột log bên phải — **SSH ~2/3** chiều cao, **journal ~1/3** (`flex-[2]` / `flex-[1]`).
+- **Đồng bộ KV (giai đoạn chuyển đổi):** `KV_POLL_INTERVAL_MS` **220**, `KV_PUT_DEBOUNCE_MS` **240** (`src/utils/htqlKvSync.ts`); header client không gửi **`unknown`** khi thiếu tag (`src/main.tsx`).
+- **Module bundle (Báo giá, Đơn hàng bán chung từ, …):** dữ liệu nằm trong **`htql_module_bundle`** (PUT `/api/htql-module-bundle/:id`), **không** còn trong **`htql_kv_store`** — poll KV **không** thấy thay đổi. Bắt buộc: **`GET /api/htql-module-bundle-versions`** (nhẹ, chỉ `module_id` + `version`) + **`bootstrapHtqlModuleBundleSyncPoll`** (`src/utils/htqlModuleBundleSyncPoll.ts`, cùng chu kỳ **220 ms** với KV) → khi `version` đổi → `fetch` bundle + dispatch sự kiện làm mới UI. Khi quay lại tab: gọi **`htqlModuleBundleVersionsPollNow`** cùng **`htqlKvPollNow`** (`src/main.tsx`).
+
+### Dev: Cursor / `npm run dev` — dùng chung MySQL với máy chủ (client đã phát hành)
+
+- **UI dev:** `http://localhost:5174/` (mặc định `VITE_DEV_PORT` trong `vite.config.ts`; có thể đổi).
+- **Không** «đồng bộ MySQL vào Vite»: trình duyệt **không** kết nối MySQL trực tiếp. Dữ liệu MySQL hiển thị khi app gọi **API Node** (`server/donViTinhServer.js`) — cùng lớp API mà client EXE (qua `VITE_HTQL_API_BASE` / mode `smart`) dùng. Muốn **cùng DB** với phần mềm đã phát hành → trỏ dev tới **cùng máy chủ API** (cùng instance MySQL phía sau API đó).
+- **Cách 1 (khuyến nghị):** Trong `.env.development` bật `VITE_HTQL_DEV_USE_REMOTE_API=1`, đặt `VITE_HTTP_PROXY_API_TARGET=http://<IP máy chủ>:3001` (vd LAN `192.168.1.68:3001`). `initHtqlApiBase` (`src/config/htqlApiBase.ts`) resolve base tới máy chủ; server đã `cors()`. **Không** commit mật khẩu MySQL — chỉ cấu hình `server/.env` trên máy chạy API.
+- **Cách 2:** Chạy API cục bộ `node server/donViTinhServer.js` với `server/.env` trỏ **cùng** biến MySQL như máy chủ (hoặc tunnel/SSH tới DB nếu cần); trong `.env.development` đặt `VITE_HTQL_DEV_USE_REMOTE_API=0`, `VITE_HTTP_PROXY_API_TARGET=http://127.0.0.1:3001` — request `/api` từ `localhost:5174` qua proxy Vite tới API local.
+
+---
+
+## Liên kết hệ thống: Server ↔ Tool ↔ Client (bắt buộc nắm khi phát hành)
+
+Ba thành phần dùng **cùng một chuẩn đường dẫn và phiên bản**; không tách rời khi build/triển khai.
+
+### Mô hình dữ liệu (fetch-on-demand, MySQL nguồn sự thật) — bắt buộc
+
+**Mục tiêu:** Dữ liệu nghiệp vụ **không** phụ thuộc bộ nhớ trình duyệt / `localStorage` làm kho chứa entity; **MySQL** (qua API Node) là nguồn sự thật.
+
+1. **Fetch-on-demand:** Module/màn hình **GET** dữ liệu khi cần (mở màn, đổi tab, refetch) — **không** tải trước toàn bộ KV + mirror `localStorage` như cache nghiệp vụ dài hạn.
+2. **Không `localStorage.setItem` cho entity:** Chứng từ, danh mục, bản ghi nghiệp vụ **không** ghi vào `localStorage`. Cho phép `sessionStorage` / `localStorage` **chỉ** cho UI không phải entity (ví dụ khôi phục layout tab tạm thời — xem `layout.tsx`) — **không** dùng làm nguồn sự thật. **Lộ trình:** gỡ dần các `*Api.ts` đang `setItem` — **theo từng module** cho tới khi thay bằng API + React Query.
+3. **React Query (`@tanstack/react-query`):** Provider toàn app (`src/providers/HtqlQueryProvider.tsx`) — mặc định **`gcTime: 0`**, **`staleTime: 0`** (v5; trước đây `cacheTime`) để **không** giữ cache entity giữa các phiên; dữ liệu lấy từ **API → MySQL** khi query chạy.
+4. **Phiên / cookie HttpOnly:** API set cookie **`htql_sess`** (HttpOnly, `sameSite=lax`, bổ sung **`credentials: true`** trên CORS + `axios`/`fetch` **`withCredentials: true`**). Máy trạm **không** lưu token phiên thủ công trong `localStorage`. **Song song:** header **`X-HTQL-Client-Id`** (thiết bị) vẫn dùng khi cross-origin HTTP / Electron không gửi cookie tới API.
+5. **Trạng thái bộ lọc (filter):** Bảng MySQL **`user_preferences`** (`client_id`, `prefs_json`, `updated_at`) — API **`GET /api/user-preferences`**, **`PUT /api/user-preferences`** (merge shallow vào `prefs_json`); khóa máy trạm = **`X-HTQL-Client-Id`**. **Không** lưu filter chỉ trong `localStorage`.
+
+**Triển khai trong mã nguồn (bắt buộc đồng bộ với mục 4–5):**
+
+- **Cookie phiên `htql_sess` (server):** `server/donViTinhServer.js` — `cors({ origin: true, credentials: true })`, `cookie-parser`, middleware gắn cookie **`htql_sess`** (HttpOnly, `sameSite: 'lax'`, **`secure`** khi HTTPS / `X-Forwarded-Proto: https` hoặc `HTQL_COOKIE_SECURE=1`). Biến **`HTQL_COOKIE_SECURE=0`** buộc tắt Secure (vd. chỉ HTTP nội bộ). **Khi có `mysqlPool`:** upsert **`htql_http_session`** mỗi request (trừ khi `HTQL_HTTP_SESSION_DB=0`) — xem mục **«Đồng bộ 100% MySQL»** phía trên.
+- **Client:** `src/main.tsx` đã bật `withCredentials` / `fetch` + `credentials: 'include'` — cookie được gửi kèm API.
+- **`user_preferences` (client):** `src/utils/userPreferencesApi.ts` + **`UserPreferencesProvider`** (`src/context/userPreferencesContext.tsx`) bọc trong `App` — `useUserPreferences()` / `mergePrefs()` để từng module lưu filter (theo khóa trong `prefs_json`, ví dụ `{ baoGia: { filter: … } }`). **GET** thất bại (offline) → `prefs` rỗng, không chặn khởi động app.
+- **Cập nhật installer (máy trạm):** Sau khi user **Xác nhận (tải và cài đặt)**, `phanmem/htqlClientInstaller/electron/main.cjs` tải file qua HTTP với **`Content-Length`** → thanh tiến trình **taskbar** (`setProgressBar`) + IPC **`htql-installer-download-progress`** → UI banner `InstallerDownloadProgressBanner` (vàng, `z-index` 4500). **Không** mở trình duyệt; preload: `onInstallerDownloadProgress`.
+
+**Tương thích trong lộ trình:** `src/utils/htqlKvSync.ts` (poll `htql_kv_store` + spool) có thể **còn** cho tới khi từng module đã chuyển hết sang fetch + mutation API — sau đó **gỡ** poll/spool theo checklist module.
+
+### Đồng bộ 100% MySQL — mục tiêu hệ thống & phiên client (đăng nhập thiết bị)
+
+- **Mục tiêu bắt buộc (đa máy trạm):** Toàn bộ dữ liệu nghiệp vụ phải đi **API Node → MySQL**; **không** dùng `localStorage` / RAM cache làm nguồn sự thật sau khi module đã migrate. **Giai đoạn chuyển đổi:** các chứng từ/chi tiết chưa có bảng SQL riêng vẫn đồng bộ qua **`htql_kv_store`** + `htqlKvSync.ts` — mỗi PR/module phải tiến tới **REST + bảng SQL** (hoặc `htql_module_bundle` nếu thiết kế bundle) rồi **gỡ** khỏi KV.
+- **Phiên client — không JWT trong `localStorage`:** Giữ **`htql_sess`** (HttpOnly, `sameSite=lax`, `secure` theo HTTPS) + **`credentials: true`**. Khi MySQL bật, API **ghi/cập nhật** bảng **`htql_http_session`** (`session_token` = giá trị cookie, `client_key` từ **`X-HTQL-Client-Id`**, `ip`, `user_agent`, `last_seen_at`) — phiên có thể truy vết, join với `htql_workstation`, chuẩn bị mở rộng **đăng nhập người dùng** (cột `user_login` / quyền — thêm sau, vẫn trên cùng cookie + bảng hoặc bảng con). **`GET /api/htql-meta`** trả **`httpSessionStorage`**: `mysql` | `cookie_only`. Tắt ghi DB (vd gỡ lỗi): **`HTQL_HTTP_SESSION_DB=0`** trong `server/.env`.
+- **Tối ưu đồng bộ giữa các máy:** `KV_POLL_INTERVAL_MS` / `KV_PUT_DEBOUNCE_MS` trong `src/utils/htqlKvSync.ts` giữ ở mức **thấp hợp lý** (đánh đổi tải API); sau khi module chuyển hết sang MySQL trực tiếp, **tắt** poll KV cho module đó.
+- **Checklist migrate (ưu tiên):** từng file `*Api.ts` còn `htqlEntityStorage.setItem` cho entity nghiệp vụ → thay bằng `fetch`/`axios` tới route mới trong `donViTinhServer.js` (hoặc `server/db/*Routes.js`), bảng trong `ensureSchema.js`, UI dùng **React Query** refetch sau mutation. Danh mục **DVT / KH / NCC** đã bảng SQL — không quay lại KV cho entity đó.
+
+### Thứ tự ghi máy chủ & mất kết nối (client / máy chủ)
+
+- **Máy chủ — thứ tự ghi:** **MySQL trước** (bảng nghiệp vụ + `htql_kv_store` trong giai đoạn chuyển đổi), **PostgreSQL sau** (schema tích hợp, `pg_dump` trong backup cron khi PG hoạt động). **Không** đảo thứ tự; luồng backup giữ **MySQL → PostgreSQL**.
+- **Client mất kết nối:** hàng đợi ghi **tạm** (file/spool/queue ứng dụng — **không** dùng `localStorage` entity cho dữ liệu nghiệp vụ sau khi module đã migrate). Khi có lại mạng, **đẩy** lên server rồi **xóa** spool.
+
+**Tool Control Center — bảng MySQL cạnh «Máy trạm (API)»:** panel trái **«MySQL — bảng»** (tên bảng, ước lượng số dòng InnoDB, dung lượng data+index) nằm **bên trái** cột **«Máy trạm (API)»**; dữ liệu từ **`GET /api/htql-mysql-tables`** (HTTP hoặc fallback SSH trong `electron/main.cjs`).
+
+**Cài đặt Ubuntu — CRLF và cổng:** xem **`deploy/HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md`**: sửa lỗi dòng kết thúc Windows bằng `sed -i 's/\r$//' setup_server.sh`; mở **TCP 3001** (API), **22** (SSH), **80/443** (Nginx) cho LAN/máy quản trị; **3306/5432** thường chỉ localhost. Có thể mở rule UFW **trước** lần kết nối đầu hoặc **sau** khi `setup_server.sh` bật UFW — kiểm tra `sudo ufw status verbose`.
+
+### 1. Máy chủ Ubuntu (API Node + PM2)
+
+- **Gốc cài:** **`HTQL_INSTALL_ROOT`** (mặc định **`/opt/htql550`**). **`server/.env`** là nguồn sự thật cho MySQL, `HTQL_DATA_DIR`, **`HTQL_ROOT_SSD`**, **`HTQL_PATH_THIET_KE`** / **`HTQL_PATH_HOADON_CHUNG_TU`**, **`HTQL_UPDATE_CLIENT_DIR`**, **`HTQL_UPDATE_SERVER_DIR`**, backup HDD, v.v.
+- **SSD đính kèm:** dưới **`HTQL_ROOT_SSD`** (vd `/ssd_2tb/htql_550`): **`…/thietke/`** (thiết kế), **`…/hdct/`** (chứng từ) — `setup_server.sh` + API **`ensureHtqlDataDirectories`** tạo/quyền khi thiếu.
+- **Thư mục cập nhật (chuỗi liên kết với tool + client):**
+  - **`${HTQL_INSTALL_ROOT}/update/client`** — nơi đặt **`htql-client-manifest.json`** + file **`HTQL_550_Setup_*.exe`** (hoặc `.dmg`) do **Tool** đẩy lên; **`GET /api/htql-client-update-manifest`** đọc **đúng** thư mục này (`HTQL_UPDATE_CLIENT_DIR`).
+  - **`${HTQL_INSTALL_ROOT}/update/server`** — bản sao zip cập nhật (tool/rsync).
+- **`GET /api/htql-meta`** trả **`pathUpdateClient`**, **`pathThietKe`**, **`pathHoaDonChungTu`**, **`webAppVersion`**, **`mysqlUser`**, … — client và tool **đối chiếu** để không lệch đường dẫn.
+- **Sau mỗi lần đổi `.env` có ảnh hưởng process:** **`pm2 restart <app> --update-env`**.
+
+### 1.1 HTTP API từ máy quản trị Windows (Control Center) — cổng **3001**
+
+- **Đọc meta / registry:** Tool gọi trực tiếp **`GET http://<host Smart Connect>:3001/api/htql-meta`** và **`/api/htql-client-registry`** từ Windows (`connectionState.host` sau Smart Connect). Mã: `fetchJsonFromServerWithSshFallback` trong **`phanmem/controlCenter/electron/main.cjs`**.
+- **Timeout HTTP (Windows → host:3001):** **12 giây** (`HTQL_API_HTTP_TIMEOUT_MS`). Lỗi **`timeout`** thường gặp khi **UFW / router / NAT** không cho **3001** tới IP của PC quản trị, trong khi **SSH vẫn thông** — trên server `curl http://127.0.0.1:3001/api/htql-meta` vẫn có thể **200**.
+- **Khuyến nghị vận hành:** mở **3001** (hoặc reverse proxy chuẩn) tới subnet/IP quản trị và máy trạm cần dùng API; tránh phụ thuộc hoàn toàn vào fallback.
+- **Fallback SSH (chỉ Control Center):** Nếu HTTP thất bại với lỗi thuộc nhóm **timeout**, **ECONNREFUSED**, **ETIMEDOUT**, **ENOTFOUND**, **EHOSTUNREACH**, **ENETUNREACH**, **getaddrinfo**, **socket hang up**, hoặc lỗi **HTTP kèm HTML** (thông báo **proxy/Nginx** / không phải JSON API), tool chạy trên Ubuntu: **`curl -sS` (không `-f`) `http://127.0.0.1:3001/...`** qua phiên SSH (timeout nhánh ~**35 giây**, `HTQL_API_SSH_CURL_TIMEOUT_MS`) để gặp **PM2 `htql550-api`**. Cần **Smart Connect / SSH**; không thay thế việc mở firewall cho HTTP nếu máy trạm phải gọi API trực tiếp.
+- **«MySQL — bảng» / `GET /api/htql-mysql-tables`:** nếu vẫn lỗi sau fallback — triển khai **zip server** mới từ repo (có route), **`pm2 restart htql550-api --update-env`**. Gọi qua **cổng 80:** Nginx cần **`location /api/`** → `proxy_pass http://127.0.0.1:3001` (`deploy/nginx-htql550.conf.example`).
+- **Máy trạm (EXE/DMG — Electron):** gọi API Node qua **HTTP** — **LAN trước** `192.168.1.68:3001`, **WAN sau** `14.224.152.48:3001` (`htqlApiBase`, `VITE_HTQL_*`); **không** fallback SSH; **không** dùng webapp trình duyệt làm kênh chính.
+
+### 2. Tool Windows (`HTQL_550 Server` — `phanmem/controlCenter`)
+
+- **Kết nối:** Smart Connect — **ưu tiên LAN 192.168.1.68**, sau đó **WAN 14.224.152.48** (IP_LAN / IP_WAN trong electron/main.cjs); **SSH + sudo** tới **/opt/htql550** (**REMOTE_HTQL_ROOT**).
+- **MySQL:** **Đọc từ server** / **Ghi lên server + PM2** — cập nhật **`server/.env`** (`HTQL_MYSQL_*`) + **`${HTQL_INSTALL_ROOT}/.mysql_password`**, không làm mất cấu hình khi **Cập nhật phần mềm server** (rsync **`--exclude .env`**).
+- **Cập nhật mã server:** zip `htql_server_v….zip` → `/tmp` → giải nén → **`rsync` vào `${REMOTE_HTQL_ROOT}/server/`** (không đụng `data/`, `.env`, SSD, `update/`).
+- **Cập nhật client cho máy trạm:** SFTP installer → **`/tmp`** → **`sudo cp`** vào **`${REMOTE_HTQL_ROOT}/update/client/`** + tạo **`htql-client-manifest.json`** (SHA, tên file) — **cùng đường dẫn** mà API phục vụ manifest. **Không** đổi tên thư mục tùy tiện: phải trùng **`pathUpdateClient`** từ **`/api/htql-meta`**.
+
+### 3. Máy trạm Client (Electron + NSIS) — build & phát hành bản cập nhật EXE
+
+**Phạm vi:** đóng gói **`scripts\build-htql-client.ps1`** → **`phanmem\client\HTQL_550_Setup_V….exe`** (hoặc `HTQL_CLIENT_OUT`); hành vi runtime trên Windows.
+
+#### A. Đồng bộ dữ liệu nghiệp vụ giữa các máy trạm (lộ trình)
+
+- **Mục tiêu dài hạn:** mọi thao tác **ghi** đi thẳng **API → MySQL**; mọi **đọc** qua **React Query** + refetch — **không** mirror entity trong `localStorage` (xem mục **«Mô hình dữ liệu»** phía trên).
+- **Giai đoạn chuyển đổi:** một số module vẫn dùng **`htql_kv_store`** + **`htqlKvSync.ts`** (poll GET `/api/htql-kv`, debounce PUT). **`KV_POLL_INTERVAL_MS`** (mặc định **220 ms**), **`KV_PUT_DEBOUNCE_MS`** (**240 ms**). Module đã chuyển **`htql_module_bundle`** (vd. **baoGia**, **donHangBanChungTu**) **phải** dùng thêm poll phiên bản **`/api/htql-module-bundle-versions`** (xem mục Control Center phía trên). Các module còn KV: sau mỗi lần poll/PUT, **`rehydrateModuleCachesFromKvKeys`** phải **nạp lại RAM** — nếu thiếu, máy trạm khác **không thấy** dữ liệu mới.
+- **Đóng ứng dụng (Electron):** **`BrowserWindow` → sự kiện `close`** gọi **`await webContents.executeJavaScript`** trên **`window.__htqlFlushKvSync()`** (cùng **`flushHtqlKvPendingSync()`**) rồi **`destroy()`** — **không** dựa vào `before-quit` async (Electron không đảm bảo đợi). **`pagehide`** trên renderer (backup) cũng gọi flush. Tránh mất dữ liệu chưa lên MySQL khi tắt app.
+- **Footer máy trạm:** **`● Kết nối`** kèm **`IP Client:`** (IPv4 máy trạm qua IPC **`htql:get-client-ipv4`** / `os.networkInterfaces`). **`● Luồng KV`:** làm mới **chỉ dòng thống kê** mỗi **~1 giây** (byte ↑/↓, độ trễ) — **không** làm chậm poll KV / poll bundle (đồng bộ dữ liệu vẫn **220 ms**). **`CSDL:`** — **`Đã kết nối`** / **`Chưa kết nối`** / **`Đang đồng bộ`** theo `storageBackend` (MySQL) + API + trạng thái ghi KV (`getHtqlCsdFooterLabel`); khi máy chủ **JSON:** nhãn **`Chế độ JSON (máy chủ)`**. **Không** hiển thị **`SLDL ĐB: <số>`**.
+- **Không ghi đè khi đang sửa (KV):** khóa **pending** vẫn áp trong giai đoạn còn `htqlKvSync`.
+
+#### A (tiếp). Kiểm tra bản cài đặt mới (EXE) — tự động khi mở & định kỳ
+
+- **Phiên bản client (đặt tên theo rule):** tag **`VYYYY_MM_DD_NN`** trong **`phanmem/htqlClientInstaller/VERSION_TAG`**, đồng bộ **`sync-version`** → file cài **`HTQL_550_Setup_VYYYY_MM_DD_NN.exe`** — **không** đổi quy ước tên tùy tiện (đồng bộ **`htql-client-manifest.json`** trên server khi Tool đẩy bản mới).
+- **Nguyên tắc so sánh & cập nhật (chỉ máy trạm đã cài EXE / DMG):** Lấy tag **`VYYYY_MM_DD_NN`** từ `version`, **`latestFile`** hoặc **`fileName`** trong manifest — **không** dùng tên file thô làm chuỗi so sánh. So **`versionRank`/`semver`** của manifest với **`app.getVersion()`** trong **Electron** (`phanmem/htqlClientInstaller/electron/main.cjs`). Nếu **phiên bản trên máy chủ lớn hơn** → **`dialog.showMessageBox`**: Để sau / **Xác nhận (tải và cài đặt)** — **không** cài ngầm; **không** mở trình duyệt: app **tải file `.exe` qua HTTP vào thư mục tạm** (`%TEMP%/htql-client-updates/`) rồi trên **Windows** chạy **`spawn(exe, ['/S','/NCRC'], { detached, stdio:'ignore', windowsHide:true })`** (cài **NSIS im lặng**, tránh **`shell.openPath`** / cửa sổ phụ). Ngay sau đó **`app.exit(0)`** — **không** hộp thoại «đang đóng để cài» (one-click sau khi user đã xác nhận). **Trong lúc tải:** hiển thị **tiến trình** (taskbar + banner trong app). **Không** bật **`electron-updater`** (generic URL). Cùng một manifest: **chống trùng hộp thoại** ~**90 s**; **một luồng** kiểm tra (`checkInstallerUpdateInFlight`). Màn **Kết nối máy chủ**: **`htql:run-installer-update-check`**.
+- **Bản web (Vite trong trình duyệt, kênh phụ / dev):** **không** coi là «máy trạm chính thức» theo `build.mdc` mục 14 — **không** hiện Modal / luồng cập nhật installer trên UI. **Footer:** **ẩn** phần **`● Client:`** (không dùng `VITE_APP_VERSION` / semver gốc repo làm Client); **vẫn** hiển thị **`● Máy chủ:`** + tag manifest (so khớp với web khi build cùng đợt). Bản **Electron:** hiển thị **`● Client:`** + **`| Máy chủ:`** (tag + so khớp xanh khi khớp phiên bản cài đặt).
+- **Kiểm tra bản mới (thứ tự ưu tiên trong `htqlClientInstaller/electron/main.cjs`):**
+  1. **Ưu tiên host API:** đọc **`htql-smart-connect.json`** (quét LAN khi cài) — `discoveredHost` + `apiPort`. **Bổ sung bắt buộc:** đọc **`htql-server-paths.json`** cạnh file chạy — trường **`apiBase`** (IPv6 bọc **`[…]`** trong URL). File này được **ghi tự động** khi renderer hoàn tất **`initHtqlApiBase()`** (IPC **`htql:notify-resolved-api-base`**) — cùng base URL mà UI dùng gọi API; **không** phụ thuộc vào việc NSIS tạo smart-connect hoặc gọi thủ công `saveServerPathsSnapshot` (hàm đó dành cho snapshot đầy đủ đường dẫn máy chủ khi cần).
+  2. **Trước:** `GET /api/htql-client-update-manifest` (nội dung **`update/client`** do Tool đẩy); **sau:** thư mục **`update/client/`** cạnh **`.exe`** (offline).
+  3. Gọi **`/api/htql-meta`** khi cần gợi ý đường dẫn `pathUpdateClient`.
+  4. **Thời điểm:** Timer ~**3,5 s / 12 s / 30 s** có thể chạy **trước** khi `initHtqlApiBase` xong (probe LAN tới ~**5 s**); sau khi có **`apiBase`** từ renderer, main **chạy thêm** một lần kiểm tra ngay — đảm bảo sau khi Tool đẩy manifest lên server, client vẫn bắt được bản mới.
+- **Footer — Luồng KV:** **↑ / ↓ byte** và **`Độ trễ: XX ms`** (vòng GET gần nhất); làm mới dòng hiển thị **~1 s** (không ảnh hưởng tần suất poll KV/bundle). **Kết nối:** LAN/ONLINE theo `htqlApiBase` + **`IP Client`** (Electron). Cột **Client | Máy chủ:** tag manifest chuẩn hóa.
+- **Tần suất (bắt buộc vận hành):** **mỗi lần mở phần mềm** (~**3,5 s**, ~**12 s**, ~**30 s**) gọi kiểm tra; **thêm** lần ngay sau **`initHtqlApiBase` + notify apiBase**; trong lúc chạy **mỗi 6 giờ** một lần (timer) — tránh **quá tải API**.
+- **Kết luận:** Client phụ thuộc **API máy chủ** + nội dung **`update/client`**; Tool chỉ là kênh đưa file vào đúng chỗ trên server.
+
+#### B. Server & Tool — bản cập nhật mới, đặt tên đồng bộ với client
+
+- **Gói server (zip):** tên **`htql_server_vYYYY.MM.BUILD.zip`** (BUILD tăng liên tục — `BUILD_SERVER_INSTRUCTIONS.md` / `server-build-counter.txt`). Thư mục trong zip cùng tên; **`VERSION.txt`** gốc repo đồng bộ khi đóng gói.
+- **API Node:** `webAppVersion` / `version` trong **`GET /api/htql-meta`** phải **khớp chuỗi** mà client so trong footer (**`VITE_APP_VERSION`** build web trong client) khi phát hành cùng đợt — tránh cảnh báo «lệch đồng bộ» giả.
+- **Tool Control Center:** **`phanmem/controlCenter/package.json` → `version`** (semver) → file **`HTQL_550 Server-<version>-Portable.exe`** sau `package-htql-control.ps1` — **một** file trong **`phanmem/tool/`**.
+- **Client trên server (`update/client/`):** **`htql-client-manifest.json`** + **`HTQL_550_Setup_VYYYY_MM_DD_NN.exe`** — tên file installer **trùng** tag `VYYYY_MM_DD_NN` trong manifest; Tool đẩy đúng **`pathUpdateClient`** từ **`/api/htql-meta`**.
+- **Đồng bộ ba gói một đợt phát hành:** cùng lúc nâng **zip server** + (khi cần) **tool** + **client installer** + manifest trên Ubuntu; **`pm2 restart … --update-env`** khi đổi `.env`.
+
+### Checklist phát hành đồng bộ (3 gói) — lưu file đúng chỗ
+
+**Chỉ** lưu bản phát hành tại: **`phanmem\client\`**, **`phanmem\server\`**, **`phanmem\tool\`**. Sau **mỗi** lần đóng gói thành công: trong **từng** thư mục đích **chỉ giữ lại đúng file vừa build** (cùng loại: một zip server / một portable tool / một installer client); **xóa** mọi bản cùng loại cũ hơn và file rác (`latest.yml`, `builder-*.yml`, `*.blockmap`, …). **Không** để artifact rải rác ngoài ba thư mục trên.
+
+1. **`scripts/package-htql-server.ps1`** → `phanmem\server\htql_server_v….zip` (đồng bộ `VERSION.txt` + `version` trong `package.json` gốc và `server/package.json`).
+2. **`scripts/package-htql-control.ps1`** → một file **`HTQL_550 Server-*-Portable.exe`** trong `phanmem\tool\`; xóa `phanmem\controlCenter\release\` sau copy.
+3. **Client:** **`scripts/bump-htql-client-version.ps1`** → **`scripts/build-htql-client.ps1`** → một **`HTQL_550_Setup_V….exe`** trong `phanmem\client\`. **Không** bump → tên `.exe` trùng bản cũ.
+4. Trên Ubuntu: đẩy zip/server khi cần; dùng Tool đẩy **cùng bản** client `.exe` + manifest vào **`update/client`**; **`pm2 restart`** nếu đổi env.
+
+**Đồng bộ HTTP desktop (bắt buộc nắm khi đổi API client/server):** `GET /api/htql-sync-state`, `GET /api/sync/delta`, ETag trên `GET /api/htql-module-bundle/:id`, `systemVersion` trên `GET/PUT /api/htql-kv` — chi tiết & lộ trình đo tải: **`.cursor/rules/dongbodesktop.mdc`**. **Phiên bản server tối thiểu** cho client có đồng bộ mới: gói zip có `server/db/htqlSyncRoutes.js` + migration `htql_system_state` / `htql_sync_log` trong `ensureSchema.js`; `GET /api/htql-meta` có `htqlSyncStateApi: true`.
+
+**Cấp mã chứng từ (đa máy trạm, không trùng):** `POST /api/htql-sequence/ma-he-thong` + bảng MySQL **`htql_sequence_ma`** (`ensureSchema.js`). Client gọi trước khi tạo bản ghi có mã `{năm}/{prefix}/{số}` bắt buộc duy nhất; khi API lỗi dùng fallback cục bộ (`src/utils/htqlSequenceApi.ts`).
+
+---
+
+## Giao diện máy trạm & Tool Server (tone màu)
+
+- **Cửa sổ:** **Frameless** (`frame: false`, `titleBarStyle: 'hidden'`), **titleBarOverlay** (Windows): nền **nâu đất** `#2d1f0f` / `#1a1408`, biểu tượng cửa sổ **vàng kim loại** `#d4af37` — cùng phong cách **HTQL_550 Control** (vàng gold + nâu đất).
+- **Kéo di chuyển:** vùng **titleBarOverlay** + thanh **ElectronDragBar** (`src/components/electronDragBar.tsx`, `-webkit-app-region: drag`, gradient Nam Bắc AD) — giữ đặc trưng phần mềm, không che nút thu nhỏ/đóng của hệ thống.
+- **Nền cửa sổ Electron:** `backgroundColor: '#1a1408'`.
+- **Không** menu ứng dụng mặc định trên Tool Server (đã `Menu.setApplicationMenu(null)`); máy trạm: không menu production (chỉ dev có menu View khi `--htql-dev`).
+
+---
+
+## A. HTQL_550 Server — tool quản trị SSH (Windows)
+
+### Tên sản phẩm & thư mục
+
+- **Mã nguồn (build / chỉnh sửa):** `HTQL_550\phanmem\controlCenter\`
+- **Chức năng tool:** **Cập nhật server** (zip → `/tmp/htql_server_update.zip` + rsync `/opt/htql550`) và **Cập nhật client** (`.exe` / `.dmg` + manifest dưới `/opt/htql550/update/client/`). **MySQL:** đọc/ghi **`HTQL_MYSQL_*`** trên **`/opt/htql550/server/.env`** qua **SSH** (nút **Đọc từ server** / **Ghi lên server + PM2**), cập nhật luôn **`/opt/htql550/.mysql_password`** (backup cron) và **`pm2 restart … --update-env`**. **Không** còn luồng «cài đặt server mới» từ tool — cài lần đầu dùng gói zip + SSH (xem `phanmem\server\README_CAI_DAT_SSH.md`). SSH/sudo bắt buộc; đường dẫn cài/update cố định trong code.
+- **Đồng bộ sau khi đổi mật khẩu MySQL (aaPanel):** đổi mật khẩu trong panel → **Đọc từ server** (nếu đã sửa tay `.env` trên máy chủ) hoặc nhập mật khẩu mới trong tool → **Ghi lên server + PM2** — API Node chỉ đọc biến môi trường khi process chạy; bắt buộc **`--update-env`**. **Xác minh:** khối «Tình trạng HTQL» (**`/api/htql-meta`**) hiển thị `mysqlHost` / `mysqlDatabase` / **`mysqlUser`** (không trả mật khẩu qua HTTP).
+- **Bản phân phối:** `scripts\package-htql-control.ps1` copy portable vào `phanmem\tool\`, **xóa** mọi portable cùng pattern cũ hơn (chỉ giữ bản vừa build); xóa `release\` sau khi copy.
+- **Tên gói (npm):** `htql-admin-tool`
+- **Tên file EXE portable:** `HTQL_550 Server-<version>-Portable.exe` (theo `productName` + `version` + Portable). Ví dụ: `HTQL_550 Server-2.4.0-Portable.exe`.
+
+### Phiên bản tool (semver)
+
+- Khai báo tại **`phanmem\controlCenter\package.json` → `version`**.
+- Mỗi **release** (tính năng / sửa lỗi đáng kể): tăng **semver** (ví dụ `1.6.0` → `1.7.0`).
+- Sau khi đổi phiên bản: **`npm run build`** trong **`phanmem\controlCenter`** — portable tạm nằm trong `phanmem\controlCenter\release\` (khi **phát hành** chạy **`scripts\package-htql-control.ps1`** để copy vào `phanmem\tool\` và xóa `release\`).
+
+### Lệnh build tool (dev / kiểm tra nhanh)
+
+```powershell
+Set-Location "C:\Users\Administrator\Desktop\HTQL_550\phanmem\controlCenter"
+npm install
+npm run build
+```
+
+- **Đầu ra tạm:** `phanmem\controlCenter\release\HTQL_550 Server-<version>-Portable.exe` (thư mục `release\` là build tạm của electron-builder).
+- Icon: `npm run copy-icon` lấy từ `HTQL_550\logo\logo_nambac.png` (trước `vite build`).
+
+### Phân phối tool (phát hành — gom đúng thư mục + dọn rác)
+
+- **`scripts\package-htql-control.ps1`** (chạy từ gốc repo): `npm run build` trong `phanmem\controlCenter`, copy portable vào **`phanmem\tool\`** (chỉ giữ bản mới), rồi **xóa** **`phanmem\controlCenter\release\`**.
+- **Nguyên tắc:** Portable phát hành nằm trong **`phanmem\tool\`** (một file `.exe` mới nhất sau mỗi lần chạy script); không để lại `release\` sau đóng gói.
+- Kiểm tra `npx tsc --noEmit` trong `phanmem\controlCenter` khi đổi TypeScript.
+
+---
+
+## B. Gói zip cài server Ubuntu
+
+### Đồng bộ với repo
+
+- **`setup_server.sh`** nguồn sự thật: **`HTQL_550\setup_server.sh`** (gốc repo). **Không** cài **`mariadb-server`** (tránh xung đột MySQL **aaPanel**). Cài **`mariadb-client`** để kiểm tra kết nối; DB + user tạo trong aaPanel (Local server); script ghi **`server/.env`** + **`/opt/htql550/.mysql_password`** sau khi **verify** TCP `127.0.0.1:3306`.
+- **Đường dẫn mặc định lưu đính kèm trên SSD (cài đặt / `setup_server.sh`):** dưới gốc **`HTQL_ROOT_SSD`** (vd **`/ssd_2tb/htql_550`**): **`…/thietke/`** — file thiết kế; **`…/hdct/`** — đính kèm chứng từ / hóa đơn. Biến API: **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_HOADON_CHUNG_TU`** (mặc định suy từ gốc SSD).
+- **Gốc SSD (`HTQL_ROOT_SSD`) và `setup_server.sh` (cài mới Ubuntu / máy trần):**
+  - **Tương tác:** script hỏi **1)** gốc cài HTQL (API, `data`, `.env`), **2a)** `thietke`, **2b)** `hdct`, **3)** thư mục backup HDD — **không** còn bước legacy …/attachments hay rsync backup riêng một thư mục đính kèm cũ.
+  - **Chuẩn lưu trữ:** hai đường dẫn đầy đủ **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_HOADON_CHUNG_TU`** (mặc định vd **`/ssd_2tb/htql_550/thietke`**, **…/hdct**). **`HTQL_ROOT_SSD`** trong `.env` là cha chung của hai nhánh (hoặc cha `thietke` khi tách đĩa — xem cảnh báo Samba trong script).
+  - **Control Center (`HTQL_SETUP_NONINTERACTIVE=1`):** có thể truyền **`HTQL_SETUP_ATTACH`** + **`HTQL_SETUP_PATH_*`**; nếu giá trị gốc kết thúc **…/attachments**, code trong script **chỉ** dùng để **suy** thietke/hdct (tương thích biến môi trường cũ), **không** tạo luồng backup `attachments_incremental`.
+- Gói zip phải chứa bản **`setup_server.sh`**, **`VERSION.txt`**, và **`HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md`** (nguồn **`deploy/HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md`**) — hướng dẫn cài đặt từng bước trên Ubuntu mới (phụ trợ, MySQL, đường dẫn, PM2, kiểm tra).
+- **Schema MySQL tự động:** `server/db/ensureSchema.js` — **`CREATE TABLE IF NOT EXISTS`** cho DVT, NCC, KH, registry, workstation, `htql_kv_store`, …; chạy **mỗi lần** API khởi động (PM2). Khi có **phân hệ / bảng mới** trong bản phát hành server: bổ sung khối SQL tại `ensureSchema.js`, đóng gói zip mới, restart PM2 — **không** cần client tạo bảng. Hằng **`HTQL_MYSQL_SCHEMA_VERSION`** và **`HTQL_ENSURED_TABLES`** dùng log / tài liệu.
+- Tham chiếu tổng quan: **`BUILD_SERVER_INSTRUCTIONS.md`** (đường dẫn lưu trữ, mạng, backup).
+
+### Định dạng tên & phiên bản
+
+- **Tên file zip:** `htql_server_v[YYYY].[MM].[BUILD].zip`
+- **BUILD:** số tăng **liên tục**, **không** reset khi đổi tháng/năm (xem `BUILD_SERVER_INSTRUCTIONS.md`).
+- **Tên thư mục trong zip:** `htql_server_v[YYYY].[MM].[BUILD]` — Tool Server suy ra từ **tên file** `htql_server_v….zip` (không cần nhập tay). Tham khảo **`PACKAGE_INFO.txt`** trong gói sau khi đóng gói.
+
+### Thư mục phân phối (một file zip server mới nhất)
+
+- **Đầu ra:** `HTQL_550\phanmem\server\htql_server_v....zip` — **duy nhất** trong thư mục đó.
+- **Sau khi build:** `scripts\package-htql-server.ps1` ghi zip vào `phanmem\server\`, rồi **xóa mọi file và thư mục khác** trong thư mục đó (zip cũ, file tạm, README nhầm, thư mục giải nén, …) — chỉ **giữ lại** đúng file `htql_server_v….zip` vừa tạo.
+- **Tuỳ chọn:** ghi đè thư mục đầu ra bằng biến môi trường `HTQL_PACK_SERVER_OUT` (đường dẫn tuyệt đối hoặc tương đối gốc repo), ví dụ `phanmem\server` hoặc `D:\phat_hanh\htql_server`.
+- **Kết nối client tới server thực:** API Node cổng **3001**; LAN **192.168.1.68**; online **14.224.152.48**. Trong `.env.production` (Vite): `VITE_HTQL_IP_LAN`, `VITE_HTQL_IP_PUBLIC`, `VITE_HTQL_API_PORT=3001`, `VITE_HTQL_API_MODE=smart`. **`npm run dev`:** file **`.env.development`** — bật `VITE_HTQL_DEV_USE_REMOTE_API=1` để probe LAN/WAN (mặc định trong repo); không bật thì API chỉ qua proxy `localhost:3001`. Proxy dev: `VITE_HTTP_PROXY_API_TARGET=http://192.168.1.68:3001`. Trên Ubuntu: `deploy/env.server.example`; **DEMO:** `HTQL_DEMO_MODE=1` + DB `htql_550_db_demo` (user tạo trên aaPanel), header `X-HTQL-Demo: 1`.
+- **Script đóng gói** (và file `server-build-counter.txt`) nằm tại **`HTQL_550\scripts\`** để không lẫn file giao cho khách.
+
+### Phiên bản server mới — checklist triển khai (MySQL + SSD + file đính kèm)
+
+Sau khi **đóng gói zip** (`package-htql-server.ps1`) và **upload lên Ubuntu** / rsync `htql_server_v….zip` → `/opt/htql550/update/server/` (hoặc giải nén tay), **cấu hình process Node** (PM2) như sau:
+
+1. **File `.env` của API** (thường `/opt/htql550/server/.env` — đồng bộ `deploy/env.server.example`):
+   - **MySQL:** đủ **`HTQL_MYSQL_*`** *hoặc* tương thích **`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASS`** (API map sang cùng nghĩa).
+   - **Dữ liệu JSON/registry:** **`HTQL_DATA_DIR`** (vd `/opt/htql550/data`).
+   - **Gốc SSD (bắt buộc cho file thiết kế + đính kèm chứng từ trên đĩa):** **`HTQL_ROOT_SSD`** — do `setup_server.sh` ghi từ **2a/2b** (hoặc biến **`HTQL_SETUP_*`** khi không tương tác), vd **`/ssd_2tb/htql_550`**.
+     - Mặc định (khi không ghi `HTQL_PATH_*` riêng): **`HTQL_PATH_THIET_KE`** → **`${HTQL_ROOT_SSD}/thietke`**, **`HTQL_PATH_HOADON_CHUNG_TU`** → **`${HTQL_ROOT_SSD}/hdct`**. **Không** yêu cầu thư mục tên **`attachments`** ở cấp gốc SSD cho vận hành chuẩn.
+     - Có thể ghi tường minh **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_HOADON_CHUNG_TU`** nếu cần tách cấu trúc con (không dùng lại tên thư mục cũ `thiet-ke`, `attachments/hoa-don-chung-tu`).
+2. **Áp dụng env:** `pm2 restart <tên_app> --update-env` (vd `htql550-api` — đúng tên app trong `ecosystem.config.cjs`).
+3. **Quyền thư mục SSD:** `setup_server.sh` đã tạo gốc + **`thietke`** / **`hdct`** và phân quyền. Nếu log API báo lỗi sau khi đổi tay đường dẫn: **`sudo mkdir -p`** + **`sudo chown`** user chạy PM2.
+4. **API file trên SSD (bản server có `htqlUploadRoutes.js`):**
+   - **`POST /api/htql-upload?kind=thiet_ke|chung_tu|vthh_hinh&relativeDir=…&filename=…`** — multipart `file` = nội dung file; **đường dẫn lưu** trên server = `HTQL_PATH_THIET_KE` / `HTQL_PATH_HOADON_CHUNG_TU` / **`HTQL_PATH_VTHH_HINH_ANH`** (mặc định **`${HTQL_ROOT_SSD}/vthh`** hoặc env riêng) + `relativeDir` (đã chặn `..`). Ảnh VTHH tab 4: **`kind=vthh_hinh`**, `relativeDir` = mã VTHH ASCII.
+   - **`GET /api/htql-files?kind=thiet_ke|chung_tu|vthh_hinh&rel=…`** — đọc file đã lưu (xem trước / tải).
+   - **`POST /api/htql-files-move?kind=thiet_ke`** — đổi tên/di chuyển file đã lưu (`fromRel` → `toRel`) khi chuẩn hóa đường dẫn dktk (pending → `kh00001`, hoặc giữ thư mục mã BG khi nối từ báo giá). Client: `htqlReconcileThietKeServerPaths` (`src/utils/htqlReconcileThietKeServerPaths.ts`), gọi trước khi lưu chứng từ.
+   - **Client web (Báo giá / Đơn hàng bán):** khi có kết nối API (LAN/Online), đính kèm thiết kế **ưu tiên upload** lên server → lưu `server_kind` + `server_relative_path` trong JSON chứng từ; **không** nhét base64 vào JSON khi upload thành công.
+5. **`GET /api/htql-meta`:** trả `pathThietKe`, `pathHoaDonChungTu`, `ssdRoot`, `storageBackend`, `fileUploadApi: true` (khi build có route upload).
+6. **Migration cấu trúc thư mục + KV (từ tiền tố module cũ `bao_gia/`, `don_hang_mua/`, …):** trên máy chủ (sau **backup** SSD + DB), chạy **`cd /opt/htql550/server && npm run migrate-storage`** (file `server/migrateStorageLayout.js`) — đưa thư mục con cũ lên đúng cấp dưới `thietke` / `hdct` và cập nhật chuỗi trong `htql_kv_store` (+ file `data/htql_kv_store.json` nếu không dùng MySQL). Tuỳ chọn một lần khi khởi động API: **`HTQL_STORAGE_MIGRATE_ON_START=1`** rồi `pm2 restart … --update-env` — **tắt** biến này sau khi xong để không chạy lại mỗi lần restart.
+
+---
+
+### Lệnh đóng gói server
+
+```powershell
+Set-Location "C:\Users\Administrator\Desktop\HTQL_550"
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\package-htql-server.ps1"
+```
+
+- Script cập nhật **`VERSION.txt`** ở gốc repo theo phiên bản vừa đóng gói.
+- **Loại trừ:** `node_modules`, `attachments/`, dữ liệu demo, `.env` cá nhân (không đưa vào zip).
+- **Định dạng zip:** không dùng `Compress-Archive` thuần (entry dùng `\\` → `unzip` trên Ubuntu có thể thoát **mã 1** cảnh báo, làm hỏng script cập nhật có `set -e`). Script `package-htql-server.ps1` nén bằng `ZipArchive` với đường dẫn **chỉ dùng `/`**, và gói kèm **`package.json` gốc repo** (để `/api/htql-meta` có `webAppVersion`).
+- **Đồng bộ dữ liệu ứng dụng (MySQL):** bảng `htql_kv_store` + API `GET/PUT /api/htql-kv` đồng bộ các khóa `localStorage` prefix `htql*` (trừ khóa đã có REST + bảng riêng: DVT, NCC, KH). Mật khẩu DB chỉ trên server. **Tool Control Center:** thống kê bảng qua **`GET /api/htql-mysql-tables`** (tên, ước lượng số dòng InnoDB, dung lượng data + index) — hiển thị cạnh khối «Máy trạm (API)».
+
+#### Đồng bộ đa máy trạm — chi tiết kỹ thuật (tham chiếu mã)
+
+- **Vấn đề cũ:** client chỉ **kéo KV một lần** khi khởi động → máy B **không thấy** dữ liệu máy A cho tới khi mở lại app.
+- **Hành vi chuẩn (mã `src/utils/htqlKvSync.ts`):** khi `kvSyncEnabled` từ `/api/htql-meta`, client **poll** `GET /api/htql-kv?prefix=htql` theo **`KV_POLL_INTERVAL_MS`** (mặc định **220 ms**) và **hợp nhất** theo **`version`**. **Độ trễ điển hình LAN** sau khi máy A lưu: cỡ **sub‑giây đến ~1–2 s** (debounce + PUT + vòng poll + RTT) — **không** có giới hạn <0,01 ms qua mạng; roadmap nếu cần đẩy gần tức thì: **SSE/WebSocket** server.
+- **Tránh ghi đè khi đang nhập:** khóa **pending** (chờ PUT) không bị poll ghi đè.
+- **Làm mới UI:** `CustomEvent` (vd `htql-bao-gia-reload`, `banHangTabEvent`, …) + `htql-kv-remote-sync` với `detail.keys`.
+- **File hướng dẫn trong zip:** `HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md` (cùng cấp `setup_server.sh` sau khi giải nén).
+
+### MySQL trên server (`setup_server.sh` + aaPanel)
+
+- **Mục tiêu:** MySQL do **aaPanel** quản lý. Script cài **`mariadb-client`** (lệnh `mysql`), **không** cài **`mariadb-server`**. Tạo DB trong aaPanel (Add DB, utf8mb4, **Local server** / `127.0.0.1`); nhập mật khẩu khi chạy script hoặc `export HTQL_SETUP_MYSQL_PASSWORD=...` (non-interactive). Script chạy **`SELECT 1`** qua TCP rồi ghi **`HTQL_MYSQL_*`** vào **`server/.env`**. API Node dùng `mysql2` — **không** commit mật khẩu vào repo.
+- **Xác minh mật khẩu (cài đặt tương tác):** sau khi có lệnh `mysql`, `setup_server.sh` chạy `SELECT 1` tới DB/user aaPanel. **Sai mật khẩu hoặc lỗi kết nối** → in thông báo và stderr MySQL, **nhập lại mật khẩu** trong vòng lặp cho tới khi thành công; để trống + Enter → thoát. **`HTQL_SETUP_NONINTERACTIVE=1`:** không hỏi lại — lỗi lần đầu → thoát (sửa `HTQL_SETUP_MYSQL_PASSWORD` / cấu hình aaPanel rồi chạy lại).
+- **Tài khoản Ubuntu:** user có **`sudo`**, không chạy script bằng root.
+- **Checklist (`.env`):** `HTQL_MYSQL_HOST=127.0.0.1`, port **3306**; sau cài chạy **`ensureSchema`** khi PM2 khởi động.
+- **Tùy chọn trong code:** `HTQL_MYSQL_BOOTSTRAP` — chỉ khi cần tạo DB bằng tài khoản admin (không dùng trong luồng aaPanel chuẩn).
+
+### Ubuntu apt treo `0% [Waiting for headers]` (security.ubuntu.com)
+
+- **Dấu hiệu:** `apt update` / `apt install` đứng lâu ở `0% [Waiting for headers]`, lặp `Connecting to security.ubuntu.com`.
+- **Nguyên nhân thường gặp:** DNS lỗi, IPv6 route kém ổn định, firewall/proxy chặn outbound 80/443, mirror mặc định phản hồi chậm theo tuyến mạng hiện tại.
+- **Cách xử lý nhanh (an toàn):**
+  1. Kiểm tra DNS + route: `getent hosts security.ubuntu.com`, `ping -4 -c 3 security.ubuntu.com`.
+  2. Ép IPv4 cho apt (tránh treo do IPv6): tạo `/etc/apt/apt.conf.d/99force-ipv4` với `Acquire::ForceIPv4 "true";`
+  3. Đặt timeout/retry cho apt: `/etc/apt/apt.conf.d/99htql-timeouts`:
+     - `Acquire::Retries "3";`
+     - `Acquire::http::Timeout "20";`
+     - `Acquire::https::Timeout "20";`
+  4. Chạy lại: `sudo apt clean && sudo apt update`.
+  5. Nếu vẫn chậm: chuyển mirror sang mirror ổn định gần khu vực (hoặc dùng mirror nội bộ doanh nghiệp), sau đó `sudo apt update` lại.
+- **Đã triển khai trong script cài đặt:** `setup_server.sh` tự ghi `/etc/apt/apt.conf.d/99htql-network` (ForceIPv4 + timeout + retries) và chạy `apt-get update` theo vòng lặp retry 3 lần; nếu vẫn lỗi thì dừng sớm với thông báo kiểm tra DNS/mạng.
+- **Đã triển khai trong Tool cập nhật server (SSH):** IPC `ssh:runServerUpdate` trong `phanmem/controlCenter/electron/main.cjs` (và bản mirror `tools/htqlControlCenter/electron/main.cjs`) — trước `apt-get update` cũng ghi cùng file `99htql-network` và retry `apt-get update` tối đa 3 lần, vì bước **«Update 1/7»** luôn gọi `apt` trên máy Ubuntu mỗi lần đẩy zip (đây là chỗ hay thấy `Waiting for headers` / thử IPv6 tới `security.ubuntu.com`, không phải do mã Node trong zip).
+- **Lưu ý triển khai HTQL_550:** chỉ tiếp tục `setup_server.sh` sau khi `apt update` chạy ổn định; tránh để script cài dở gây thiếu package (`curl`, `rsync`, `mariadb-client`, `ufw`...).
+
+### Tool Server (Electron)
+
+- **Đóng gói:** `powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\package-htql-control.ps1"` → **`phanmem\tool\`** chỉ còn **một** file `HTQL_550 Server-*-Portable.exe`.
+- **Đích cập nhật trên Ubuntu (mặc định):** server zip + client installer/manifest: **`/opt/htql550/update/server/`** và **`/opt/htql550/update/client/`** (đồng bộ với `deploy/env.server.example` và Control Center).
+- **Cập nhật mã server (Control Center → SSH):** chỉ đồng bộ **`server/`** từ gói zip đã giải nén vào **`/opt/htql550/server/`** bằng `rsync` với **`--exclude node_modules`** và **`--exclude .env`**. **Tuyệt đối không** xóa hoặc ghi đè **`/opt/htql550/data/`**, thư mục **`update/`**, và **SSD** (`hdct`, `thietke`). **`server/.env`** không bị ghi đè bởi zip — có thể chỉnh **riêng** qua **Ghi MySQL** trong tool (hoặc SSH tay).
+
+---
+
+## D. Vận hành Ubuntu — PM2, backup, schema MySQL
+
+### Khởi động lại cùng hệ điều hành
+
+- **`setup_server.sh`** sau khi `pm2 start ecosystem.config.cjs` gọi **`pm2 save`** và **`pm2 startup systemd -u <user> --hp $HOME`** — PM2 đăng ký với **systemd** để process API (**`htql550-api`**) tự chạy lại sau **reboot** (cùng user triển khai).
+- **Liên kết tool / client:** API lắng nghe cổng **3001**; client và Control Center dùng cùng base URL (LAN/WAN) — không đổi cổng khi chỉ cập nhật mã.
+
+### Bảng MySQL & module mới
+
+- **`server/db/ensureSchema.js`** chỉ dùng **`CREATE TABLE IF NOT EXISTS`** / bổ sung cột an toàn — **không** có **`DROP TABLE`**, **`TRUNCATE`**, hay script xóa dữ liệu khách hàng / vật tư.
+- Phân hệ mới cần lưu MySQL: **bổ sung** SQL trong `ensureSchema.js` trong repo → đóng gói zip → triển khai → `pm2 restart` — bảng mới xuất hiện, **dữ liệu cũ giữ nguyên**.
+
+### Tự động `mkdir` + quyền thư mục lưu trữ
+
+- **API Node (`ensureHtqlDataDirectories` trong `server/donViTinhServer.js`):** mỗi lần khởi động tạo (nếu thiếu) **`DATA_DIR`**, **`PATH_DU_LIEU`**, **`hdct`**, **`thietke`**, **`HTQL_ROOT_SSD`** (gốc SSD), thư mục **`HTQL_PATH_VTHH_HINH_ANH`** (ảnh VTHH — mặc định cùng cây SSD với `thietke`/`hdct`), **`update/client`**, **`update/server`**, **`logs`** (dưới `HTQL_INSTALL_ROOT`), thư mục backup HDD (`HTQL_PATH_BACKUP_*`), SQLite (khi không dùng MySQL). Trên **Linux/macOS** gọi **`chmod 775`** cho từng thư mục vừa tạo (không `chown` — cần quyền owner; nếu `EPERM` thì bỏ qua).
+- **`setup_server.sh`:** sau khi ghi **`server/.env`**, gọi **`mkdir -p`** cho **`data`**, **`logs`**, **`update/client`**, **`update/server`**, **`backup_dulieu`**, **`backup_ct_tk`**; **`chmod u+rwX`** + **`chown`** user triển khai cho **`data`**, **`update`**, **`logs`** và toàn bộ cây **`HTQL_BACKUP`** — đảm bảo PM2/API và **Control Center (SFTP/sudo cp)** ghi được **`/opt/htql550/update/client`** (gói `.exe` + `htql-client-manifest.json`).
+- **SSD:** `setup_server.sh` suy **`SSD_DEFAULT`** (= **`HTQL_ROOT_SSD`** trong `.env`) từ thư mục cha của **`thietke`** / **`hdct`** đã nhập (hoặc từ **`HTQL_SETUP_ATTACH`** khi Control Center cài không tương tác), rồi **`mkdir -p`** + **`chown`** + **`chmod`** cho **`${SSD_DEFAULT}/thietke`** và **`hdct`**.
+
+### Backup định kỳ — 01:00 hàng ngày
+
+- **`/usr/local/bin/htql550-backup.sh`** (cron **`0 1 * * *`**) do `setup_server.sh` đăng ký:
+  - Dump **PostgreSQL** (nếu dùng) + **nén `data/`** dưới gốc cài + **`mysqldump` MySQL** (đọc mật khẩu **`/opt/htql550/.mysql_password`**) vào **`${BACKUP_HDD}/daily_system/`** — xoay vòng **tối đa 10 bản**/loại (db, data, mysql).
+  - **Đồng bộ gia tăng (rsync):** **`${SSD_ROOT}/hdct/`** và **`${SSD_ROOT}/thietke/`** (đúng **`HTQL_PATH_*`** đã cấu hình) → **`${BACKUP_HDD}/backup_ct_tk/hdct`**, **`thietke`** — **không** còn rsync thư mục legacy **`attachments_incremental`**.
+- Log: **`/opt/htql550/logs/htql550-backup.log`** (đường dẫn theo gốc cài).
+
+### Cập nhật phiên bản server — không xóa dữ liệu
+
+- Zip cập nhật **không** chứa `data/`, `.env` production của khách; `rsync` **không** xóa `data`. **`ensureSchema`** không hủy bảng — chỉ tạo thiếu.
+
+---
+
+## E. Máy trạm — kiểm tra cập nhật & an toàn dữ liệu
+
+(Chuỗi **Server ↔ Tool ↔ Client** tổng quan: xem mục **«Liên kết hệ thống»** ở đầu file.)
+
+### Thư mục `update/client` (máy chủ Ubuntu)
+
+- **Đường dẫn chuẩn (mặc định):** **`/opt/htql550/update/client`** = **`HTQL_UPDATE_CLIENT_DIR`** trong **`server/.env`** = đích **Control Center** (`PATH_UPDATE_CLIENT` trong `phanmem/controlCenter/electron/main.cjs` = `` `${REMOTE_HTQL_ROOT}/update/client` `` với **`REMOTE_HTQL_ROOT=/opt/htql550`**).
+- **`GET /api/htql-meta`** trả **`pathUpdateClient`** (đường dẫn tuyệt đối thực tế trên máy chủ). **Máy trạm (Electron)** gọi **`/api/htql-meta`** trước **`/api/htql-client-update-manifest`** để **đối chiếu** với chuẩn `/opt/htql550/update/client` và hiển thị trong hộp thoại — **không** quét trực tiếp đĩa Linux từ Windows; manifest **luôn** khớp thư mục mà API đang phục vụ (cùng `HTQL_UPDATE_CLIENT_DIR`).
+- **`GET /api/htql-client-update-manifest`** đọc **`htql-client-manifest.json`** trong **`pathUpdateClient`** (mặc định file trên = **`/opt/htql550/update/client/htql-client-manifest.json`** sau khi Tool đẩy). Client so sánh **phiên bản** (`semver` / tag `VYYYY_MM_DD_NN`) với bản đang chạy: nếu **≤** thì **không** hỏi cập nhật; nếu **>** thì **hộp thoại xác nhận** trước khi mở URL tải / hành động cập nhật.
+- **Tần suất gọi API kiểm tra trên máy trạm:** lúc mở app (~3,5 s) + **mỗi 6 giờ** — xem **§3.A** (tránh poll quá dày).
+
+### Thư mục cục bộ cạnh file chạy: `update/client/`
+
+- Nếu có **`htql-client-manifest.json`** + file **`.exe`** tương ứng trong **`update/client/`** cạnh **`.exe`** ứng dụng, client áp dụng **cùng quy tắc** so sánh phiên bản; khi mới hơn → hỏi trước, rồi **`shell.openPath`** chạy installer (NSIS chỉ cập nhật/ghi đè chương trình — **không** xóa `%ProgramData%\HTQL550` / dữ liệu đồng bộ theo thiết kế NSIS).
+
+### Nguyên tắc
+
+- Cập nhật client/server **không** được kèm bước xóa DB, xóa JSON nghiệp vụ, hay xóa file SSD đính kèm — mọi thao tác dọn rác chỉ trong phạm vi **cache/build tạm** được kiểm soát tách biệt.
+
+---
+
+## C. HTQL_550 Máy trạm (client Windows — NSIS x64, một file Setup)
+
+### Mã nguồn & phiên bản
+
+- **Mã nguồn (build):** `HTQL_550\phanmem\htqlClientInstaller\` (Electron + electron-builder NSIS).
+- **Phân phối (chỉ giao khách):** `HTQL_550\phanmem\client\` — **duy nhất một** file `HTQL_550_Setup_<tag>.exe` (script `build-htql-client.ps1` xóa mọi file cũ trong thư mục này trước khi copy; không ghi README vào `client\`).
+- **Định danh phiên bản (bắt buộc):** **`VYYYY_MM_DD_NN`** (ví dụ `V2026_04_07_01`) — **một** dòng trong **`phanmem\htqlClientInstaller\VERSION_TAG`**. Cùng ngày tháng năm: tăng **NN**; đổi ngày: reset **01**. Trước mỗi `npm run build` trong installer: **`node scripts/sync-version.cjs`** đồng bộ tag → **`package.json`** (semver: **`YYYY.M.D-NN`**) + **`.env.production`** (`VITE_HTQL_550_VERSION`) + **`artifactName`** (`HTQL_550_Setup_${tag}.exe`).
+- **Bắt buộc trước mỗi bản client mới (phát hành khác phiên bản trước):** chạy **`scripts\bump-htql-client-version.ps1`** (hoặc sửa tay **`VERSION_TAG`**). **`build-htql-client.ps1` không tự tăng số** — nếu **không** bump mà build lại, tên file **`HTQL_550_Setup_V….exe` giữ nguyên** như lần trước (ghi đè trong `phanmem\client\`); đó là **đúng thiết kế**, không phải lỗi đóng gói.
+- **Tên file cài đặt:** `HTQL_550_Setup_V2026_04_07_01.exe` (theo tag; không trùng định dạng cũ `v2026.4.x` thuần npm).
+
+### Thông số kỹ thuật (Cursor / build)
+
+| Hạng mục | Giá trị |
+|----------|---------|
+| **Target** | Windows **x64** |
+| **Installer** | NSIS: `oneClick: false`, `allowToChangeInstallationDirectory: true`, `perMachine: true` (cài cho máy, cần quản trị khi ghi Program Files) |
+| **Database** | SQLite cục bộ: thư mục & file khởi tạo dưới `%ProgramData%\HTQL550\` (bước cài đặt tạo `sqlite\htql_local.db` placeholder; ứng dụng mở rộng schema khi chạy) |
+| **Cập nhật** | `electron-updater` + `build.publish` (generic URL máy chủ Ubuntu / Nginx Nam Bắc AD — ví dụ `https://14.224.152.48/htql-client-updates/`) — kiểm tra khi khởi động (`checkForUpdatesAndNotify`) |
+| **License / README** | File văn bản **UTF-8** (khuyến nghị **UTF-8 có BOM** cho `LICENSE.txt` để NSIS Unicode hiển thị tiếng Việt ổn định). |
+| **Probe HTTP** | `axios` (timeout) trong `src/config/htqlApiBase.ts` — thay thế `fetch` thuần cho kiểm soát timeout rõ ràng. |
+
+### Quy trình cài đặt 8 bước — thanh tiến trình (NSIS Setup Wizard + PowerShell)
+
+Script `build/htql-install-wizard.ps1` (WinForms) chạy **sau** chọn thư mục, **trước** giải nén file ứng dụng: **một** thanh tiến trình **0% → 100%** qua 8 giai đoạn (macro `customPageAfterChangeDir` trong `build/installer.nsh`; tự `BM_CLICK` Tiếp khi xong). Nội dung giai đoạn:
+
+| % | Giai đoạn | Nội dung |
+|---|-----------|----------|
+| 0% | Chào mừng | Logo Nam Bắc AD & giới thiệu HTQL_550 bản 64-bit |
+| 15% | Cam kết | Điều khoản nội bộ & bảo mật dữ liệu xưởng in |
+| 30% | Vị trí | Xác nhận cài đặt tại `C:\HTQL550` (hoặc `INSTDIR`) |
+| 45% | Quét mạng (4/8) | Quét LAN `192.168.1.1`–`254`, cổng **3001** → `htql-smart-connect.json` |
+| ~60% | Kết nối máy chủ (5/8) | Gọi `/api/htql-meta`; **LAN / Online**; ghi `htql-server-paths.json` + `htql-online-fallback.json`; hộp thoại đường dẫn |
+| 75% | Kiểm tra phần cứng (6/8) | RAM (khuyến nghị ≥8GB) & dung lượng đĩa trống → `htql-hardware-check.json` |
+| 90% | Khởi tạo hệ thống (7/8) | Chuẩn bị bước NSIS: Registry + Shortcut (thực hiện khi giải nén) |
+| 100% | Hoàn tất (8/8) | Sẵn sàng giải nén; bước sau: `MUI_PAGE_INSTFILES` (thanh tiến trình **thật** khi **Extracting** / ghi file) + `customInstall` (SQLite `ProgramData` + cache) + trang Finish — **Chạy phần mềm ngay** (`runAfterFinish`). |
+
+### Giao diện ứng dụng — Footer & kiểm tra cập nhật
+
+- **Footer** (`src/components/appFooter.tsx`): **● Kết nối** — LAN (IP cụ thể) hoặc ONLINE (IP công khai); **● Đồng bộ** — so sánh phiên bản web gốc (`VITE_APP_VERSION`) với `webAppVersion` từ `/api/htql-meta` (xanh nếu khớp); **● Luồng KV** — tổng **dung lượng tải lên / tải xuống** trong phiên làm việc (đồng bộ `htql_kv_store`), thời gian **poll** gần nhất (ms) và **tốc độ ước lượng** (KB/s) của lần GET KV cuối (hữu ích khi chẩn đoán LAN).
+- **Cập nhật bản cài (EXE):** `electron-updater` (generic) **bổ sung** kiểm tra **`/api/htql-client-update-manifest`** + **`update/client/`** cạnh exe — khi có bản mới: **hộp thoại xác nhận** trong main process (xem **mục §3.A**); chu kỳ **6 giờ** + lúc mở app.
+
+### Màn hình «Kết nối máy chủ» (đường dẫn lưu trữ + snapshot)
+
+- **Module:** `src/modules/ketNoiMayChu/ketNoiMayChu.tsx` — sidebar **Kết nối máy chủ** (`ketNoiMayChu`).
+- **API:** `GET /api/htql-meta` trả `pathDuLieu`, `pathHoaDonChungTu`, `pathThietKe`, `pathCoSoDuLieu` (và `dataDir` tương thích cũ). Client suy đường dẫn thiếu qua `src/utils/htqlDerivePaths.ts`. Server (`server/donViTinhServer.js`): `HTQL_PATH_DU_LIEU`, `HTQL_PATH_HOADON_CHUNG_TU`, `HTQL_PATH_THIET_KE`, `HTQL_PATH_CO_SO_DU_LIEU` (mặc định `DATA_DIR/sqlite`).
+- **LAN / Online:** `getHtqlConnectionMode()` trong `src/config/htqlApiBase.ts` (RFC1918 = LAN).
+- **Lưu máy trạm:** nút **Lưu** ghi **`htql-server-paths.json`** (kết nối, `connectionMode`, phiên bản server, 4 đường dẫn). **Electron:** cạnh `.exe`. **Bước 5 cài đặt** cũng ghi file này vào `INSTDIR` trước khi giải nén.
+- **Kiểu dữ liệu:** `src/types/htqlServerPaths.ts` — `HtqlMetaResponse`, `HtqlServerPathsSnapshot`.
+
+### Cơ chế kết nối thông minh (Hybrid Connect)
+
+- **Auto-Discovery:** quét `192.168.1.1`–`254`, cổng **3001**; ưu tiên **Local-First** (file cài đặt + `htqlApiBase.ts`).
+- **Ngân sách LAN:** ~**5 giây** từ lúc bắt đầu `initHtqlApiBase` — sau đó chuyển sang **WAN** `14.224.152.48` nếu chưa có API LAN.
+- **Fallback WAN:** IP **`14.224.152.48`** (cổng API theo `.env.production`).
+
+### Logic dữ liệu & chống trùng mã (Sequential ID)
+
+- **Tạo đơn:** Offline — mã **`TEMP-`**; Online — server cấp số nối tiếp (Max ID + 1) — triển khai lớp API/đồng bộ (roadmap).
+- **Chống xung đột:** so sánh **`updated_at`** (timestamp); cảnh báo trước khi ghi đè nếu máy trạm cũ hơn máy chủ — **roadmap** (ghi đè form nghiệp vụ theo rule HTQL).
+
+### Đóng gói ứng dụng (toàn bộ phân hệ trong `src/`)
+
+- **Bước 1:** `npm run build` tại gốc repo — Vite đóng gói **toàn bộ** mã `src/` vào `dist/`.
+- **Bước 2:** Trong `phanmem\htqlClientInstaller`: `npm run build` — copy `dist` → `web-dist`, electron-builder NSIS x64.
+
+### Phân phối (chỉ một file Setup .exe)
+
+- **Đầu ra:** mặc định `HTQL_550\phanmem\client\` — **một** `HTQL_550_Setup_V....exe`. **`HTQL_CLIENT_OUT`:** thư mục đích tùy chọn (tuyệt đối hoặc tương đối gốc repo). **`build-htql-client.ps1`** sau khi copy **xóa mọi file/thư mục khác** trong thư mục đích — **chỉ giữ** file `.exe` vừa tạo.
+- **Lệnh phát hành client mới (bump + build — khuyến nghị):**
+
+```powershell
+Set-Location "C:\Users\Administrator\Desktop\HTQL_550"
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\bump-htql-client-version.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\build-htql-client.ps1"
+```
+
+### So khớp CLIENT_EXE_BUILD_GUIDE.md
+
+- Logo Nam Bắc: icon build copy từ `logo/logo_nambac.png`.
+- Tên file dạng `HTQL_550_Setup_VYYYY_MM_DD_NN.exe` (theo `VERSION_TAG`).
+
+---
+
+## Ghi chú chung
+
+- Gói zip cài server trên Ubuntu phải **đồng bộ** `setup_server.sh` với repo trước khi phát hành.
+
+### Sau mỗi lần build bản cập nhật — chỉ giữ artifact trong thư mục đích (bắt buộc)
+
+- **Nguyên tắc:** Khi **build bản cập nhật mới** (server zip / tool portable / client Setup) xong, mỗi script đóng gói **ghi** artifact vào **thư mục đích đã định** (mặc định `phanmem\server\`, `phanmem\tool\`, `phanmem\client\` hoặc `HTQL_PACK_SERVER_OUT` / `HTQL_CLIENT_OUT`), rồi **xóa sạch** mọi file/thư mục **không** phải bản vừa tạo trong thư mục đó (zip cũ, README nhầm, thư mục giải nén, `.exe` lỗi thời, v.v.) — tránh rác và nhầm phiên bản.
+- **`scripts\package-htql-server.ps1`:** ghi `htql_server_v….zip` vào **`phanmem\server\`** (hoặc `HTQL_PACK_SERVER_OUT`), **xóa mọi file/thư mục khác** trong thư mục đó — chỉ còn **một** file zip.
+- **`scripts\package-htql-control.ps1`:** copy **một** `HTQL_550 Server-*-Portable.exe` vào **`phanmem\tool\`**, xóa nội dung cũ trong `phanmem\tool\`, **xóa** `phanmem\controlCenter\release\`.
+- **`scripts\build-htql-client.ps1`:** copy **một** `HTQL_550_Setup_V….exe` vào **`phanmem\client\`** (hoặc `HTQL_CLIENT_OUT`), **xóa** mọi file khác trong thư mục đích, dọn `release\` / `web-dist` của installer.
+
+---
+
+## Thư mục / đường dẫn — tự tạo khi thiếu
+
+- **Control Center (Electron):** khi SFTP file zip/installer, nếu cần thì chạy `mkdir -p` trên server cho thư mục đích (ví dụ `/tmp` đã có; các đường dẫn SSD trong bước `sudo cp` đều có `mkdir -p` trước).
+- **API Node (`server/donViTinhServer.js`):** khi khởi động, tự `fs.mkdirSync(..., { recursive: true })` + (Linux) `chmod 775` cho `DATA_DIR`, SSD gốc, `hdct`, `thietke`, SQLite (nếu dùng), `update/server`, `update/client`, `logs`, backup (theo biến môi trường). Ghi file đính kèm lên SSD qua `POST /api/htql-upload` (`server/htqlUploadRoutes.js`) vào **`HTQL_PATH_THIET_KE`** / **`HTQL_PATH_HOADON_CHUNG_TU`**. **`setup_server.sh`** tạo và phân quyền gốc SSD + **`thietke`**/**`hdct`** theo **`HTQL_SETUP_ATTACH`**; bổ sung `chown` user triển khai cho `data` / `update` / `logs` và cây backup HDD.
+- **Client cài đặt (Electron installer):** thư mục làm việc / file cấu hình cạnh exe được tạo khi ghi (theo code hiện có).
+
+
+
+
+## Bổ sung — Chuẩn lưu trữ SSD tách đôi (bắt buộc triển khai mới)
+
+- **Hóa đơn / chứng từ:** đường dẫn tuyệt đối `/ssd_2tb/htql_550/hdct/` — biến `HTQL_PATH_HOADON_CHUNG_TU`; API upload `kind=chung_tu`.
+- **File thiết kế:** đường dẫn tuyệt đối `/ssd_2tb/htql_550/thietke/` — biến `HTQL_PATH_THIET_KE`; API upload `kind=thiet_ke`.
+- Hai kho **không** gộp chung trong một thư mục `attachments` khi cài mới. `HTQL_ROOT_SSD=/ssd_2tb/htql_550` vẫn là gốc SSD; nếu không khai báo `HTQL_PATH_*`, Node suy `${HTQL_ROOT_SSD}/hdct` và `${HTQL_ROOT_SSD}/thietke`. `deploy/env.server.example` có sẵn hai dòng `HTQL_PATH_*` tường minh.
+
+## Bổ sung — Build máy trạm và thư mục phân phối
+
+- Trước phát hành: `npx tsc --noEmit` (exit 0) và `npm run build` tại gốc repo. Tránh xóa code dư thừa hàng loạt nếu không có công cụ / bằng chứng rõ — ưu tiên ổn định nghiệp vụ.
+- `HTQL_CLIENT_OUT`: ghi đè thư mục đích của `scripts/build-htql-client.ps1` (tương tự `HTQL_PACK_SERVER_OUT`). Sau khi build giữ tối đa **10** file `HTQL_550_Setup_*.exe` gần nhất trong thư mục đích.
+- `HTQL_PACK_SERVER_OUT`: thư mục nhận `htql_server_v….zip`; `package-htql-server.ps1` xóa mọi file/thư mục khác, **chỉ giữ** đúng file zip vừa tạo.

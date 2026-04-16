@@ -1,12 +1,13 @@
 /**
- * API và types cho Báo giá (header + chi tiết dòng).
- * Mã: {Năm}/BG/{Số} — rule ma-he-thong.mdc
- * 
- * [YC24 Mục 7] Endpoint backend (khi có): /api/sales/quotes
- * Hiện tại: localStorage-based (tách biệt khỏi /api/purchase/orders)
+ * API don hang ban (chung tu day du) — header + chi tiet.
+ * Mã đơn: rule ma-he-thong.mdc (prefix DHB).
+ *
+ * Du lieu: /api/htql-module-bundle/donHangBanChungTu (MySQL htql_module_bundle hoac file JSON).
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlModuleBundleGet, htqlModuleBundlePut } from '@/utils/htqlModuleBundleApi'
 import { baoGiaHoanTacKhiHetLienKetDonHangBan } from '../baoGia/baoGiaApi'
 import { HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import type {
@@ -33,93 +34,14 @@ export type {
 /** Alias tương thích — cùng nghĩa với DonHangBanChungTuKyValue. */
 export type KyValue = DonHangBanChungTuKyValue
 
-/** Dữ liệu mẫu báo giá */
-const MOCK_DON: DonHangBanChungTuRecord[] = [
-  {
-    id: 'dhb_full1',
-    tinh_trang: 'Chưa thực hiện',
-    ngay_don_hang: '2026-03-10',
-    so_don_hang: 'DHB00001',
-    ngay_giao_hang: null,
-    khach_hang: 'CÔNG TY TNHH QUẢNG CÁO VAX',
-    dia_chi: '',
-    ma_so_thue: '',
-    dien_giai: '',
-    nv_ban_hang: '',
-    dieu_khoan_tt: '',
-    so_ngay_duoc_no: '0',
-    dieu_khoan_khac: '',
-    tong_tien_hang: 4000000,
-    tong_thue_gtgt: 0,
-    tong_thanh_toan: 4000000,
-    so_chung_tu_cukcuk: '',
-  },
-  {
-    id: 'dhb_full2',
-    tinh_trang: 'Đang thực hiện',
-    ngay_don_hang: '2026-03-12',
-    so_don_hang: 'DHB00002',
-    ngay_giao_hang: '2026-03-20',
-    khach_hang: 'CÔNG TY CP NGUYÊN VẬT LIỆU ABC',
-    dia_chi: '',
-    ma_so_thue: '',
-    dien_giai: 'Đơn hàng vật tư quý 1',
-    nv_ban_hang: '',
-    dieu_khoan_tt: '',
-    so_ngay_duoc_no: '0',
-    dieu_khoan_khac: '',
-    tong_tien_hang: 15000000,
-    tong_thue_gtgt: 0,
-    tong_thanh_toan: 15000000,
-    so_chung_tu_cukcuk: 'CUKCUK-2026-001',
-  },
-  {
-    id: 'dhb_full3',
-    tinh_trang: 'Chưa thực hiện',
-    ngay_don_hang: '2026-03-15',
-    so_don_hang: 'DHB00003',
-    ngay_giao_hang: null,
-    khach_hang: 'CÔNG TY TNHH DỊCH VỤ XYZ',
-    dia_chi: '',
-    ma_so_thue: '',
-    dien_giai: '',
-    nv_ban_hang: '',
-    dieu_khoan_tt: '',
-    so_ngay_duoc_no: '0',
-    dieu_khoan_khac: '',
-    tong_tien_hang: 8500000,
-    tong_thue_gtgt: 0,
-    tong_thanh_toan: 8500000,
-    so_chung_tu_cukcuk: '',
-  },
-]
 
-/** Chi tiết theo báo giá */
-const MOCK_CHI_TIET: DonHangBanChungTuChiTiet[] = [
-  {
-    id: 'ct1',
-    don_hang_ban_id: 'dhb_full1',
-    ma_hang: 'VT00001',
-    ten_hang: 'decal trang sus',
-    ma_quy_cach: '',
-    dvt: 'Cây',
-    chieu_dai: 0,
-    chieu_rong: 0,
-    chieu_cao: 0,
-    ban_kinh: 0,
-    luong: 0,
-    so_luong: 5,
-    so_luong_nhan: 0,
-    don_gia: 800000,
-    thanh_tien: 4000000,
-    pt_thue_gtgt: null,
-    tien_thue_gtgt: null,
-    lenh_san_xuat: '',
-  },
-]
+export const DON_HANG_BAN_CHUNG_TU_MODULE_ID = 'donHangBanChungTu' as const
+export const DON_HANG_BAN_CHUNG_TU_BUNDLE_QUERY_KEY = ['htql-module-bundle', DON_HANG_BAN_CHUNG_TU_MODULE_ID] as const
 
-const STORAGE_KEY_DON_HANG_BAN_CT = 'htql_don_hang_ban_chung_tu_list'
-const STORAGE_KEY_CHI_TIET = 'htql_don_hang_ban_chung_tu_chi_tiet'
+const BUNDLE_V = 2
+
+/** Prefix mã chứng từ Đơn hàng bán: {Năm}/ĐHB/{Số} (rule ma-he-thong / htql550). */
+const MODULE_PREFIX = 'ĐHB'
 
 function normalizeDonHangBanChungTu(d: Partial<DonHangBanChungTuRecord> & { id: string; de_xuat_id?: string }): DonHangBanChungTuRecord {
   const legacyDx = (d as { de_xuat_id?: string }).de_xuat_id
@@ -225,74 +147,102 @@ export function donHangBanChiTienBangIdsLinked(row: DonHangBanChungTuRecord): st
   return [...new Set([...fromArr, primary])].filter(Boolean)
 }
 
-function loadFromStorage(): { donHangBan: DonHangBanChungTuRecord[]; chiTiet: DonHangBanChungTuChiTiet[] } {
-  try {
-    const rawDonHangBanChungTu = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DON_HANG_BAN_CT) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
-    const donHangBan = rawDonHangBanChungTu ? JSON.parse(rawDonHangBanChungTu) : null
-    const chiTiet = rawCt ? JSON.parse(rawCt) : null
-    if (Array.isArray(donHangBan) && Array.isArray(chiTiet)) {
-      return { donHangBan: donHangBan.map((d: Partial<DonHangBanChungTuRecord> & { id: string }) => normalizeDonHangBanChungTu(d)), chiTiet }
-    }
-  } catch {
-    /* ignore */
-  }
-  return { donHangBan: [...MOCK_DON], chiTiet: [...MOCK_CHI_TIET] }
-}
+let _donHangBanList: DonHangBanChungTuRecord[] = []
+let _chiTietList: DonHangBanChungTuChiTiet[] = []
+let _donHangBanDraft: DonHangBanChungTuDraftLine[] | null = null
 
-function saveToStorage(): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_DON_HANG_BAN_CT, JSON.stringify(_donHangBanList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
-    }
-  } catch {
-    /* ignore */
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+let persistInFlight = false
+const PERSIST_DEBOUNCE_MS = 450
+
+function buildDonHangBanChungTuBundleForPersist(): Record<string, unknown> {
+  return {
+    _v: BUNDLE_V,
+    donHangBan: _donHangBanList,
+    chiTiet: _chiTietList,
+    draft: _donHangBanDraft,
   }
 }
 
-/** Draft các dòng đang nhập trong form (chỉ lưu cột hiển thị, bỏ _vthh để tránh object lớn). */
-const STORAGE_KEY_DRAFT = 'htql_don_hang_ban_chung_tu_draft'
+function donHangBanChungTuHasPendingPersist(): boolean {
+  return persistTimer != null || persistInFlight
+}
+
+function schedulePersistDonHangBanChungTuBundle(): void {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    persistInFlight = true
+    void htqlModuleBundlePut(DON_HANG_BAN_CHUNG_TU_MODULE_ID, buildDonHangBanChungTuBundleForPersist())
+      .catch(() => {
+        /* offline */
+      })
+      .finally(() => {
+        persistInFlight = false
+      })
+  }, PERSIST_DEBOUNCE_MS)
+}
+
+function applyDonHangBanChungTuBundlePayload(bundle: unknown | null): void {
+  /** Null/invalid bundle: empty lists (không khôi phục bản ghi MOCK). */
+  if (!bundle || typeof bundle !== 'object') {
+    _donHangBanList = []
+    _chiTietList = []
+    _donHangBanDraft = null
+    return
+  }
+  const o = bundle as { donHangBan?: unknown; chiTiet?: unknown; draft?: unknown }
+  const donRaw = o.donHangBan
+  const chiTietRaw = o.chiTiet
+  if (!Array.isArray(donRaw) || !Array.isArray(chiTietRaw)) {
+    _donHangBanList = []
+    _chiTietList = []
+    _donHangBanDraft = null
+    return
+  }
+  _donHangBanList = (donRaw as (Partial<DonHangBanChungTuRecord> & { id: string })[]).map((d) =>
+    normalizeDonHangBanChungTu(d),
+  )
+  _chiTietList = chiTietRaw as DonHangBanChungTuChiTiet[]
+  if (o.draft == null) _donHangBanDraft = null
+  else if (Array.isArray(o.draft)) _donHangBanDraft = o.draft as DonHangBanChungTuDraftLine[]
+  else _donHangBanDraft = null
+}
+
+export async function donHangBanChungTuFetchBundleAndApply(): Promise<number> {
+  try {
+    const { bundle, version, notModified } = await htqlModuleBundleGet(DON_HANG_BAN_CHUNG_TU_MODULE_ID)
+    if (notModified) return version
+    if (!donHangBanChungTuHasPendingPersist()) applyDonHangBanChungTuBundlePayload(bundle)
+    return version
+  } catch {
+    if (!donHangBanChungTuHasPendingPersist() && _donHangBanList.length === 0) applyDonHangBanChungTuBundlePayload(null)
+    return 0
+  }
+}
+
+export function donHangBanReloadFromStorage(): void {
+  void donHangBanChungTuFetchBundleAndApply()
+}
 
 export function getDonHangBanChungTuDraft(): DonHangBanChungTuDraftLine[] | null {
-  try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT) : null
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return _donHangBanDraft
 }
 
 export function setDonHangBanChungTuDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const toSave = lines.map((l) => {
-        const { _vthh, ...rest } = l
-        return rest
-      })
-      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(toSave))
-    }
-  } catch {
-    /* ignore */
-  }
+  const toSave = lines.map((l) => {
+    const { _vthh: _drop, ...rest } = l
+    return rest
+  })
+  _donHangBanDraft = toSave as DonHangBanChungTuDraftLine[]
+  schedulePersistDonHangBanChungTuBundle()
 }
 
 export function clearDonHangBanChungTuDraft(): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY_DRAFT)
-  } catch {
-    /* ignore */
-  }
+  _donHangBanDraft = null
+  schedulePersistDonHangBanChungTuBundle()
 }
 
-/** Bản sao có thể xóa; khởi tạo từ localStorage (nếu có) hoặc dữ liệu mẫu */
-const _initial = loadFromStorage()
-let _donHangBanList: DonHangBanChungTuRecord[] = _initial.donHangBan
-let _chiTietList: DonHangBanChungTuChiTiet[] = _initial.chiTiet
-
-/** Lấy từ/đến theo kỳ: "tat-ca" | "tuan-nay" | "thang-nay" | "quy-nay" | "nam-nay" */
 export function getDateRangeForKy(ky: string): { tu: string; den: string } {
   if (ky === 'tat-ca') return { tu: '', den: '' }
   const now = new Date()
@@ -665,7 +615,7 @@ export function donHangBanDelete(donHangBanId: string): void {
   const baoGiaId = removed?.bao_gia_id
   _donHangBanList = _donHangBanList.filter((d) => d.id !== donHangBanId)
   _chiTietList = _chiTietList.filter((c) => c.don_hang_ban_id !== donHangBanId)
-  saveToStorage()
+  schedulePersistDonHangBanChungTuBundle()
   baoGiaHoanTacKhiHetLienKetDonHangBan(baoGiaId, _donHangBanList)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT))
@@ -673,7 +623,17 @@ export function donHangBanDelete(donHangBanId: string): void {
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
-export function donHangBanPost(payload: DonHangBanChungTuCreatePayload): DonHangBanChungTuRecord {
+export async function donHangBanPost(
+  payload: DonHangBanChungTuCreatePayload,
+): Promise<DonHangBanChungTuRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _donHangBanList.map((d) => d.so_don_hang))
+  const soDon = await allocateMaHeThongFromServer({
+    seqKey: 'DHB_CT',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `bg${Date.now()}`
   const donHangBanRow: DonHangBanChungTuRecord = {
     id,
@@ -682,7 +642,7 @@ export function donHangBanPost(payload: DonHangBanChungTuCreatePayload): DonHang
     so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_don_hang: payload.ngay_don_hang,
-    so_don_hang: payload.so_don_hang,
+    so_don_hang: soDon,
     ngay_giao_hang: payload.ngay_giao_hang,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
@@ -766,7 +726,7 @@ export function donHangBanPost(payload: DonHangBanChungTuCreatePayload): DonHang
       dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
-  saveToStorage()
+  schedulePersistDonHangBanChungTuBundle()
   return donHangBanRow
 }
 
@@ -865,17 +825,15 @@ export function donHangBanPut(donHangBanId: string, payload: DonHangBanChungTuCr
       dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
-  saveToStorage()
+  schedulePersistDonHangBanChungTuBundle()
 }
 
 export function getDefaultDonHangBanChungTuFilter(): DonHangBanChungTuFilter {
-  const ky = 'thang-nay' as KyValue
+  /** Mặc định «Tất cả»: tránh ẩn đơn khi `ngay_don_hang` khác kỳ (vd. lập từ báo giá tháng trước). */
+  const ky = 'tat-ca' as KyValue
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
-
-/** Prefix mã chứng từ Đơn hàng bán: {Năm}/ĐHB/{Số} (rule ma-he-thong / htql550). */
-const MODULE_PREFIX = 'ĐHB'
 
 /** Trả về mã ĐHB tiếp theo (2026/ĐHB/1, 2026/ĐHB/2...) — reset mỗi năm. */
 export function donHangBanSoDonHangTiepTheo(): string {

@@ -1,6 +1,7 @@
 export type ModuleId =
   // Công việc
   | 'banLamViec'
+  | 'ketNoiMayChu'
   | 'congViec'
   // CRM - Entry points (parent modules with internal tabs/workflow)
   | 'banHang'
@@ -33,8 +34,10 @@ export type ModuleId =
   | 'baoCaoTaiChinh'
   | 'tyGiaXuatQuy'
   | 'soTienGuiNganHang'
-  | 'taiKhoanNganHang'
+  | 'taiKhoan'
+  | 'loaiThuChi'
   | 'quy'
+  | 'chuyenTien'
   | 'nganHang'
   | 'thuQuy'
   // Kho
@@ -71,6 +74,7 @@ export const MODULE_GROUPS: Array<{
     label: 'CÔNG VIỆC',
     items: [
       { id: 'banLamViec', label: 'Bàn làm việc', icon: 'LayoutDashboard' },
+      { id: 'ketNoiMayChu', label: 'Kết nối máy chủ', icon: 'Server' },
       { id: 'congViec', label: 'Công việc', icon: 'ClipboardList' },
     ],
   },
@@ -126,14 +130,15 @@ export const MODULE_GROUPS: Array<{
           { id: 'chiTien', label: 'Chi tiền', icon: 'TrendingDown' },
           { id: 'thuChiTien', label: 'Thu/chi tiền', icon: 'ArrowLeftRight' },
           { id: 'kiemKeQuy', label: 'Kiểm kê quỹ', icon: 'ClipboardCheck' },
-          { id: 'soChiTietTienMat', label: 'Sổ chi tiết tiền mặt', icon: 'BookMarked' },
-          { id: 'soTienGuiNganHang', label: 'Sổ chi tiết tài khoản ngân hàng', icon: 'Building2' },
+          { id: 'soChiTietTienMat', label: 'Sổ tiền mặt', icon: 'BookMarked' },
+          { id: 'soTienGuiNganHang', label: 'Sổ ngân hàng', icon: 'Building2' },
           { id: 'baoCaoTaiChinh', label: 'Báo cáo', icon: 'BarChart3' },
-          { id: 'quy', label: 'Chuyển tiền', icon: 'Wallet' },
+          { id: 'chuyenTien', label: 'Chuyển tiền', icon: 'Wallet' },
           { id: 'nganHang', label: 'Ngân hàng', icon: 'Landmark' },
           { id: 'thuQuy', label: 'Thủ quỹ', icon: 'UserCircle' },
           { id: 'tyGiaXuatQuy', label: 'Tính tỷ giá xuất quỹ', icon: 'TableProperties' },
-          { id: 'taiKhoanNganHang', label: 'Tài khoản ngân hàng', icon: 'Landmark' },
+          { id: 'taiKhoan', label: 'Tài khoản', icon: 'Landmark' },
+          { id: 'loaiThuChi', label: 'Loại thu/chi', icon: 'Tags' },
         ],
       },
     ],

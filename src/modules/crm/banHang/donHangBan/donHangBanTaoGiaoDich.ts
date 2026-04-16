@@ -1,6 +1,6 @@
 /**
  * Tạo giao dịch từ Đơn hàng bán — logic cục bộ module donHangBan (không import từ baoGia).
- * Hợp đồng bán: payload cùng cấu trúc với hopDongBan (đọc qua localStorage riêng).
+ * Hợp đồng bán: payload cùng cấu trúc với hopDongBan (đọc qua bộ nhớ nghiệp vụ / session khi cần).
  */
 
 import type { DonHangBanChungTuRecord, DonHangBanChungTuChiTiet } from '../../../../types/donHangBanChungTu'

@@ -1,5 +1,5 @@
 /**
- * API Đơn hàng bán — localStorage mock, prefix DHB.
+ * API Đơn hàng bán — htqlEntityStorage mock, prefix DHB.
  * Hỗ trợ "Lập từ báo giá" — copy chi tiết + khách hàng từ BaoGiaRecord.
  */
 
@@ -12,6 +12,7 @@ import type {
 } from '../../../../types/banHang'
 import type { BaoGiaRecord, BaoGiaChiTiet } from '../../../../types/baoGia'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 export type { DonHangBanRecord, DonHangBanChiTiet, DonHangBanCreatePayload, BanHangKyValue }
 
@@ -53,8 +54,8 @@ const MOCK_CT: DonHangBanChiTiet[] = [
 
 function loadFromStorage(): { don: DonHangBanRecord[]; chiTiet: DonHangBanChiTiet[] } {
   try {
-    const rawDon = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DON) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawDon = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_DON) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const don = rawDon ? JSON.parse(rawDon) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(don) && Array.isArray(chiTiet)) return { don, chiTiet }
@@ -76,9 +77,9 @@ init()
 
 function save() {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_list))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_DON, JSON.stringify(_list))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch { /* ignore */ }
 }

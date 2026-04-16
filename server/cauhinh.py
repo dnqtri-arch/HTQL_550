@@ -15,7 +15,7 @@ DUONG_DAN_VAT_TU = os.environ.get("HTQL_550_VATTU") or (
 # Kết nối PostgreSQL (tiếng Việt: biến môi trường)
 CSDL_HOST = os.environ.get("HTQL_550_DB_HOST", "localhost")
 CSDL_PORT = int(os.environ.get("HTQL_550_DB_PORT", "5432"))
-CSDL_TEN = os.environ.get("HTQL_550_DB_NAME", "htql550")
+CSDL_TEN = os.environ.get("HTQL_550_DB_NAME", "htql_550")
 CSDL_USER = os.environ.get("HTQL_550_DB_USER", "postgres")
 CSDL_MAT_KHAU = os.environ.get("HTQL_550_DB_PASSWORD", "")
 

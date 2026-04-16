@@ -15,7 +15,7 @@ export interface DonHangBanChungTuApi {
   getDefaultFilter: () => DonHangBanChungTuFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: DonHangBanChungTuKyValue; label: string }[]
-  post: (payload: DonHangBanChungTuCreatePayload) => DonHangBanChungTuRecord
+  post: (payload: DonHangBanChungTuCreatePayload) => Promise<DonHangBanChungTuRecord>
   put: (donHangBanId: string, payload: DonHangBanChungTuCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => DonHangBanChungTuDraftLine[] | null

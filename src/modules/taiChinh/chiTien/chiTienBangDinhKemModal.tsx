@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { FileText, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import type { ChiTienBangAttachmentItem } from '../../../types/chiTienBang'
+import { htqlPathPartAscii } from '../../../utils/htqlPathPartAscii'
 
 /** Đính kèm chứng từ — cùng quy tắc Đơn hàng mua (dinhkem.mdc): .jpg, .png, .pdf, .docx */
 const ACCEPT_ATTR = '.jpg,.jpeg,.png,.pdf,.docx'
@@ -30,7 +31,7 @@ export function parseSoChiTienBangForAttachmentFile(soDon: string): string {
  * Tham số thứ hai (nếu có) bỏ qua, giữ cho tương thích gọi cũ.
  */
 export function partMccForPath(maKh: string, _tenKhFallback?: string): string {
-  const m = (maKh || '').trim().replace(/\s+/g, '').toLowerCase()
+  const m = htqlPathPartAscii(maKh)
   return m || 'kh_unknown'
 }
 
@@ -62,14 +63,11 @@ export function buildBgAttachmentBaseName(
   return `${bgPart}_${khPart}_${tgPart}_${index}`
 }
 
-/** Thư mục module (slug) — đính kèm chứng từ Thu tiền */
-export const BG_ATTACHMENT_MODULE_FOLDER = 'chi_tien_bang'
-
-/** thu_tien_bang / mã_kh / mã_bg — `maKhPathPart` đã qua partMccForPath */
+/** Dưới gốc hdct: mã_kh / mã_phiếu */
 export function buildBgAttachmentFolderVirtualPath(soChiTienBang: string, maKhPathPart: string): string {
   const kh = (maKhPathPart || 'kh_unknown').trim().toLowerCase()
   const bg = parseSoChiTienBangForAttachmentFile(soChiTienBang)
-  return `${BG_ATTACHMENT_MODULE_FOLDER}/${kh}/${bg}`
+  return `${kh}/${bg}`
 }
 
 export function buildBgAttachmentFullVirtualPath(soChiTienBang: string, maKhPathPart: string, fileName: string): string {

@@ -1,9 +1,10 @@
 /**
- * API Quỹ tiền mặt & Tài khoản Ngân hàng (localStorage).
+ * API Quỹ tiền mặt & Tài khoản Ngân hàng (htqlEntityStorage).
  * Dùng cho tích hợp thanh toán công nợ NCC.
  */
 
 import type { QuyRecord } from './type'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 
 const LS_KEY = 'htql_quy_accounts'
 
@@ -15,16 +16,16 @@ const DU_LIEU_MAU: QuyRecord[] = [
 
 function loadAll(): QuyRecord[] {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = htqlEntityStorage.getItem(LS_KEY)
     if (raw) return JSON.parse(raw) as QuyRecord[]
   } catch { /* ignore */ }
   const fresh = DU_LIEU_MAU.map((r) => ({ ...r }))
-  localStorage.setItem(LS_KEY, JSON.stringify(fresh))
+  htqlEntityStorage.setItem(LS_KEY, JSON.stringify(fresh))
   return fresh
 }
 
 function saveAll(data: QuyRecord[]): void {
-  localStorage.setItem(LS_KEY, JSON.stringify(data))
+  htqlEntityStorage.setItem(LS_KEY, JSON.stringify(data))
 }
 
 export function quyGetAll(): QuyRecord[] {

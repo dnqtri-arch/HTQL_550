@@ -1,2 +1,2 @@
-flask>=2.3.0
+# Tiện ích Python (script quản trị / tích hợp PostgreSQL sau này). API chính: Node (donViTinhServer.js).
 psycopg2-binary>=2.9.0

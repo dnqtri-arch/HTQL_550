@@ -2266,7 +2266,7 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
       if (initialDon) {
         api.put(initialDon.id, payload)
       } else {
-        api.post(payload)
+        await api.post(payload)
       }
       api.clearDraft()
       setUnsavedChanges(false)
@@ -5236,14 +5236,14 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
       )}
 
       {showDonMuaHangPopup && viewDonHangMuaRecord && doiChieuSource === 'don_mua_hang' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setShowDonMuaHangPopup(false); setViewDonHangMuaRecord(null) }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'transparent', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
           <div
             style={{
               background: 'var(--bg-primary)', borderRadius: 8, width: '94vw', maxWidth: 1100,
               height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
               boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+              pointerEvents: 'auto',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <DonHangMuaApiProvider api={apiDonHangMua}>
               <DonHangMuaForm

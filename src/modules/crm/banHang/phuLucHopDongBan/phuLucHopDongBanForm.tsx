@@ -116,10 +116,14 @@ import { NhanVatTuHangHoaApiProvider } from '../../muaHang/nhanVatTuHangHoa/nhan
 import { NhanVatTuHangHoaFormModal } from '../../muaHang/nhanVatTuHangHoa/nhanVatTuHangHoaFormModal'
 import {
   PhuLucHopDongBanChungTuDinhKemModal,
-  chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu,
   partMccForPath,
   type PhuLucHopDongBanChungTuDinhKemPendingRow,
 } from './phuLucHopDongBanDinhKemModalFull'
+import {
+  chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu,
+  maKhPathPartTuKhachHangVaDanhBa,
+} from '../../../../utils/htqlThietKeDktkNaming'
+import { htqlReconcileThietKeServerPaths } from '../../../../utils/htqlReconcileThietKeServerPaths'
 import { usePhuLucHopDongBanChungTuApi } from './phuLucHopDongBanChungTuApiContext'
 import { TINH_TRANG_NVTHH_DA_NHAP_KHO } from './phuLucHopDongBanChungTuApi'
 import { setUnsavedChanges } from '../../../../context/unsavedChanges'
@@ -1474,6 +1478,7 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
   const refTieuDeInput = useRef<HTMLInputElement>(null)
   const refNhanHangTuWrap = useRef<HTMLDivElement>(null)
   const baoGiaNguonPickRef = useRef<{ bao_gia_id: string; so_bao_gia_goc?: string } | null>(null)
+  const [dktkBaoGiaPickTick, setDktkBaoGiaPickTick] = useState(0)
   const refBaoGiaPickWrap = useRef<HTMLDivElement>(null)
   const [baoGiaPickOpen, setBaoGiaPickOpen] = useState(false)
   const [baoGiaPickRect, setBaoGiaPickRect] = useState<{ top: number; left: number; width: number } | null>(null)
@@ -1777,6 +1782,7 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
           bao_gia_id: hdb.bao_gia_id!,
           so_bao_gia_goc: (hdb.so_bao_gia_goc ?? '').trim() || undefined,
         }
+        setDktkBaoGiaPickTick((t) => t + 1)
       } else {
         baoGiaNguonPickRef.current = null
       }
@@ -1970,36 +1976,43 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
       return
     }
     const so = (initialHdbCt.so_hop_dong ?? '').trim() || 'BG'
-    const khPart = partMccForPath('')
-    setAttachments(chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(raw, so, khPart))
+    const khPart = maKhPathPartTuKhachHangVaDanhBa(initialHdbCt.khach_hang, khList)
+    const soBg = (initialHdbCt.so_bao_gia_goc ?? '').trim() || undefined
+    setAttachments(chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(raw, so, khPart, { soBaoGiaGoc: soBg }))
     setAttachmentsDirty(false)
-  }, [initialHdbCt?.id])
+  }, [initialHdbCt?.id, initialHdbCt?.khach_hang, initialHdbCt?.so_bao_gia_goc, initialHdbCt?.so_hop_dong, khList])
 
   /** Đồng bộ `name` + `virtual_path` khi đổi Mã HĐ / KH (đính kèm trước, nhập KH sau — tránh tên file vẫn `KH_unknown`). */
   useEffect(() => {
     const so = soDonHang.trim() || 'DHM'
+    const soBg =
+      (initialHdbCt?.so_bao_gia_goc ?? prefillHdbCt?.so_bao_gia_goc ?? baoGiaNguonPickRef.current?.so_bao_gia_goc ?? '').trim() ||
+      undefined
     setAttachments((prev) => {
       if (prev.length === 0) return prev
-      const next = chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(prev, so, khPartDinhKem)
+      const next = chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(prev, so, khPartDinhKem, { soBaoGiaGoc: soBg })
       const same = next.every(
         (n: PhuLucHopDongBanChungTuAttachmentItem, i: number) => n.virtual_path === prev[i]?.virtual_path && n.name === (prev[i]?.name ?? '')
       )
       return same ? prev : next
     })
-  }, [soDonHang, khPartDinhKem])
+  }, [soDonHang, khPartDinhKem, initialHdbCt?.so_bao_gia_goc, prefillHdbCt?.so_bao_gia_goc, dktkBaoGiaPickTick])
 
   useEffect(() => {
     if (!phieuNhanTuBaoGia) return
     const so = soDonHang.trim() || 'DHM'
+    const soBg =
+      (initialHdbCt?.so_bao_gia_goc ?? prefillHdbCt?.so_bao_gia_goc ?? baoGiaNguonPickRef.current?.so_bao_gia_goc ?? '').trim() ||
+      undefined
     setPhieuChiAttachments((prev) => {
       if (prev.length === 0) return prev
-      const next = chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(prev, so, khPartDinhKem)
+      const next = chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(prev, so, khPartDinhKem, { soBaoGiaGoc: soBg })
       const same = next.every(
         (n: PhuLucHopDongBanChungTuAttachmentItem, i: number) => n.virtual_path === prev[i]?.virtual_path && n.name === (prev[i]?.name ?? '')
       )
       return same ? prev : next
     })
-  }, [phieuNhanTuBaoGia, soDonHang, khPartDinhKem])
+  }, [phieuNhanTuBaoGia, soDonHang, khPartDinhKem, initialHdbCt?.so_bao_gia_goc, prefillHdbCt?.so_bao_gia_goc, dktkBaoGiaPickTick])
 
   /** Khi chuyển sang xem đơn khác (initialHdbCt/initialChiTiet đổi) mà form vẫn mở: đồng bộ toàn bộ state từ props để hiển thị đúng đơn mới. */
   useEffect(() => {
@@ -2087,12 +2100,13 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
     if (rawAtt.length === 0) setAttachments([])
     else {
       const so = (initialHdbCt.so_hop_dong ?? '').trim() || 'BG'
-      const khPart = partMccForPath('')
-      setAttachments(chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(rawAtt, so, khPart))
+      const khPart = maKhPathPartTuKhachHangVaDanhBa(initialHdbCt.khach_hang, khList)
+      const soBg = (initialHdbCt.so_bao_gia_goc ?? '').trim() || undefined
+      setAttachments(chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(rawAtt, so, khPart, { soBaoGiaGoc: soBg }))
     }
     setAttachmentsDirty(false)
     setEditingFromView(false)
-  }, [readOnly, initialHdbCt?.id, initialHdbCt, initialChiTiet, laPhieuNhanNvthh, phieuNhanTuBaoGia])
+  }, [readOnly, initialHdbCt?.id, initialHdbCt, initialChiTiet, laPhieuNhanNvthh, phieuNhanTuBaoGia, khList])
 
   useEffect(() => {
     if (khDropdownOpen && refKhWrap.current) {
@@ -2336,6 +2350,9 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
   }
 
   const buildPayload = (): PhuLucHopDongBanChungTuCreatePayload => {
+    const soBgPayload =
+      (initialHdbCt?.so_bao_gia_goc ?? prefillHdbCt?.so_bao_gia_goc ?? baoGiaNguonPickRef.current?.so_bao_gia_goc ?? '').trim() ||
+      undefined
     const coBang =
       initialHdbCt != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0) || mauHienTai === 'codongia'
     const apVat = coBang && apDungVatGtgt
@@ -2442,7 +2459,9 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
       dia_chi_cong_trinh: diaChiCongTrinh?.trim() || undefined,
       attachments:
         attachments.length > 0
-          ? chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(attachments, soDonHang.trim() || 'DHM', khPartDinhKem)
+          ? chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(attachments, soDonHang.trim() || 'DHM', khPartDinhKem, {
+              soBaoGiaGoc: soBgPayload,
+            })
           : undefined,
       ...(phieuNhanTuBaoGia
         ? {
@@ -2483,7 +2502,9 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
                 }),
             phieu_chi_attachments:
               phieuChiAttachments.length > 0
-                ? chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(phieuChiAttachments, soDonHang.trim() || 'DHM', khPartDinhKem)
+                ? chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(phieuChiAttachments, soDonHang.trim() || 'DHM', khPartDinhKem, {
+                    soBaoGiaGoc: soBgPayload,
+                  })
                 : undefined,
           }
         : {}),
@@ -2567,11 +2588,27 @@ export function PhuLucHopDongBanForm({ onClose, onSaved, onHeaderPointerDown, dr
     if (!validateBeforeSave()) return
     setDangLuu(true)
     try {
+      const soD = soDonHang.trim() || 'DHM'
+      const soBgOpt =
+        (initialHdbCt?.so_bao_gia_goc ?? prefillHdbCt?.so_bao_gia_goc ?? baoGiaNguonPickRef.current?.so_bao_gia_goc ?? '').trim() ||
+        undefined
+      if (attachments.length > 0) {
+        const norm = chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(attachments, soD, khPartDinhKem, { soBaoGiaGoc: soBgOpt })
+        const moved = await htqlReconcileThietKeServerPaths(attachments, norm)
+        setAttachments(moved)
+      }
+      if (phieuChiAttachments.length > 0) {
+        const normPc = chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu(phieuChiAttachments, soD, khPartDinhKem, {
+          soBaoGiaGoc: soBgOpt,
+        })
+        const movedPc = await htqlReconcileThietKeServerPaths(phieuChiAttachments, normPc)
+        setPhieuChiAttachments(movedPc)
+      }
       const payload = buildPayload()
       if (initialHdbCt) {
         api.put(initialHdbCt.id, payload)
       } else {
-        api.post(payload)
+        await api.post(payload)
       }
       api.clearDraft()
       setUnsavedChanges(false)

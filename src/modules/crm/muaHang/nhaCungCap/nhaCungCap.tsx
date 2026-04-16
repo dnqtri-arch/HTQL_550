@@ -2,7 +2,7 @@
  * Danh sách Nhà cung cấp — form tách sang nhaCungCapForm.tsx
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Copy, Pencil, Trash2, RefreshCw, Download, Upload } from 'lucide-react'
 import { DataGrid } from '../../../../components/common/dataGrid'
 import { ListPageToolbar } from '../../../../components/listPageToolbar'
@@ -18,6 +18,7 @@ import {
 } from './nhaCungCapApi'
 import { LOOKUP_CONTROL_HEIGHT } from '../../../../constants/lookupControlStyles'
 import { NhaCungCapForm } from './nhaCungCapForm'
+import { DANH_MUC_POLL_INTERVAL_MS } from '../../../../constants/danhMucPoll'
 
 function normalizeForFilter(s: string): string {
   return s
@@ -71,6 +72,15 @@ const giaTriChiTiet: React.CSSProperties = {
   fontWeight: 500,
 }
 
+const loaiCheckboxStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  margin: 0,
+  flexShrink: 0,
+  cursor: 'pointer',
+  accentColor: 'var(--accent, #d97706)',
+}
+
 export type NhaCungCapEmbeddedProps = {
   embeddedAddMode?: boolean
   onAddSuccess?: (ncc: NhaCungCapRecord) => void
@@ -84,7 +94,8 @@ export function NhaCungCap({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }
   const [danhSach, setDanhSach] = useState<NhaCungCapRecord[]>([])
   const [dongChon, setDongChon] = useState<NhaCungCapRecord | null>(null)
   const [dangTai, setDangTai] = useState(true)
-  const [loaiLoc, setLoaiLoc] = useState<'to_chuc' | 'ca_nhan' | 'ca_hai'>('ca_hai')
+  const [locToChuc, setLocToChuc] = useState(true)
+  const [locCaNhan, setLocCaNhan] = useState(true)
   const [nhomLoc, setNhomLoc] = useState('')
   const [danhSachNhom, setDanhSachNhom] = useState<NhomKhNccItem[]>(() => loadNhomKhNcc())
   const [modalOpen, setModalOpen] = useState<'add' | 'edit' | 'clone' | null>(() => (embeddedAddMode ? 'add' : null))
@@ -108,6 +119,46 @@ export function NhaCungCap({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }
   useEffect(() => {
     napLai()
   }, [])
+
+  const loaiLoc = useMemo<'to_chuc' | 'ca_nhan' | 'ca_hai'>(() => {
+    if (locToChuc && locCaNhan) return 'ca_hai'
+    if (locToChuc) return 'to_chuc'
+    if (locCaNhan) return 'ca_nhan'
+    return 'ca_hai'
+  }, [locToChuc, locCaNhan])
+
+  const refreshBangLang = useCallback(() => {
+    nhaCungCapNapLai()
+    void nhaCungCapGetAll().then((data) => {
+      setDanhSach(data)
+      setDongChon((prev) => {
+        if (!prev) return data[0] ?? null
+        const capNhat = data.find((r) => r.id === prev.id)
+        return capNhat ?? data[0] ?? null
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      refreshBangLang()
+    }, DANH_MUC_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [refreshBangLang])
+
+  useEffect(() => {
+    const run = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      refreshBangLang()
+    }
+    window.addEventListener('focus', run)
+    document.addEventListener('visibilitychange', run)
+    return () => {
+      window.removeEventListener('focus', run)
+      document.removeEventListener('visibilitychange', run)
+    }
+  }, [refreshBangLang])
 
   const danhSachLoc = useMemo(
     () =>
@@ -209,18 +260,33 @@ export function NhaCungCap({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Loại:</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
-              <input type="radio" name="loai" checked={loaiLoc === 'to_chuc'} onChange={() => setLoaiLoc('to_chuc')} />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '11px', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={locToChuc}
+                onChange={(e) => {
+                  const v = e.target.checked
+                  if (!v && !locCaNhan) setLocCaNhan(true)
+                  setLocToChuc(v)
+                }}
+                style={loaiCheckboxStyle}
+              />
               Tổ chức
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
-              <input type="radio" name="loai" checked={loaiLoc === 'ca_nhan'} onChange={() => setLoaiLoc('ca_nhan')} />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '11px', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={locCaNhan}
+                onChange={(e) => {
+                  const v = e.target.checked
+                  if (!v && !locToChuc) setLocToChuc(true)
+                  setLocCaNhan(v)
+                }}
+                style={loaiCheckboxStyle}
+              />
               Cá nhân
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
-              <input type="radio" name="loai" checked={loaiLoc === 'ca_hai'} onChange={() => setLoaiLoc('ca_hai')} />
-              Cả hai
-            </label>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(hai ô đều chọn = hiện cả hai loại)</span>
             <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>Nhóm KH, NCC:</span>
             <select value={nhomLoc} onChange={(e) => setNhomLoc(e.target.value)} style={{ ...inputStyle, minWidth: 160 }}>
               <option value="">-- Tất cả --</option>

@@ -29,7 +29,7 @@ import { DANH_SACH_TINH_THANH_VIET_NAM, MA_TINH_THEO_TEN } from '../../../../con
 import { getWardsByProvinceCode } from './wardsApi'
 import { suggestAddressVietnam, cleanAddressForDisplay } from './addressAutocompleteApi'
 import { DiaDiemHangBlock } from '../../shared/diaDiemHangBlock'
-import { lookupTaxCode } from './taxLookupApi'
+import { lookupTaxCode, TaxLookupRateLimitedError } from './taxLookupApi'
 import { getBanksVietnam, type BankItem } from './banksApi'
 import { formatSoNguyenInput, formatSoTien, parseFloatVN, isZeroDisplay } from '../../../../utils/numberFormat'
 import DatePicker, { registerLocale } from 'react-datepicker'
@@ -972,6 +972,12 @@ export function KhachHangForm({
                             }))
                           } else {
                             showError('Không tìm thấy thông tin cho mã số thuế này.')
+                          }
+                        } catch (e) {
+                          if (e instanceof TaxLookupRateLimitedError) {
+                            showError(e.message)
+                          } else {
+                            showError('Kh\u00f4ng th\u1ec3 tra c\u1ee9u MST. Th\u1eed l\u1ea1i sau.')
                           }
                         } finally {
                           setLayThongTinLoading(false)

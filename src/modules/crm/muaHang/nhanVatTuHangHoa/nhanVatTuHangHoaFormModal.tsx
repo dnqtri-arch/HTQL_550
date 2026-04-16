@@ -46,14 +46,6 @@ export function NhanVatTuHangHoaFormModal({
   const [formMaximized, setFormMaximized] = useState(false)
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
-
-  useEffect(() => {
     if (open) {
       setModalPosition(null)
       setFormMinimized(false)

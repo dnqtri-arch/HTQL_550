@@ -28,11 +28,12 @@ interface ThemKhoModalProps {
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.7)',
+  background: 'transparent',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 4000,
+  pointerEvents: 'none',
 }
 
 const box: React.CSSProperties = {
@@ -42,6 +43,7 @@ const box: React.CSSProperties = {
   minWidth: 360,
   maxWidth: '90vw',
   boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  pointerEvents: 'auto',
 }
 
 const headerStyle: React.CSSProperties = {
@@ -114,7 +116,6 @@ function maDocNhat(baseMa: string, existingItems: KhoItem[]): string {
 
 export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = [], initialData }: ThemKhoModalProps) {
   const isEditMode = initialData != null
-  const overlayMouseDownRef = useRef(false)
   const [ten, setTen] = useState(isEditMode ? initialData.label : '')
   const [tkKho, setTkKho] = useState(isEditMode ? (initialData.tk_kho ?? '') : '')
   const [diaChi, setDiaChi] = useState(isEditMode ? (initialData.dia_chi ?? '') : '')
@@ -206,12 +207,8 @@ export function ThemKhoModal({ onClose, onSave, onSaveAndAdd, existingItems = []
   }
 
   return (
-    <div
-      style={overlay}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) overlayMouseDownRef.current = true }}
-      onClick={(e) => { if (e.target === e.currentTarget && overlayMouseDownRef.current) onClose(); overlayMouseDownRef.current = false }}
-    >
-      <div style={box} onMouseDown={() => { overlayMouseDownRef.current = false }} onClick={(e) => e.stopPropagation()}>
+    <div style={overlay}>
+      <div style={box}>
         <div style={{ ...headerStyle, gap: 12, flexWrap: 'nowrap' }}>
           <span style={{ flexShrink: 0 }}>{isEditMode ? 'Sửa kho' : 'Thêm Kho'}</span>
           <div style={{ flex: 1, minWidth: 0, height: 28, minHeight: 28, display: 'flex', alignItems: 'center', padding: '0 10px', background: loi ? 'rgba(255, 87, 34, 0.12)' : 'transparent', border: loi ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', boxSizing: 'border-box' }}>

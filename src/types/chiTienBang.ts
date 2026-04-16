@@ -82,13 +82,16 @@ export interface ChiTienBangRecord {
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: ChiTienBangAttachmentItem[]
   /** Phiếu chi tiền (module Chi tiền): lý do chi — dropdown. */
-  ly_do_chi_phieu?: 'chi_nha_cung_cap' | 'chi_khac' | null
+  /** Chuỗi hiển thị (hoặc mã legacy chi_nha_cung_cap / … khi đọc dữ liệu cũ). */
+  ly_do_chi_phieu?: string | null
   /** Phiếu chi: Chi tiền mặt */
   chi_tien_mat?: boolean
   /** Phiếu chi: Chi qua ngân hàng */
   chi_qua_ngan_hang?: boolean
   /** Phiếu chi: ngày hạch toán (yyyy-mm-dd), có thể khác TG tạo */
   ngay_hach_toan?: string
+  /** Phiếu chi — id bản ghi TK công ty (chi từ TK này) — dùng tính số dư hiện tại. */
+  phieu_tai_khoan_id?: string
 }
 
 export interface ChiTienBangChiTiet {
@@ -170,11 +173,13 @@ export interface ChiTienBangCreatePayload {
   phieu_chi_ngan_hang?: string
   phieu_chi_ten_nguoi_nhan_ck?: string
   phieu_chi_attachments?: ChiTienBangAttachmentItem[]
-  ly_do_chi_phieu?: 'chi_nha_cung_cap' | 'chi_khac' | null
+  /** Chuỗi hiển thị (hoặc mã legacy chi_nha_cung_cap / … khi đọc dữ liệu cũ). */
+  ly_do_chi_phieu?: string | null
   chi_tien_mat?: boolean
   chi_qua_ngan_hang?: boolean
   /** Phiếu chi — ngày hạch toán */
   ngay_hach_toan?: string
+  phieu_tai_khoan_id?: string
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string

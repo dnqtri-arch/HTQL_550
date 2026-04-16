@@ -1,0 +1,2 @@
+# Shell scripts cho Ubuntu: luôn LF (tránh bash\r khi clone/checkout trên Windows)
+*.sh text eol=lf

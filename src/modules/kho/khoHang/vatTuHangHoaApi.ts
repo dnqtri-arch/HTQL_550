@@ -3,16 +3,23 @@
  * Cơ sở dữ liệu dùng chung cho cả hai module:
  * - Kho → Vật tư hàng hóa
  * - Mua hàng → Vật tư, hàng hóa
- * (Cùng localStorage key + cache; khi có backend thì cùng REST API.)
+ * (Cùng htqlEntityStorage key + cache; khi có backend thì cùng REST API.)
  * Khi có backend REST: GET/POST /api/vat-tu-hang-hoa, PUT/DELETE /api/vat-tu-hang-hoa/:id
- * Hình ảnh lưu tại: /ssd_2t/htql_550/thietke/vattu/ (DB chỉ lưu tên file hoặc path tương đối).
+ * Ảnh VTHH: API `kind=vthh_hinh`, gốc SSD `HTQL_PATH_VTHH_HINH_ANH` (mặc định …/vthh); DB lưu `htql-vthh:` + path tương đối.
  */
 
 import type { VatTuHangHoaRecord } from '../../../types/vatTuHangHoa'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
+import { htqlFileDownloadUrl } from '../../../utils/htqlServerFileUpload'
+
+const HTQL_VTHH_PREFIX = 'htql-vthh:'
 
 export type { ChietKhauItem, DinhMucNvlItem, DonViQuyDoiItem, VatTuHangHoaRecord } from '../../../types/vatTuHangHoa'
 
-const STORAGE_KEY = 'htql550_vat_tu_hang_hoa'
+/** Khóa htqlEntityStorage + htql_kv_store — đồng bộ đa máy qua KV. */
+export const VTHH_ENTITY_STORAGE_KEY = 'htql550_vat_tu_hang_hoa'
+
+const STORAGE_KEY = VTHH_ENTITY_STORAGE_KEY
 
 const DU_LIEU_MAU: VatTuHangHoaRecord[] = [
   {
@@ -64,7 +71,7 @@ const DU_LIEU_MAU: VatTuHangHoaRecord[] = [
 
 function loadFromStorage(): VatTuHangHoaRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as VatTuHangHoaRecord[]
       if (Array.isArray(parsed)) return parsed
@@ -76,7 +83,7 @@ function loadFromStorage(): VatTuHangHoaRecord[] {
 }
 
 function saveToStorage(data: VatTuHangHoaRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
 let cache: VatTuHangHoaRecord[] | null = null
@@ -117,6 +124,25 @@ export async function vatTuHangHoaDelete(id: number): Promise<void> {
   const list = loadFromStorage().filter((r) => r.id !== id)
   saveToStorage(list)
   cache = list
+}
+
+/** Xóa VTHH và mọi bản ghi con (ma_vthh_cap_cha = mã của bản ghi cha). */
+export async function vatTuHangHoaDeleteWithChildren(id: number): Promise<{ deletedIds: number[] }> {
+  const list = loadFromStorage()
+  const target = list.find((r) => r.id === id)
+  if (!target) throw new Error('Không tìm thấy bản ghi.')
+  const maCha = (target.ma ?? '').trim()
+  const ids = new Set<number>()
+  ids.add(id)
+  if (maCha) {
+    for (const r of list) {
+      if (r.id !== id && (r.ma_vthh_cap_cha ?? '').trim() === maCha) ids.add(r.id)
+    }
+  }
+  const next = list.filter((r) => !ids.has(r.id))
+  saveToStorage(next)
+  cache = next
+  return { deletedIds: [...ids] }
 }
 
 export function vatTuHangHoaNapLai(): void {
@@ -164,8 +190,36 @@ export function vatTuHangHoaMaTuDong(tinhChat: string): string {
   } while (true)
 }
 
-/** Base path lưu ảnh (server) */
-export const VATTU_IMAGE_BASE = '/ssd_2t/htql_550/thietke/vattu/'
+/** Gợi ý đường dẫn vật lý trên SSD (nhãn UI) — đồng bộ `HTQL_PATH_VTHH_HINH_ANH` / `deploy/env.server.example`. */
+export const VATTU_IMAGE_PHYSICAL_HINT = '/ssd_2tb/htql_550/vthh/'
+
+/** Giữ tên `VATTU_IMAGE_BASE` cho import cũ: chỉ dùng hiển thị gợi ý thư mục, không nối trực tiếp làm URL ảnh. */
+export const VATTU_IMAGE_BASE = VATTU_IMAGE_PHYSICAL_HINT
+
+/** URL xem ảnh (prefix `htql-vthh:` hoặc path tương đối server). */
+export function vatTuHinhAnhUrl(stored: string | undefined | null): string {
+  const s = String(stored ?? '').trim()
+  if (!s) return ''
+  if (s.startsWith('data:')) return s
+  if (s.startsWith(HTQL_VTHH_PREFIX)) {
+    return htqlFileDownloadUrl('vthh_hinh', s.slice(HTQL_VTHH_PREFIX.length))
+  }
+  if (/^https?:\/\//i.test(s)) return s
+  return htqlFileDownloadUrl('vthh_hinh', s.replace(/^\/+/, ''))
+}
+
+/** Chuỗi gợi ý đường dẫn đầy đủ trên SSD (chỉ để hiển thị, không dùng làm URL fetch). */
+export function vatTuHinhAnhPathLabel(stored: string | undefined | null): string {
+  const s = String(stored ?? '').trim()
+  if (!s) return '—'
+  if (s.startsWith('data:')) return 'Base64'
+  if (s.startsWith(HTQL_VTHH_PREFIX)) {
+    const rel = s.slice(HTQL_VTHH_PREFIX.length).replace(/^\/+/, '')
+    const base = VATTU_IMAGE_PHYSICAL_HINT.replace(/\/+$/, '')
+    return `${base}/${rel}`
+  }
+  return s
+}
 
 /**
  * YC21 (Mục 8): Lấy danh sách vật tư dùng trong Bán hàng.

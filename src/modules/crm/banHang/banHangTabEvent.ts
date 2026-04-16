@@ -12,6 +12,12 @@ export const HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT = 'htql-hop-dong-ban-list-refr
 /** Làm mới danh sách Phụ lục HĐ bán (cùng mục đích đồng bộ như HĐ bán, lưu trữ tách biệt). */
 export const HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT = 'htql-phu-luc-hop-dong-ban-list-refresh'
 
+/** Làm mới danh sách Hoá đơn bán (đồng bộ KV đa máy trạm). */
+export const HTQL_HOA_DON_BAN_LIST_REFRESH_EVENT = 'htql-hoa-don-ban-list-refresh'
+
+/** Làm mới danh sách Ghi nhận doanh thu / nhận hàng (đồng bộ KV đa máy trạm). */
+export const HTQL_GHI_NHAN_DOANH_THU_LIST_REFRESH_EVENT = 'htql-ghi-nhan-doanh-thu-list-refresh'
+
 export type BanHangTabEventDetail =
   | string
   | {

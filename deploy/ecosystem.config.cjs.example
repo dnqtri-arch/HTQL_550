@@ -1,0 +1,18 @@
+/** PM2 — copy thành ecosystem.config.cjs và sửa đường dẫn sau khi chạy setup_server.sh */
+module.exports = {
+  apps: [
+    {
+      name: 'htql550-api',
+      cwd: '__HTQL_SERVER_DIR__',
+      script: 'donViTinhServer.js',
+      interpreter: 'node',
+      instances: 1,
+      autorestart: true,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3001,
+      },
+    },
+  ],
+}

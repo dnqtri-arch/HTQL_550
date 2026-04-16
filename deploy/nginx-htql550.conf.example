@@ -1,0 +1,27 @@
+# Nginx — copy vào /etc/nginx/sites-available/htql550 (chỉnh server_name, root client nếu có)
+# API Node lắng nghe 127.0.0.1:3001
+#
+# Lỗi «Cannot GET /api/...» (HTML 404) khi gọi cổng 80:
+#   → Thiếu location /api/ như dưới, hoặc proxy_pass sai.
+# Khi gọi trực tiếp :3001 mà vẫn 404:
+#   → PM2 đang chạy bản API cũ — triển khai lại gói zip + pm2 restart htql550-api.
+
+server {
+    listen 80;
+    server_name _;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Khi triển khai client build: chỉnh root tới thư mục chứa index.html
+    # location / {
+    #     root __HTQL_CLIENT_ROOT__;
+    #     try_files $uri $uri/ /index.html;
+    # }
+}

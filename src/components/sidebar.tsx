@@ -11,7 +11,21 @@ const sidebarStyles: React.CSSProperties = {
   borderRight: '2px solid var(--border-strong)',
   display: 'flex',
   flexDirection: 'column',
-  overflowY: 'auto',
+  height: '100%',
+  minHeight: 0,
+  overflow: 'hidden',
+}
+
+const sidebarBrandStyles: React.CSSProperties = {
+  flexShrink: 0,
+  position: 'sticky',
+  top: 0,
+  zIndex: 3,
+  background: 'var(--bg-sidebar)',
+  padding: '10px 12px',
+  borderBottom: '1px solid var(--border-strong)',
+  minHeight: 0,
+  overflow: 'hidden',
 }
 
 const groupStyles: React.CSSProperties = {
@@ -90,27 +104,25 @@ export function Sidebar({ activeModuleId, onSelectModule }: SidebarProps) {
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))
   }
-  
-  const toggleParent = (parentId: string) => {
-    setExpandedParents((prev) => ({ ...prev, [parentId]: !prev[parentId] }))
+
+  const toggleParent = (id: string) => {
+    setExpandedParents((prev) => ({ ...prev, [id]: !prev[id] }))
   }
-  
-  const isChildActive = (item: SidebarItem): boolean => {
-    if (!item.children) return false
-    return item.children.some((child) => child.id === activeModuleId)
-  }
+
+  const isChildActive = (item: SidebarItem): boolean =>
+    Boolean(item.children?.some((c) => c.id === activeModuleId))
 
   return (
     <aside style={sidebarStyles}>
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-strong)' }}>
-        <h1 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+      <div style={sidebarBrandStyles}>
+        <h1 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
           HTQL_550
         </h1>
-        <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+        <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', marginBottom: 0 }}>
           Hệ thống đa phân hệ
         </p>
       </div>
-      <nav style={{ flex: 1, padding: '4px 0' }}>
+      <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' }}>
         {MODULE_GROUPS.map((group) => {
           const isExpanded = expandedGroups[group.id] !== false
           const accent = GROUP_ACCENTS[group.id]?.solid ?? 'var(--accent)'

@@ -17,7 +17,7 @@ export interface GhiNhanDoanhThuApi {
   getDefaultFilter: () => GhiNhanDoanhThuFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: string; label: string }[]
-  post: (payload: GhiNhanDoanhThuCreatePayload) => GhiNhanDoanhThuRecord
+  post: (payload: GhiNhanDoanhThuCreatePayload) => Promise<GhiNhanDoanhThuRecord>
   put: (donId: string, payload: GhiNhanDoanhThuCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => (Record<string, string> & { _dvtOptions?: string[] })[] | null

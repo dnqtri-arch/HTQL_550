@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Context API cho Đơn hàng mua — form và danh sách trong module donhangmua.
  */
 
@@ -12,7 +12,7 @@ export interface DonHangMuaApi {
   getDefaultFilter: () => DonHangMuaFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: string; label: string }[]
-  post: (payload: DonHangMuaCreatePayload) => DonHangMuaRecord
+  post: (payload: DonHangMuaCreatePayload) => Promise<DonHangMuaRecord>
   put: (donId: string, payload: DonHangMuaCreatePayload) => void
   soDonHangTiepTheo: () => string
   getDraft: () => (Record<string, string> & { _dvtOptions?: string[] })[] | null

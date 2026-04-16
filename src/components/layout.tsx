@@ -5,12 +5,19 @@ import { Sidebar } from './sidebar'
 import { ModuleRouter } from './moduleRouter'
 import { AppHeader } from './appHeader'
 import { AppFooter } from './appFooter'
+import { ElectronDragBar } from './electronDragBar'
 import { MODULE_GROUPS } from '../config/sidebarConfig'
 import type { ModuleId } from '../config/sidebarConfig'
 
 let tabCounter = 0
 function generateTabId() {
   return `tab-${++tabCounter}-${Date.now()}`
+}
+
+/** Đổi id module cũ (YC92) khi khôi phục tab từ sessionStorage. */
+function normalizeLayoutModuleId(id: string): ModuleId {
+  if (id === 'taiKhoanNganHang') return 'taiKhoan'
+  return id as ModuleId
 }
 
 function getModuleLabel(moduleId: ModuleId): string {
@@ -88,9 +95,6 @@ export function Layout() {
     openOrFocusTab(id)
   }, [openOrFocusTab])
 
-  const activeTab = tabs.find((t) => t.id === activeTabId)
-  const displayModuleId = activeTab?.moduleId ?? activeModuleId
-
   /** F5: Khôi phục tab và màn hình đang xem từ sessionStorage. */
   useEffect(() => {
     if (hasRestored) return
@@ -98,17 +102,22 @@ export function Layout() {
     try {
       const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(STORAGE_KEY_LAYOUT) : null
       if (raw) {
-        const data = JSON.parse(raw) as { openModuleIds?: ModuleId[]; activeModuleId?: ModuleId | null }
+        const data = JSON.parse(raw) as { openModuleIds?: string[]; activeModuleId?: string | null }
         const openModuleIds = data.openModuleIds
         const savedActive = data.activeModuleId
         if (Array.isArray(openModuleIds) && openModuleIds.length > 0) {
-          const newTabs: LayoutTab[] = openModuleIds.map((moduleId) => ({
-            id: generateTabId(),
-            moduleId,
-            label: getModuleLabel(moduleId),
-          }))
+          const newTabs: LayoutTab[] = openModuleIds.map((mid) => {
+            const moduleId = normalizeLayoutModuleId(String(mid))
+            return {
+              id: generateTabId(),
+              moduleId,
+              label: getModuleLabel(moduleId),
+            }
+          })
           setTabs(newTabs)
-          const activeTab = newTabs.find((t) => t.moduleId === savedActive) ?? newTabs[0]
+          const activeTab =
+            newTabs.find((t) => t.moduleId === (savedActive != null ? normalizeLayoutModuleId(String(savedActive)) : null)) ??
+            newTabs[0]
           setActiveTabId(activeTab.id)
           setActiveModuleId(activeTab.moduleId)
           return
@@ -157,12 +166,26 @@ export function Layout() {
     <div style={layoutStyles}>
       <Sidebar activeModuleId={activeModuleId} onSelectModule={handleSelectModule} />
       <main style={mainStyles}>
+        <ElectronDragBar />
         <AppHeader />
         <div style={contentStyles}>
-          {displayModuleId ? (
-            <ModuleRouter moduleId={displayModuleId} />
-          ) : (
+          {tabs.length === 0 ? (
             <WelcomeScreen onSelectModule={handleSelectModule} />
+          ) : (
+            tabs.map((tab) => (
+              <div
+                key={tab.id}
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: tab.id === activeTabId ? 'flex' : 'none',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <ModuleRouter moduleId={tab.moduleId} />
+              </div>
+            ))
           )}
         </div>
         <AppFooter />

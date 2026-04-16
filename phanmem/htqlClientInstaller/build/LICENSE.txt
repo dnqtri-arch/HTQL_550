@@ -1,0 +1,13 @@
+﻿ĐIỀU KHOẢN SỬ DỤNG PHẦN MỀM HTQL_550 (MÁY TRẠM)
+
+1. Phần mềm dùng nội bộ doanh nghiệp. Không phân phối lại nếu không được phép bằng văn bản.
+
+2. Cam kết bảo mật dữ liệu xưởng in: dữ liệu nghiệp vụ, khách hàng và chứng từ chỉ được truy cập qua API máy chủ (cổng 3001 theo cấu hình). Người dùng chịu trách nhiệm bảo mật tài khoản, mật khẩu và mạng nội bộ. Không sao chép dữ liệu ra ngoài phạm vi được phép.
+
+3. Gói cài đặt: Full Module — bao gồm toàn bộ phân hệ ứng dụng đóng gói trong bản cài (Bán hàng, Mua hàng, Kho, Tài chính, Công việc, Bàn làm việc và các module liên quan trong bản build hiện tại).
+
+4. Cài đặt có thể yêu cầu quyền Quản trị viên (Administrator) để ghi thư mục cài đặt và tạo lối tắt.
+
+5. Bằng việc cài đặt, bạn xác nhận đã đọc và đồng ý các điều khoản trên.
+
+(Cập nhật theo chính sách nội bộ Nam Bắc AD.)

@@ -11,6 +11,7 @@ function LoadingFallback() {
 
 // Công việc
 const BanLamViec = lazy(() => import('../modules/banlamviec').then((m) => ({ default: m.BanLamViec })))
+const KetNoiMayChu = lazy(() => import('../modules/ketNoiMayChu/ketNoiMayChu').then((m) => ({ default: m.KetNoiMayChu })))
 const CongViec = lazy(() => import('../modules/congviec').then((m) => ({ default: m.CongViec })))
 
 // CRM - Entry points (modules with internal tabs/workflow)
@@ -49,7 +50,9 @@ const SoChiTietTienMat = lazy(() => import('../modules/taiChinh').then((m) => ({
 const BaoCaoTaiChinh = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.BaoCaoTaiChinh })))
 const TyGiaXuatQuy = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.TyGiaXuatQuy })))
 const SoTienGuiNganHang = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.SoTienGuiNganHang })))
-const TaiKhoanNganHang = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.TaiKhoanNganHang })))
+const TaiKhoan = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.TaiKhoan })))
+const LoaiThuChi = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.LoaiThuChi })))
+const ChuyenTien = lazy(() => import('../modules/taiChinh').then((m) => ({ default: m.ChuyenTien })))
 const Quy = lazy(() => import('../modules/quy').then((m) => ({ default: m.Quy })))
 const NganHang = lazy(() => import('../modules/nganhang').then((m) => ({ default: m.NganHang })))
 const ThuQuy = lazy(() => import('../modules/thuquy').then((m) => ({ default: m.ThuQuy })))
@@ -76,6 +79,7 @@ const TaiLieu = lazy(() => import('../modules/tailieu').then((m) => ({ default: 
 const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
   // Công việc
   banLamViec: BanLamViec,
+  ketNoiMayChu: KetNoiMayChu,
   congViec: CongViec,
   
   // CRM - Entry points
@@ -112,7 +116,9 @@ const modules: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> 
   baoCaoTaiChinh: BaoCaoTaiChinh,
   tyGiaXuatQuy: TyGiaXuatQuy,
   soTienGuiNganHang: SoTienGuiNganHang,
-  taiKhoanNganHang: TaiKhoanNganHang,
+  taiKhoan: TaiKhoan,
+  loaiThuChi: LoaiThuChi,
+  chuyenTien: ChuyenTien,
   quy: Quy,
   nganHang: NganHang,
   thuQuy: ThuQuy,

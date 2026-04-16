@@ -3,10 +3,12 @@
  * Mã: {Năm}/BG/{Số} — rule ma-he-thong.mdc
  * 
  * [YC24 Mục 7] Endpoint backend (khi có): /api/sales/quotes
- * Hiện tại: localStorage-based (tách biệt khỏi /api/purchase/orders)
+ * Hiện tại: htqlEntityStorage-based (tách biệt khỏi /api/purchase/orders)
  */
 
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
+import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { baoGiaHoanTacKhiHetLienKetHopDongBan } from '../baoGia/baoGiaApi'
 import { HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import type {
@@ -32,6 +34,8 @@ export type {
 
 /** Alias tương thích — cùng nghĩa với HopDongBanChungTuKyValue. */
 export type KyValue = HopDongBanChungTuKyValue
+
+const MODULE_PREFIX = 'HDB'
 
 /** Dữ liệu mẫu báo giá */
 const MOCK_DON: HopDongBanChungTuRecord[] = [
@@ -210,8 +214,8 @@ function normalizeHopDongBanChungTu(d: Partial<HopDongBanChungTuRecord> & { id: 
 
 function loadFromStorage(): { list: HopDongBanChungTuRecord[]; chiTiet: HopDongBanChungTuChiTiet[] } {
   try {
-    const rawList = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_HOP_DONG_BAN_CT_LIST) : null
-    const rawCt = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_CHI_TIET) : null
+    const rawList = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_HOP_DONG_BAN_CT_LIST) : null
+    const rawCt = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_CHI_TIET) : null
     const list = rawList ? JSON.parse(rawList) : null
     const chiTiet = rawCt ? JSON.parse(rawCt) : null
     if (Array.isArray(list) && Array.isArray(chiTiet)) {
@@ -225,9 +229,9 @@ function loadFromStorage(): { list: HopDongBanChungTuRecord[]; chiTiet: HopDongB
 
 function saveToStorage(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_HOP_DONG_BAN_CT_LIST, JSON.stringify(_hopDongBanChungTuList))
-      localStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
+    if (typeof htqlEntityStorage !== 'undefined') {
+      htqlEntityStorage.setItem(STORAGE_KEY_HOP_DONG_BAN_CT_LIST, JSON.stringify(_hopDongBanChungTuList))
+      htqlEntityStorage.setItem(STORAGE_KEY_CHI_TIET, JSON.stringify(_chiTietList))
     }
   } catch {
     /* ignore */
@@ -239,7 +243,7 @@ const STORAGE_KEY_DRAFT_HDB_CT = 'htql_hop_dong_ban_chung_tu_draft'
 
 export function getHopDongBanChungTuDraft(): HopDongBanChungTuDraftLine[] | null {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_DRAFT_HDB_CT) : null
+    const raw = typeof htqlEntityStorage !== 'undefined' ? htqlEntityStorage.getItem(STORAGE_KEY_DRAFT_HDB_CT) : null
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : null
@@ -250,12 +254,12 @@ export function getHopDongBanChungTuDraft(): HopDongBanChungTuDraftLine[] | null
 
 export function setHopDongBanChungTuDraft(lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>): void {
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof htqlEntityStorage !== 'undefined') {
       const toSave = lines.map((l) => {
         const { _vthh, ...rest } = l
         return rest
       })
-      localStorage.setItem(STORAGE_KEY_DRAFT_HDB_CT, JSON.stringify(toSave))
+      htqlEntityStorage.setItem(STORAGE_KEY_DRAFT_HDB_CT, JSON.stringify(toSave))
     }
   } catch {
     /* ignore */
@@ -264,16 +268,23 @@ export function setHopDongBanChungTuDraft(lines: Array<Record<string, string> & 
 
 export function clearHopDongBanChungTuDraft(): void {
   try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY_DRAFT_HDB_CT)
+    if (typeof htqlEntityStorage !== 'undefined') htqlEntityStorage.removeItem(STORAGE_KEY_DRAFT_HDB_CT)
   } catch {
     /* ignore */
   }
 }
 
-/** Bản sao có thể xóa; khởi tạo từ localStorage (nếu có) hoặc dữ liệu mẫu */
+/** Bản sao có thể xóa; khởi tạo từ htqlEntityStorage (nếu có) hoặc dữ liệu mẫu */
 const _initial = loadFromStorage()
 let _hopDongBanChungTuList: HopDongBanChungTuRecord[] = _initial.list
 let _chiTietList: HopDongBanChungTuChiTiet[] = _initial.chiTiet
+
+/** Đồng bộ cache bộ nhớ sau khi `htqlEntityStorage` thay đổi (KV poll / máy khác). */
+export function hopDongBanChungTuReloadFromStorage(): void {
+  const { list, chiTiet } = loadFromStorage()
+  _hopDongBanChungTuList = list
+  _chiTietList = chiTiet
+}
 
 /** Lấy từ/đến theo kỳ: "tat-ca" | "tuan-nay" | "thang-nay" | "quy-nay" | "nam-nay" */
 export function getDateRangeForKy(ky: string): { tu: string; den: string } {
@@ -667,7 +678,17 @@ export function hopDongBanChungTuDelete(donHangBanId: string): void {
 }
 
 /** Tạo báo giá mới (thêm vào danh sách nội bộ). Trả về bản ghi báo giá vừa tạo. */
-export function hopDongBanChungTuPost(payload: HopDongBanChungTuCreatePayload): HopDongBanChungTuRecord {
+export async function hopDongBanChungTuPost(
+  payload: HopDongBanChungTuCreatePayload,
+): Promise<HopDongBanChungTuRecord> {
+  const year = getCurrentYear()
+  const hint = hintMaxSerialForYearPrefix(year, MODULE_PREFIX, _hopDongBanChungTuList.map((d) => d.so_hop_dong))
+  const soHopDong = await allocateMaHeThongFromServer({
+    seqKey: 'HDB_BAN_HD',
+    modulePrefix: MODULE_PREFIX,
+    hintMaxSerial: hint,
+    year,
+  })
   const id = `bg${Date.now()}`
   const hopDongBanChungTuRow: HopDongBanChungTuRecord = {
     id,
@@ -676,7 +697,7 @@ export function hopDongBanChungTuPost(payload: HopDongBanChungTuCreatePayload): 
     so_dien_thoai_lien_he: payload.so_dien_thoai_lien_he,
     tinh_trang: payload.tinh_trang,
     ngay_lap_hop_dong: payload.ngay_lap_hop_dong,
-    so_hop_dong: payload.so_hop_dong,
+    so_hop_dong: soHopDong,
     ngay_cam_ket_giao: payload.ngay_cam_ket_giao,
     khach_hang: payload.khach_hang,
     dia_chi: payload.dia_chi ?? '',
@@ -865,12 +886,10 @@ export function hopDongBanChungTuPut(donHangBanId: string, payload: HopDongBanCh
 }
 
 export function getDefaultHopDongBanChungTuFilter(): HopDongBanChungTuFilter {
-  const ky = 'thang-nay' as KyValue
+  const ky = 'tat-ca' as KyValue
   const { tu, den } = getDateRangeForKy(ky)
   return { ky, tu, den }
 }
-
-const MODULE_PREFIX = 'HDB'
 
 /** Trả về số báo giá tiếp theo (2026/BG/1, 2026/BG/2...) — reset mỗi năm. */
 export function hopDongBanSoHopDongTiepTheo(): string {

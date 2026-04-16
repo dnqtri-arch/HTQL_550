@@ -1,6 +1,7 @@
+import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 /**
  * Danh mục mẫu hóa đơn (tham chiếu cấu trúc thông tư / dữ liệu kê khai thuế).
- * Tầng ứng dụng: gộp mẫu quốc gia + mẫu người dùng thêm (localStorage).
+ * Tầng ứng dụng: gộp mẫu quốc gia + mẫu người dùng thêm (htqlEntityStorage).
  */
 
 const STORAGE_KEY = 'htql550_mau_hoa_don_user'
@@ -26,8 +27,8 @@ const MAU_QUOC_GIA: MauHoaDonItem[] = [
 
 function loadUserMau(): MauHoaDonItem[] {
   try {
-    if (typeof localStorage === 'undefined') return []
-    const raw = localStorage.getItem(STORAGE_KEY)
+    if (typeof htqlEntityStorage === 'undefined') return []
+    const raw = htqlEntityStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const arr = JSON.parse(raw) as unknown
     if (!Array.isArray(arr)) return []
@@ -39,8 +40,8 @@ function loadUserMau(): MauHoaDonItem[] {
 
 function saveUserMau(list: MauHoaDonItem[]): void {
   try {
-    if (typeof localStorage === 'undefined') return
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+    if (typeof htqlEntityStorage === 'undefined') return
+    htqlEntityStorage.setItem(STORAGE_KEY, JSON.stringify(list))
   } catch {
     /* ignore */
   }

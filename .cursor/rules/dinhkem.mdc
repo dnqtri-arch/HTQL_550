@@ -1,6 +1,6 @@
 ---
-description: Đính kèm chứng từ — Đơn hàng mua, Báo giá (đường dẫn, UI, xác nhận)
-globs: ["**/*DinhKem*.tsx", "**/*Attachment*.ts", "src/modules/crm/**/baoGia/*Form*.tsx", "src/modules/crm/**/donHangMua/*Form*.tsx"]
+description: Đính kèm chứng từ — Đơn hàng mua, Báo giá (đường dẫn, UI, xác nhận) + ảnh VTHH (tab Đặc tính)
+globs: ["**/*DinhKem*.tsx", "**/*Attachment*.ts", "src/modules/crm/**/baoGia/*Form*.tsx", "src/modules/crm/**/donHangMua/*Form*.tsx", "src/modules/kho/khoHang/vatTuHangHoaForm.tsx"]
 alwaysApply: false
 ---
 
@@ -12,9 +12,41 @@ alwaysApply: false
 - **Code (module `purchase/don-hang-mua`):** `DonHangMuaDinhKemModal.tsx`, `DonHangMuaForm.tsx`, `donHangMuaAttachmentTypes.ts` (re-export type từ `src/types/donHangMua.ts`), payload `attachments` trong `donHangMuaApi.ts`.
 - **Type đính kèm:** `DonHangMuaAttachmentItem` — định nghĩa tại **`src/types/donHangMua.ts`**.
 
-## Quy tắc đường dẫn lưu trữ (virtual_path)
+## Lưu trữ vật lý trên máy chủ (đồng bộ `setup_server.sh` / `HTQL_PATH_*`)
 
-- Cấu trúc thư mục logic: `don_hang_mua/{phần_ncc}/{mã_đhm}/{tên_file}`.
+- **Gốc SSD:** `HTQL_ROOT_SSD` (vd `/ssd_2tb/htql_550`).
+- **Đính kèm chứng từ (hóa đơn, chứng từ scan, …):** `HTQL_PATH_HOADON_CHUNG_TU` → mặc định **`…/hdct`** (API `kind=chung_tu`).
+- **Đính kèm thiết kế (dktk):** `HTQL_PATH_THIET_KE` → mặc định **`…/thietke`** (API `kind=thiet_ke`).
+- **`virtual_path`** (trong payload **đính kèm chứng từ / thiết kế** của các chứng từ CRM, v.v.): **đường tương đối** trong gốc `hdct` hoặc `thietke` tương ứng (không gồm tiền tố tuyệt đối kiểu `/ssd_...`).
+
+### Ảnh VTHH — tab 4 «Đặc tính / Hình ảnh» (`vatTuHangHoaForm.tsx`)
+
+Nguyên tắc **bắt buộc** khi triển khai (đồng bộ `deploy/env.server.example`, `setup_server.sh`, `server/donViTinhServer.js`, `server/htqlUploadRoutes.js`):
+
+- **Gốc vật lý trên SSD:** biến **`HTQL_PATH_VTHH_HINH_ANH`** — mặc định **`/ssd_2tb/vthh`**. Thư mục gốc và thư mục con được tạo khi upload; quyền ghi theo user chạy PM2 (`setup_server` / API `mkdir` + `chmod` 775 nếu có trong script).
+- **Cấu trúc đường dẫn đầy đủ trên ổ:**
+  **`{HTQL_PATH_VTHH_HINH_ANH}/{mã_vthh_ascii}/{tên_file}`**
+  — tức sau gốc luôn có **một segment thư mục = mã VTHH** (chuẩn ASCII), rồi mới tới **tên file** theo quy tắc đặt tên bên dưới. **Không** lưu trực tiếp file ngay dưới gốc (`/ssd_2tb/vthh/ten.jpg`) nếu form đã có `relativeDir` hợp lệ.
+- **Segment `{mã_vthh_ascii}`:** kết quả **`htqlPathPartAscii(ma_vthh)`** (`src/utils/htqlPathPartAscii.ts`) — **chữ thường**, không dấu, chỉ `[a-z0-9_-]`. Trùng cách chuẩn hóa token đường dẫn với đính kèm, nhưng **nội dung là mã VTHH**, không dùng `partMccForPath` / `kh_unknown` / `ncc_unknown`.
+- **Phía form gửi API:** chỉ **`kind=vthh_hinh`**, **`relativeDir`** = segment trên (= mã VTHH ASCII), **`filename`** = tên file; **không** gửi đường dẫn tuyệt đối — **`server/htqlUploadRoutes.js`** nối `path.join(pathVthhHinhAnh, relativeDir, filename)`.
+- **Tên file (`{tên_file}`):** trong **`vatTuHangHoaForm.tsx`** — **`tenVthhImageBaseNameFromParts`**: tên hiển thị VTHH (`ten_vthh`) + **hậu tố kích thước** từ **`kichThuocSuffixForFileName`** (ô mD/mR trên form, ví dụ `2,6m` → `26m` trong tên file ASCII) → qua chuẩn hóa giống `tenVatTuToFileName` (bỏ dấu, chữ thường, `[a-z0-9]` gộp liền); tên rỗng → `anh`; đuôi `.jpg` / `.jpeg` / `.png` theo ảnh sau resize (giới hạn kích thước / 5 MB gốc — xem code form). **Không** cắt bớt phần tên sau khi đã gộp kích thước.
+- **Lưu trong bản ghi VTHH:** trường **`duong_dan_hinh_anh`** = tiền tố **`htql-vthh:`** + **`relativePath`** do API trả (dạng **`{mã_vthh_ascii}/{tên_file}`**). Xem/ tải ảnh: **`GET /api/htql-files?kind=vthh_hinh&rel=...`**.
+
+### Tên thư mục / token trên ổ (ASCII — tiếng Việt không dấu, không khoảng trắng)
+
+- **Nguyên tắc:** mọi **segment** thư mục và **token** mã chứng từ trên path SSD dùng **chữ thường**, **không dấu**, **không khoảng**; chỉ `[a-z0-9_-]`. **Không** dùng tên đầy đủ kiểu `donhangban`, `hopdongban` trong path — chỉ **mã viết tắt chuẩn** sau khi qua `htqlPathPartAscii` / parse mã hệ thống.
+- **Ánh xạ nghiệp vụ → token (ví dụ):** Đơn hàng bán → `dhb`; Hợp đồng bán → `hdb`; Báo giá → `bg`; Đơn hàng mua → `dhm`; Phụ lục HĐ bán / chứng từ tương ứng → theo quy tắc parse số chứng từ (`2026_dhb_3`, `2026_bg_3`, …), không thêm thư mục tên module dài.
+- **Phần mã khách, mã NCC, mã chứng từ trên path (modal đính kèm ĐHM/BG/ĐHB/…):** chuẩn hóa bằng **`htqlPathPartAscii`** — **chữ thường**, **không dấu**, chỉ `[a-z0-9_-]` (ký tự lạ → `_`). Ví dụ segment đơn hàng bán: `2026_dhb_3` (không dùng `don_hang_ban` trong path).
+- **`partMccForPath(ma_kh)`** — chưa có mã KH → token nội bộ **`kh_unknown`** (JSON/UI cũ); **thư mục vật lý dktk** **không** dùng `kh_unknown` — dùng **`_pending_dktk`** (`PENDING_DKTK_FOLDER` trong **`src/utils/htqlThietKeDktkNaming.ts`**, hàm **`folderKhSegmentFromMaKhPathPart`**). Đơn hàng mua: chưa có mã NCC vẫn **`ncc_unknown`** (chuẩn riêng ĐHM).
+- **Ảnh VTHH** dùng **mã VTHH** qua `htqlPathPartAscii` trong **`relativeDir`**, **không** dùng `partMccForPath` — xem mục **«Ảnh VTHH»** phía trên.
+
+### Migration từ bản cũ (tiền tố thư mục module)
+
+- Trên server: **`server/migrateStorageLayout.js`** — lệnh **`npm run migrate-storage`** trong thư mục `server/` (sau khi backup). Đưa file từ `thietke/bao_gia/kh/…` → `thietke/kh/…`, `hdct/don_hang_mua/ncc/…` → `hdct/ncc/…`, đồng thời bỏ các tiền tố tương ứng trong **`htql_kv_store`**. Có thể bật **`HTQL_STORAGE_MIGRATE_ON_START=1`** một lần khi restart PM2 (xem `build.mdc`).
+
+## Quy tắc đường dẫn logic (virtual_path) — Đính kèm chứng từ
+
+- Cấu trúc thư mục: **`{phần_ncc}/{mã_đhm}/{tên_file}`** (ví dụ Đơn hàng mua — `DonHangMuaDinhKemModal.tsx`). **Không** thêm tiền tố `don_hang_mua/` — để khi chuyển module vẫn **tái sử dụng** cùng thư mục file trên ổ (tiết kiệm dung lượng).
 - **Phần NCC trên path và trong tên file:** `partMccForPath(ma_ncc)` — **chỉ** dùng **mã NCC** (`ma_ncc`, chữ thường, bỏ khoảng trắng). **Không** dùng tên NCC / slug từ tên. Chưa có mã → `ncc_unknown`. (Tham số tên NCC nếu còn trong chữ ký hàm thì bỏ qua.)
 - `mã_đhm` suy từ `so_don_hang` (vd. `2026/DHM/3` → `2026_dhm_3`).
 - **Tên file (base):** `buildDhmAttachmentBaseName` — phần thời gian: **TG nhận hàng** (`ngayGiaoHang`) nếu có; không thì **TG tạo đơn** (`ngayDonHang`); không thì **thời điểm hiện tại** — **không** để rơi về epoch / `01/01/1970`.
@@ -55,15 +87,18 @@ alwaysApply: false
 - Hàng strip thumbnails: **`align-items: flex-start`** để mọi cột cùng căn đỉnh, tránh lệch dọc khi một cột có nội dung khác chiều cao.
 - **Kết quả bắt buộc:** vị trí và kích thước ô thumbnail **không đổi** khi hover; **chiều cao tổng** vùng strip + popover **không nhảy** chỉ vì ẩn/hiện nút Xóa (chỉ khi số file đổi sau khi xóa thì layout co lại — đúng nghiệp vụ).
 
-## Đính kèm thiết kế (dktk) — Báo giá
+## Đính kèm thiết kế (dktk) — Báo giá & bán hàng (cùng chuẩn path)
 
+- **Logic chung (`src/utils/htqlThietKeDktkNaming.ts`):** **`chuanHoaThietKeVirtualPaths`** + **`buildDktkAttachmentBaseName`** — tên file: **`{mã_chứng_từ_ascii}_{HH_mm_dd_MM_yyyy}_{n}`** (vd `2026_bg_1_07_00_16_04_2026_1.tif`) — **không** nhét mã KH vào tên file; token chứng từ luôn ASCII (**`dhb`**, không **`đhb`** — chuẩn hóa qua **`htqlNormalizeChungTuSoAscii`**). Thư mục con chứng từ: **`2026_bg_1`**, **`2026_dhb_1`**, **`2026_hdb_1`**, **`2026_plhdb_1`**, v.v.
+- **Cấu trúc thư mục logic (dưới gốc `thietke`):** **`{phần_khách}/{mã_chứng_từ}/{tên_file}`** — `phần_khách` = **`folderKhSegmentFromMaKhPathPart(partMccForPath(ma_kh))`** → có mã KH thì segment = `ma_kh` ASCII; chưa có mã → **`_pending_dktk`** (không tạo `kh_unknown` trên ổ). **Không** dùng tiền tố `bao_gia/` hay `don_hang_ban/`.
+- **Báo giá → ĐHB / HĐ / Phụ lục:** khi payload có **`so_bao_gia_goc`**, chuẩn hóa **giữ thư mục con = token mã BG** và tên file gắn BG nếu file xuất phát từ BG (**`chuanHoaThietKeVirtualPaths`** với `soBaoGiaGoc`) — **không** nhân bản file; khi đổi KH hoặc từ pending → mã KH, form gọi **`htqlReconcileThietKeServerPaths`** rồi **`POST /api/htql-files-move`** để file trên SSD khớp `virtual_path` mới.
 - **Tên gọi:** **Đính kèm thiết kế** hoặc viết tắt **dktk** (nút/popover đính kèm trên form Báo giá — `BaoGiaDinhKemModal.tsx`).
 - **Nút + nhãn (vd. «Đính kèm file thiết kế») trên toolbar:** chữ nhãn **không** in đậm (`font-weight` bình thường — không dùng 600/700 trên span nhãn; giữ badge đếm file nếu có).
 - **Định dạng:** `.ai`, `.eps`, `.svg`, `.pdf`, `.cdr` (Corel), `.psd`, `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`.
 - **Dung lượng:** mỗi file phải **nhỏ hơn 2000 MB** (`BG_DINH_KEM_TOI_DA_BYTES`); file **từ 2000 MB trở lên** không đính kèm — `alert` + banner, không đọc file đó; vẫn xử lý file hợp lệ còn lại.
 - **Hiển thị dung lượng:** `formatDungLuongHienThi` — từ khoảng **1000 MB** trở lên dùng **GB / TB** cho gọn (tránh chuỗi MB quá dài).
 - **Tối đa 10 file** / báo giá; defer `alert`/`confirm` như Đơn hàng mua; tiêu đề popover: *Đính kèm thiết kế (dktk)*.
-- **Thời gian trong tên file** (khi chuẩn hóa): ưu tiên **Hiệu lực đến** (`ngay_giao_hang` trên form BG), không thì TG tạo báo giá — cùng hàm `buildBgAttachmentBaseName` / props `ngayGiaoHang`, `ngayBaoGia`.
+- **Thời gian trong tên file** (khi chuẩn hóa dktk): **TG tạo chứng từ** (ưu tiên ngày giờ lập trên form tương ứng: báo giá / ĐHB / HĐ / phụ lục), không thì ngày phụ (vd hiệu lực BG) — tham số truyền vào **`buildDktkAttachmentBaseName`** trong modal (`baoGiaDinhKemModal`, `donHangBanDinhKemModalFull`, `hopDongBanDinhKemModalFull`, `phuLucHopDongBanDinhKemModalFull`).
 - **Đọc file nặng:** `FileReader.readAsDataURL` kèm **`onprogress`** — cập nhật **từng dòng file đang xử lý** (tên + % theo `loaded/total`), không gom một thanh tổng riêng.
 - **Tiến trình & đóng popover:** state pending (`pendingUploadRows` / `onPendingUploadRowsChange`) nên giữ ở **form cha** (`baoGiaForm.tsx`) để khi đóng popover, đọc file vẫn chạy; **icon nút** `Paperclip` được **thay bằng** `Loader2` (spin) khi còn pending — **không** thêm dòng chữ *Đang upload…* cạnh nút; `title` nút mô tả trạng thái đợi; mở lại popover vẫn thấy từng file và %.
 - **Popover neo nút:** vị trí `fixed` — **cạnh trái** trùng cạnh trái nút, **top** = `getBoundingClientRect().bottom + 1` (khe 1px, cảm giác liền mạch với nút); `z-index` cao theo chuẩn modal (≥ `4100` nếu trong form modal).
@@ -81,9 +116,29 @@ alwaysApply: false
 
 - **Tên gọi trên form:** **Đính kèm thiết kế** (nút/popover đính kèm trên toolbar `DonHangBanForm.tsx` — cùng họ UI với dktk Báo giá). Nhãn nút **không** in đậm (cùng quy tắc như dktk Báo giá).
 - **Quy tắc định dạng / dung lượng / tối đa file / defer `alert`–`confirm` / viewer / tiến trình:** áp dụng **cùng chuẩn** mục **«Đính kèm thiết kế (dktk) — Báo giá** ở trên (định dạng file, `BG_DINH_KEM_TOI_DA_BYTES` tương đương trong code ĐHB, popover neo nút, v.v.).
-- **Khác biệt tên / path:** virtual path và `build*AttachmentBaseName` dùng **Mã ĐHB** + **phần khách** (`ma_kh` / `KH_unknown`) theo rule trong code `donHangBan*DinhKem*` / `DonHangBanChungTu`, không dùng mã báo giá.
+- **Khác biệt tên / path:** cùng util **`chuanHoaDuongDanDinhKemDonHangBanChungTu`** với **`soBaoGiaGoc`** khi có nguồn từ báo giá — thư mục file BG được **tái sử dụng**; token tên file theo **mã ĐHB** hiện tại hoặc giữ nhánh BG theo quy tắc `chuanHoaThietKeVirtualPaths`.
 - **Toolbar:** nhãn nút **Đính kèm thiết kế** (không dùng «Đính kèm chứng từ» cho ĐHB); ô **Mã** mặc định hiển thị **Mã ĐHB**.
+
+## Đính kèm thiết kế (dktk) — Hợp đồng bán & Phụ lục HĐ bán
+
+- **Form:** `hopDongBanForm.tsx`, `phuLucHopDongBanForm.tsx` — cùng util **`chuanHoaDuongDanDinhKemHopDongBanChungTu`** / **`chuanHoaDuongDanDinhKemPhuLucHopDongBanChungTu`** với tùy chọn **`{ soBaoGiaGoc }`**, **`maKhPathPartTuKhachHangVaDanhBa`**, **`htqlReconcileThietKeServerPaths`** trong **`handleLuuVaDong`** (đồng bộ file trên SSD sau khi đổi KH / chọn nguồn BG).
+- **Modal:** `hopDongBanDinhKemModalFull.tsx`, `phuLucHopDongBanDinhKemModalFull.tsx` — cùng quy tắc tên file và định dạng như Báo giá / ĐHB.
 
 ## Payload
 
 - Lưu mảng `attachments` trong JSON đơn (`name`, `data`, `saved_at`, `virtual_path` đã chuẩn hóa khi lưu).
+
+## Xóa file trên máy chủ (đồng bộ với xóa dữ liệu)
+
+- Khi **gỡ** file khỏi danh sách đính kèm trên form hoặc **xóa** bản ghi chứng từ / VTHH có ảnh: phải **`DELETE /api/htql-files?kind=…&rel=…`** (cùng `kind`/`rel` với lúc upload) để **xóa vật lý** file trên SSD — tránh file “mồ côi”.
+- Ảnh VTHH (`kind=vthh_hinh`): khi người dùng xóa ảnh trên form, gọi xóa file trước khi xóa trường trong JSON lưu CSDL.
+
+## Đính kèm dùng chung (BG → ĐHB / HĐ bán, ĐHB → HĐ bán)
+
+- Khi **lập chứng từ sau từ chứng từ trước** (Báo giá → Đơn hàng bán / Hợp đồng bán / Phụ lục; Đơn hàng bán → Hợp đồng bán / Phụ lục): **giữ** `virtual_path` / `server_relative_path` trỏ tới **cùng file vật lý** đã upload (ưu tiên thư mục mã BG khi có `so_bao_gia_goc`) — **không** upload bản sao; nếu chuẩn hóa đổi đường dẫn (pending → `kh…`, đổi KH): **`htqlReconcileThietKeServerPaths`** + **`POST /api/htql-files-move`** trước khi gửi payload lưu.
+- Nút **Đính kèm thiết kế** phải hiển thị **đúng** đường dẫn đã lưu trên máy chủ, không nhân bản file trên ổ.
+
+## Dữ liệu nghiệp vụ và MySQL
+
+- **Mục tiêu (build.mdc):** dữ liệu nghiệp vụ **MySQL** qua API, **fetch-on-demand**, **không** `localStorage` entity; **`htql_kv_store`** chỉ còn trong **giai đoạn chuyển đổi** cho tới khi từng module migrate xong.
+- **Hiện trạng / tra cứu:** chứng từ (báo giá, đơn hàng bán, …) có thể vẫn đồng bộ qua **`htql_kv_store`** (API `/api/htql-kv`) — **không** có bảng SQL riêng từng loại chứng từ trong phpMyAdmin. Tra cứu: bảng `htql_kv_store` + khóa `htql_bao_gia_*`, v.v.
