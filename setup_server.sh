@@ -488,8 +488,8 @@ SMB
   fi
 fi
 
-# --- Backup định kỳ 01:00 — DB + data xoay vòng 10 bản; rsync hdct/thietke theo đường dẫn đã cấu hình ---
-htql_log ">>> [HTQL] Cài đặt backup định kỳ (cron 01:00)..."
+# --- Backup định kỳ 01:00 + đồng bộ nối tiếp 01:30 ---
+htql_log ">>> [HTQL] Cài đặt backup định kỳ (01:00) + đồng bộ nối tiếp (01:30)..."
 sudo systemctl enable cron 2>/dev/null || true
 sudo systemctl start cron 2>/dev/null || true
 mkdir -p "${HTQL_ROOT}/logs"
@@ -522,21 +522,62 @@ LOG="\${HTQL_ROOT}/logs/htql550-backup.log"
   fi
   ls -1t "\${DAILY}"/db_*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
   ls -1t "\${DAILY}"/data_*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
-  if [[ -d "\${HTQL_DIR_HDCT}" ]]; then
-    rsync -a "\${HTQL_DIR_HDCT}/" "\${BACKUP_CT_TK}/hdct/" || echo "[\$(date -Is)] Cảnh báo: rsync hdct."
-  fi
-  if [[ -d "\${HTQL_DIR_THIETKE}" ]]; then
-    rsync -a "\${HTQL_DIR_THIETKE}/" "\${BACKUP_CT_TK}/thietke/" || echo "[\$(date -Is)] Cảnh báo: rsync thietke."
-  fi
-  echo "[\$(date -Is)] Hoàn tất backup (PostgreSQL + MySQL + data xoay vòng 10 bản; rsync hdct/thietke)."
+  echo "[\$(date -Is)] Hoàn tất backup (PostgreSQL + MySQL + data xoay vòng 10 bản)."
 } >> "\${LOG}" 2>&1
 HTQL_BACKUP_EOF
 sudo chmod 755 /usr/local/bin/htql550-backup.sh
+sudo tee /usr/local/bin/htql550-sync-cttk.sh > /dev/null <<HTQL_SYNC_EOF
+#!/usr/bin/env bash
+set -euo pipefail
+HTQL_ROOT="${HTQL_ROOT}"
+HTQL_DIR_THIETKE="${HTQL_DIR_THIETKE}"
+HTQL_DIR_HDCT="${HTQL_DIR_HDCT}"
+BACKUP_ROOT="${HTQL_BACKUP}"
+BACKUP_CT_TK="\${BACKUP_ROOT}/backup_ct_tk"
+mkdir -p "\${BACKUP_CT_TK}/hdct" "\${BACKUP_CT_TK}/thietke" "\${HTQL_ROOT}/logs"
+LOG="\${HTQL_ROOT}/logs/htql550-sync-cttk.log"
+
+# Chỉ đồng bộ hai nhánh SSD (hdct + thietke) → HDD theo .env; không rsync cây khác.
+# Bỏ --checksum (đọc toàn bộ file mỗi lần, dễ lỗi/kẹt trên ổ lớn); dùng mặc định rsync (size+mtime).
+# Nếu nguồn rỗng (SSD chưa mount) thì KHÔNG chạy --delete để tránh xoá nhầm bản sao HDD.
+htql_sync_one() {
+  local src="\$1" dst="\$2" name="\$3"
+  if [[ ! -d "\$src" ]]; then
+    echo "[\$(date -Is)] Cảnh báo: thiếu thư mục nguồn (\$name): \$src"
+    return 0
+  fi
+  if [[ -z "\$(find "\$src" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true)" ]]; then
+    echo "[\$(date -Is)] Cảnh báo: bỏ qua rsync \$name — nguồn rỗng (kiểm tra mount SSD / HTQL_PATH_*), không ghi đích."
+    return 0
+  fi
+  mkdir -p "\$dst"
+  local lock="/tmp/htql550-sync-\${name}.lock"
+  if command -v flock >/dev/null 2>&1; then
+    if flock -n "\$lock" rsync -a --delete "\$src/" "\$dst/"; then
+      echo "[\$(date -Is)] OK rsync \$name."
+    else
+      echo "[\$(date -Is)] Cảnh báo: rsync \$name (đang chạy song song hoặc lỗi I/O?)."
+    fi
+  else
+    rsync -a --delete "\$src/" "\$dst/" || echo "[\$(date -Is)] Cảnh báo: rsync \$name."
+  fi
+}
+
+{
+  echo "[\$(date -Is)] Bắt đầu đồng bộ nối tiếp hdct/thietke → \${BACKUP_CT_TK}"
+  htql_sync_one "\${HTQL_DIR_HDCT}" "\${BACKUP_CT_TK}/hdct" "hdct"
+  htql_sync_one "\${HTQL_DIR_THIETKE}" "\${BACKUP_CT_TK}/thietke" "thietke"
+  echo "[\$(date -Is)] Hoàn tất đồng bộ nối tiếp."
+} >> "\${LOG}" 2>&1
+HTQL_SYNC_EOF
+sudo chmod 755 /usr/local/bin/htql550-sync-cttk.sh
 # Tránh trùng dòng cron khi chạy lại script
-( crontab -l 2>/dev/null | grep -v '/usr/local/bin/htql550-backup.sh' || true
+( crontab -l 2>/dev/null | grep -Ev '/usr/local/bin/htql550-(backup|sync-cttk)\.sh' || true
   echo "0 1 * * * /usr/local/bin/htql550-backup.sh"
+  echo "30 1 * * * /usr/local/bin/htql550-sync-cttk.sh"
 ) | crontab -
 htql_log ">>> [HTQL] Đã đăng ký cron: 01:00 — \`/usr/local/bin/htql550-backup.sh\`"
+htql_log ">>> [HTQL] Đã đăng ký cron: 01:30 — \`/usr/local/bin/htql550-sync-cttk.sh\`"
 
 htql_log ">>> [HTQL] Bước 6/6 — Dọn gói không dùng, cache apt và file tạm..."
 sudo apt-get autoremove -y
@@ -563,9 +604,11 @@ _REPORT_FILE="${HTQL_ROOT}/HTQL_INSTALL_REPORT.txt"
   echo "HTQL_ROOT_SSD (.env):        ${SSD_DEFAULT}"
   echo "Backup định kỳ (HDD):       ${HTQL_BACKUP}"
   echo "  • DB + thư mục data:       \`${HTQL_BACKUP}/daily_system/\` (PostgreSQL + tar data + mysqldump MySQL — giữ tối đa 10 bản/ngày, xóa bản cũ)"
-  echo "  • Chứng từ + thiết kế:      \`${HTQL_BACKUP}/backup_ct_tk/hdct\` + \`thietke\` (rsync từ đường dẫn đã cấu hình)"
+  echo "  • Chứng từ + thiết kế:      \`${HTQL_BACKUP}/backup_ct_tk/hdct\` + \`thietke\` (đồng bộ nối tiếp)"
   echo "  • Lịch:                    01:00 hàng ngày — \`/usr/local/bin/htql550-backup.sh\`"
+  echo "  • Lịch đồng bộ nối tiếp:    01:30 hàng ngày — \`/usr/local/bin/htql550-sync-cttk.sh\`"
   echo "  • Log backup:              ${HTQL_ROOT}/logs/htql550-backup.log"
+  echo "  • Log đồng bộ nối tiếp:     ${HTQL_ROOT}/logs/htql550-sync-cttk.log"
   echo ""
   echo "— Cơ sở dữ liệu PostgreSQL —"
   echo "Database:                   ${PG_DB_NAME}"

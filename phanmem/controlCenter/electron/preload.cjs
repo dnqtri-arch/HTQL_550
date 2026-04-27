@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('htqlControl', {
   fetchHtqlClientRegistry: () => ipcRenderer.invoke('api:fetchHtqlClientRegistry'),
   fetchHtqlMeta: () => ipcRenderer.invoke('api:fetchHtqlMeta'),
   fetchMysqlTables: () => ipcRenderer.invoke('api:fetchMysqlTables'),
+  fetchMysqlModuleTables: () => ipcRenderer.invoke('api:fetchMysqlModuleTables'),
+  fetchMysqlTablePreview: (payload) => ipcRenderer.invoke('api:fetchMysqlTablePreview', payload),
+  getRecentChanges: (payload) => ipcRenderer.invoke('local:getRecentChanges', payload),
+  compactHttpSessions: (payload) => ipcRenderer.invoke('api:compactHttpSessions', payload),
   pullMysqlEnv: () => ipcRenderer.invoke('ssh:pullMysqlEnv'),
   pushMysqlEnv: (payload) => ipcRenderer.invoke('ssh:pushMysqlEnv', payload),
   serverHealth: () => ipcRenderer.invoke('ssh:serverHealth'),
@@ -43,4 +47,6 @@ contextBridge.exposeInMainWorld('htqlControl', {
   restoreServerFromZip: (fileName) => ipcRenderer.invoke('ssh:restoreServerFromZip', { fileName }),
   restoreClientInstaller: (fileName) => ipcRenderer.invoke('ssh:restoreClientInstaller', { fileName }),
   listBackupSummary: () => ipcRenderer.invoke('ssh:listBackupSummary'),
+  getBackupCatalog: () => ipcRenderer.invoke('ssh:getBackupCatalog'),
+  restoreBackupSnapshot: (fileName) => ipcRenderer.invoke('ssh:restoreBackupSnapshot', { fileName }),
 })

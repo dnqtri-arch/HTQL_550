@@ -1,6 +1,6 @@
 {
   "name": "htql-admin-tool",
-  "version": "2.5.9",
+  "version": "2.6.19",
   "private": true,
   "description": "HTQL_550 Server — tool quản trị SSH/PM2/MySQL (Windows Electron)",
   "main": "electron/main.cjs",

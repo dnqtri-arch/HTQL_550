@@ -13,7 +13,7 @@ export type HtqlWorkstation = {
 export type HtqlSettings = {
   ubuntuUser: string
   ubuntuPassword: string
-  /** File .exe / .dmg cài đặt client lần chọn gần nhất (gợi ý). */
+  /** File .exe cài đặt client lần chọn gần nhất (gợi ý). */
   lastClientInstallerPath: string
   /** Đồng bộ với `/opt/htql550/server/.env` (HTQL_MYSQL_*) — đọc/ghi qua SSH. */
   mysqlHost?: string
@@ -75,6 +75,25 @@ declare global {
       fetchHtqlMeta: () => Promise<HttpJsonResult>
       /** Thống kê bảng MySQL (GET /api/htql-mysql-tables). */
       fetchMysqlTables: () => Promise<HttpJsonResult>
+      /** Danh sách module auto tạo bảng htql_mod_* (GET /api/htql-admin-module-tables). */
+      fetchMysqlModuleTables: () => Promise<HttpJsonResult>
+      /** Xem nhanh dữ liệu bảng MySQL (GET /api/htql-mysql-table-preview). */
+      fetchMysqlTablePreview: (payload: { table: string; limit?: number }) => Promise<HttpJsonResult>
+      /** Tóm tắt commit gần đây (để hiển thị popup trước khi cập nhật). */
+      getRecentChanges: (payload?: { limit?: number }) => Promise<{ ok: boolean; lines: string[] }>
+      /** Dọn bảng htql_http_session qua API nội bộ trên server (SSH curl localhost). */
+      compactHttpSessions: (payload?: { mode?: 'truncate' | 'optimize'; target?: 'session' | 'logs' | 'all' }) => Promise<{
+        ok: boolean
+        error?: string
+        out?: string
+        json?: {
+          ok?: boolean
+          mode?: string
+          target?: string
+          session?: { mode?: string; deleted?: number }
+          logs?: { deletedTotal?: number; details?: Array<{ table?: string; deleted?: number; mode?: string }> }
+        }
+      }>
       /** Đọc HTQL_MYSQL_* từ server/.env qua SSH (không qua HTTP). */
       pullMysqlEnv: () => Promise<
         | { ok: true; fields: Pick<HtqlSettings, 'mysqlHost' | 'mysqlPort' | 'mysqlDatabase' | 'mysqlUser' | 'mysqlPassword'> }
@@ -108,6 +127,16 @@ declare global {
       restoreServerFromZip: (fileName: string) => Promise<{ ok: boolean; error?: string; out?: string; code?: number }>
       restoreClientInstaller: (fileName: string) => Promise<{ ok: boolean; error?: string; out?: string }>
       listBackupSummary: () => Promise<{ ok: boolean; error?: string; text?: string }>
+      getBackupCatalog: () => Promise<{
+        ok: boolean
+        error?: string
+        meta?: Record<string, string>
+        snapshots: Array<{ fileName: string; sizeBytes: number; mtime: string; type: string }>
+        logBackup?: string
+        logSync?: string
+        cronHint?: string
+      }>
+      restoreBackupSnapshot: (fileName: string) => Promise<{ ok: boolean; error?: string; out?: string; code?: number }>
     }
   }
 }

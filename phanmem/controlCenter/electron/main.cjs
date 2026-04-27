@@ -11,9 +11,13 @@ const https = require('https')
 const net = require('net')
 const { URL } = require('url')
 const { Client } = require('ssh2')
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
 
+/** Smart Connect HTTP — đồng bộ với `src/constants/htqlConnectionDefaults.ts` và VITE_HTQL_IP_* khi build client */
 const IP_LAN = '192.168.1.68'
 const IP_WAN = '14.224.152.48'
+const HTQL_SMART_CONNECT_API_PORT = 3001
+const HTQL_SMART_CONNECT_PROBE_TIMEOUT_MS = 2500
 const MONITOR_MS = 15_000
 
 /** Gốc cài HTQL trên Ubuntu; gói cập nhật server/client: …/update/ (không dùng /ssd_2tb cho update). */
@@ -76,6 +80,48 @@ function saveSettings(data) {
   fs.writeFileSync(settingsPath(), JSON.stringify(merged, null, 2), 'utf8')
 }
 
+function readRecentGitChanges(limit = 12) {
+  const n = Math.min(Math.max(Number(limit) || 12, 1), 30)
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      ['-C', REPO_ROOT, 'log', `-n${n}`, '--pretty=format:%h\t%s'],
+      { windowsHide: true },
+      (err, stdout) => {
+        if (err) return resolve([])
+        const lines = String(stdout || '')
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const tab = line.indexOf('\t')
+            if (tab < 0) return `- ${line}`
+            return `- ${line.slice(0, tab)} ${line.slice(tab + 1)}`
+          })
+        resolve(lines)
+      },
+    )
+  })
+}
+
+function readRecentChangesFallback(limit = 12) {
+  try {
+    const file = path.join(REPO_ROOT, 'CHANGELOG_CHUAN_HOA.md')
+    if (!fs.existsSync(file)) return []
+    const raw = fs.readFileSync(file, 'utf8')
+    const lines = String(raw || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((s) => /^[-*]\s+/.test(s) || /^#{1,3}\s+/.test(s))
+      .slice(0, Math.min(Math.max(Number(limit) || 12, 1), 30))
+      .map((s) => (s.startsWith('#') ? `- ${s.replace(/^#+\s*/, '')}` : s.replace(/^[*]\s+/, '- ')))
+    return lines
+  } catch {
+    return []
+  }
+}
+
 function pingHost(ip) {
   return new Promise((resolve) => {
     execFile('ping', ['-n', '1', '-w', '3000', ip], { windowsHide: true }, (err, stdout) => {
@@ -85,12 +131,27 @@ function pingHost(ip) {
   })
 }
 
+/**
+ * Nhiều router/WAN chặn ICMP nhưng vẫn mở TCP 3001 — Smart Connect không chỉ dựa vào ping.
+ * Ưu tiên GET /api/health (nhẹ), fallback /api/don-vi-tinh (server cũ chưa có health).
+ */
+async function probeApiHost(ip) {
+  const base = `http://${ip}:${HTQL_SMART_CONNECT_API_PORT}`
+  const health = await httpGetJson(`${base}/api/health`, HTQL_SMART_CONNECT_PROBE_TIMEOUT_MS)
+  if (health.ok && health.json && health.json.ok === true) return true
+  const dvt = await httpGetJson(`${base}/api/don-vi-tinh`, HTQL_SMART_CONNECT_PROBE_TIMEOUT_MS)
+  return Boolean(dvt.ok)
+}
+
 async function refreshConnection() {
-  const lan = await pingHost(IP_LAN)
-  if (lan) connectionState = { mode: 'lan', host: IP_LAN }
-  else {
-    const wan = await pingHost(IP_WAN)
-    if (wan) connectionState = { mode: 'wan', host: IP_WAN }
+  const [lanPing, lanApi] = await Promise.all([pingHost(IP_LAN), probeApiHost(IP_LAN)])
+  const lanReachable = lanPing || lanApi
+  if (lanReachable) {
+    connectionState = { mode: 'lan', host: IP_LAN }
+  } else {
+    const [wanPing, wanApi] = await Promise.all([pingHost(IP_WAN), probeApiHost(IP_WAN)])
+    const wanReachable = wanPing || wanApi
+    if (wanReachable) connectionState = { mode: 'wan', host: IP_WAN }
     else connectionState = { mode: 'offline', host: null }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -393,7 +454,7 @@ function createWindow() {
   const winOpts = {
     width: 1360,
     height: 880,
-    minWidth: 1100,
+    minWidth: 1180,
     minHeight: 760,
     backgroundColor: '#1a1408',
     show: false,
@@ -410,7 +471,12 @@ function createWindow() {
   if (fs.existsSync(iconPng)) winOpts.icon = iconPng
   mainWindow = new BrowserWindow(winOpts)
   Menu.setApplicationMenu(null)
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => {
+    try {
+      mainWindow.maximize()
+    } catch (_) {}
+    mainWindow.show()
+  })
   const dev = process.env.VITE_DEV === '1'
   if (dev) {
     mainWindow.loadURL('http://localhost:5173')
@@ -649,6 +715,59 @@ ipcMain.handle('api:fetchHtqlMeta', async () => {
 ipcMain.handle('api:fetchMysqlTables', async () => {
   if (!connectionState.host) return { ok: false, error: 'Smart Connect offline.' }
   return fetchJsonFromServerWithSshFallback('/api/htql-mysql-tables')
+})
+
+ipcMain.handle('api:fetchMysqlModuleTables', async () => {
+  if (!connectionState.host) return { ok: false, error: 'Smart Connect offline.' }
+  return fetchJsonFromServerWithSshFallback('/api/htql-admin-module-tables')
+})
+
+ipcMain.handle('api:fetchMysqlTablePreview', async (_, payload) => {
+  if (!connectionState.host) return { ok: false, error: 'Smart Connect offline.' }
+  const table = String(payload?.table ?? '').trim()
+  const limitRaw = Number(payload?.limit)
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 200) : 80
+  if (!table) return { ok: false, error: 'Thiếu tên bảng.' }
+  const q = `/api/htql-mysql-table-preview?table=${encodeURIComponent(table)}&limit=${limit}`
+  return fetchJsonFromServerWithSshFallback(q)
+})
+
+ipcMain.handle('local:getRecentChanges', async (_, payload) => {
+  let lines = await readRecentGitChanges(payload?.limit)
+  if (!lines.length) lines = readRecentChangesFallback(payload?.limit)
+  return { ok: true, lines }
+})
+
+ipcMain.handle('api:compactHttpSessions', async (_, payload) => {
+  if (!connectionState.host) return { ok: false, error: 'Smart Connect offline.' }
+  const modeRaw = String(payload?.mode || 'truncate').trim().toLowerCase()
+  const mode = modeRaw === 'optimize' ? 'optimize' : 'truncate'
+  const targetRaw = String(payload?.target || 'all').trim().toLowerCase()
+  const target = targetRaw === 'session' || targetRaw === 'logs' ? targetRaw : 'all'
+  const apiPath = `/api/htql-maintenance/compact-http-sessions?mode=${mode}&target=${target}`
+  const inner = `curl -sS -X POST --connect-timeout 8 --max-time 120 "http://127.0.0.1:3001${apiPath}"`
+  const cmd = `bash -lc ${JSON.stringify(inner)}`
+  try {
+    const r = await sshExecInternal(cmd, 140_000)
+    if (r.error) return { ok: false, error: r.error, out: r.out }
+    if (r.code !== 0) return { ok: false, error: `SSH/curl thoát mã ${r.code}`, out: r.out }
+    const txt = String(r.out || '').trim()
+    let parsed = null
+    try {
+      parsed = txt ? JSON.parse(txt) : null
+    } catch {
+      parsed = null
+    }
+    if (parsed && typeof parsed === 'object' && parsed.ok === true) {
+      return { ok: true, json: parsed, out: txt }
+    }
+    if (parsed && typeof parsed === 'object' && parsed.error) {
+      return { ok: false, error: String(parsed.error), out: txt }
+    }
+    return { ok: false, error: 'Không parse được JSON phản hồi compact session.', out: txt }
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) }
+  }
 })
 
 ipcMain.handle('ssh:pullMysqlEnv', async () => {
@@ -895,18 +1014,18 @@ ipcMain.handle('ssh:listClientUpdateArtifacts', async () => {
   }
 })
 
-/** Gói .exe / .dmg: SFTP → /tmp → sudo cp vào thư mục update client + manifest (SHA tính trên máy Windows) */
+/** Gói .exe: SFTP → /tmp → sudo cp vào thư mục update client + manifest (SHA tính trên máy Windows) */
 ipcMain.handle('ssh:uploadClientInstaller', async (event, localPath) => {
   if (!localPath || !fs.existsSync(localPath)) return { ok: false, error: 'File không tồn tại.' }
   const ext = path.extname(localPath).toLowerCase()
-  if (ext !== '.exe' && ext !== '.dmg') return { ok: false, error: 'Chỉ hỗ trợ .exe hoặc .dmg' }
+  if (ext !== '.exe') return { ok: false, error: 'Chỉ hỗ trợ .exe' }
   const base = path.basename(localPath)
-  if (!/^[\w.\- ()+\[\]]+\.(exe|dmg)$/i.test(base)) return { ok: false, error: 'Tên file không hợp lệ' }
+  if (!/^[\w.\- ()+\[\]]+\.exe$/i.test(base)) return { ok: false, error: 'Tên file không hợp lệ' }
 
   const s = loadSettings()
   const buf = fs.readFileSync(localPath)
   const sha256 = crypto.createHash('sha256').update(buf).digest('hex')
-  const ver = base.replace(/\.(exe|dmg)$/i, '')
+  const ver = base.replace(/\.exe$/i, '')
   const tagM = ver.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
   const semverFromTag = tagM
     ? `${tagM[1]}.${parseInt(tagM[2], 10)}.${parseInt(tagM[3], 10)}-${tagM[4]}`
@@ -969,7 +1088,7 @@ ipcMain.handle('ssh:uploadClientInstaller', async (event, localPath) => {
       `sudo cp ${escapeSingleQuotes(remoteInstaller)} ${escapeSingleQuotes(destInstaller)}`,
       `sudo cp ${escapeSingleQuotes(remoteManifest)} ${escapeSingleQuotes(destManifest)}`,
       `sudo rm -f ${escapeSingleQuotes(remoteInstaller)} ${escapeSingleQuotes(remoteManifest)}`,
-      `sudo bash -c 'cd ${escapeSingleQuotes(PATH_UPDATE_CLIENT)} && shopt -s nullglob; ls -1t *.exe 2>/dev/null | tail -n +11 | xargs -r rm -f; ls -1t *.dmg 2>/dev/null | tail -n +11 | xargs -r rm -f'`,
+      `sudo bash -c 'cd ${escapeSingleQuotes(PATH_UPDATE_CLIENT)} && shopt -s nullglob; ls -1t *.exe 2>/dev/null | tail -n +11 | xargs -r rm -f'`,
       'echo OK',
     ].join('; ')
     const cmd = `bash -lc ${JSON.stringify(inner)}`
@@ -1021,32 +1140,36 @@ ipcMain.handle('ssh:runServerUpdate', async (event, payload) => {
   const inner = [
     'set -e',
     `echo "${escapeSingleQuotes(pw)}" | sudo -S -v`,
-    'echo ">>> [Update 1/7] apt update + upgrade (Ubuntu)..."',
+    'echo ">>> [Update 1/8] apt update + upgrade (Ubuntu)..."',
     'sudo mkdir -p /etc/apt/apt.conf.d',
     'printf "%s\\n" "Acquire::Retries \\"3\\";" "Acquire::http::Timeout \\"20\\";" "Acquire::https::Timeout \\"20\\";" "Acquire::ForceIPv4 \\"true\\";" | sudo tee /etc/apt/apt.conf.d/99htql-network >/dev/null',
     'i=0; until sudo DEBIAN_FRONTEND=noninteractive apt-get update -y; do i=$((i+1)); [ "$i" -ge 3 ] && { echo "apt-get update failed after 3 tries"; exit 1; }; echo "apt-get update retry $i/3..."; sleep 5; done',
     'sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade',
-    'echo ">>> [Update 2/7] Cài unzip (nếu thiếu)..."',
+    'echo ">>> [Update 2/8] Cài unzip (nếu thiếu)..."',
     'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y unzip',
-    `echo ">>> [Update 3/7] Giải nén gói từ ${remote}..."`,
+    `echo ">>> [Update 3/8] Giải nén gói từ ${remote}..."`,
     `unzip -o '${escapeSingleQuotes(remote)}' -d /tmp || { U=$?; [ "$U" -le 1 ] || exit "$U"; }`,
-    'echo ">>> [Update 4/7] rsync mã server + package.json gốc (webAppVersion)..."',
+    'echo ">>> [Update 4/8] rsync mã server + package.json gốc (webAppVersion)..."',
     `sudo rsync -a /tmp/${escapeSingleQuotes(f)}/server/ ${escapeSingleQuotes(root)}/server/ --exclude node_modules --exclude .env`,
     `[ -f /tmp/${escapeSingleQuotes(f)}/package.json ] && sudo cp -f /tmp/${escapeSingleQuotes(f)}/package.json ${escapeSingleQuotes(root)}/package.json || true`,
     `[ -f /tmp/${escapeSingleQuotes(f)}/VERSION.txt ] && sudo cp -f /tmp/${escapeSingleQuotes(f)}/VERSION.txt ${escapeSingleQuotes(root)}/VERSION.txt || true`,
     `[ -f /tmp/${escapeSingleQuotes(f)}/PACKAGE_INFO.txt ] && sudo cp -f /tmp/${escapeSingleQuotes(f)}/PACKAGE_INFO.txt ${escapeSingleQuotes(root)}/PACKAGE_INFO.txt || true`,
-    'echo ">>> [Update 5/7] npm install..."',
+    'echo ">>> [Update 5/8] npm install..."',
     `cd ${escapeSingleQuotes(root)}/server && npm install --omit=dev`,
-    'echo ">>> [Update 6/7] khởi động lại PM2..."',
+    'echo ">>> [Update 6/8] khởi động lại PM2..."',
     'export PATH="$HOME/.npm-global/bin:$PATH:/usr/local/bin"',
     `pm2 restart '${pm2n}' || pm2 restart all`,
-    'echo ">>> [Update 7/7] Dọn rác: apt autoremove, autoclean, lưu zip vào update/server (tối đa 10 bản)..."',
+    'echo ">>> [Update 7/8] Dọn rác: apt autoremove, autoclean, lưu zip vào update/server (tối đa 10 bản)..."',
     'sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y',
     'sudo apt-get autoclean',
     `sudo mkdir -p '${PATH_UPDATE_SERVER}'`,
     `sudo cp -f '${escapeSingleQuotes(remote)}' '${PATH_UPDATE_SERVER}/${f}.zip'`,
     `sudo cp -f '${PATH_UPDATE_SERVER}/${f}.zip' '${PATH_UPDATE_SERVER}/htql_server_update.zip' || true`,
     `sudo sh -c 'cd ${PATH_UPDATE_SERVER} && ls -1t htql_server_v*.zip 2>/dev/null | tail -n +11 | xargs -r rm -f'`,
+    'echo ">>> [Update 8/8] Chạy backup+sync ngay và chuẩn hóa cron 01:00/01:30..."',
+    `sudo /usr/local/bin/htql550-backup.sh || true`,
+    `sudo /usr/local/bin/htql550-sync-cttk.sh || true`,
+    `(crontab -l 2>/dev/null | grep -v 'htql550-backup\\.sh' | grep -v 'htql550-sync-cttk\\.sh'; echo '0 1 * * * /usr/local/bin/htql550-backup.sh'; echo '30 1 * * * /usr/local/bin/htql550-sync-cttk.sh') | crontab -`,
     `rm -f '${escapeSingleQuotes(remote)}' 2>/dev/null || true`,
     `echo ">>> Hoàn tất. Đã xử lý zip tại ${remote}"`,
   ].join('; ')
@@ -1079,7 +1202,7 @@ ipcMain.handle('ssh:listServerArtifacts', async () => {
 })
 
 ipcMain.handle('ssh:listClientArtifacts', async () => {
-  const inner = `find '${PATH_UPDATE_CLIENT}' -maxdepth 1 -type f \\( -name '*.exe' -o -name '*.dmg' \\) -printf '%T@\\t%f\\n' 2>/dev/null | sort -nr | head -20 | cut -f2- || true`
+  const inner = `find '${PATH_UPDATE_CLIENT}' -maxdepth 1 -type f -name '*.exe' -printf '%T@\\t%f\\n' 2>/dev/null | sort -nr | head -20 | cut -f2- || true`
   const cmd = `bash -lc ${JSON.stringify(inner)}`
   try {
     const r = await sshExecInternal(cmd, 20_000)
@@ -1089,7 +1212,7 @@ ipcMain.handle('ssh:listClientArtifacts', async () => {
       ? raw
           .split('\n')
           .map((line) => line.trim())
-          .filter((name) => /^[\w.\- ()+\[\]]+\.(exe|dmg)$/i.test(name))
+          .filter((name) => /^[\w.\- ()+\[\]]+\.exe$/i.test(name))
       : []
     return { ok: true, files }
   } catch (e) {
@@ -1137,10 +1260,10 @@ ipcMain.handle('ssh:restoreServerFromZip', async (event, payload) => {
 ipcMain.handle('ssh:restoreClientInstaller', async (event, payload) => {
   const s = loadSettings()
   const name = String(payload?.fileName || '').trim()
-  if (!/^[\w.\- ()+\[\]]+\.(exe|dmg)$/i.test(name)) {
+  if (!/^[\w.\- ()+\[\]]+\.exe$/i.test(name)) {
     return { ok: false, error: 'Tên file installer không hợp lệ.' }
   }
-  const base = name.replace(/\.(exe|dmg)$/i, '')
+  const base = name.replace(/\.exe$/i, '')
   const remoteInst = `${PATH_UPDATE_CLIENT}/${name}`
   const probe = `bash -lc ${JSON.stringify(
     `sudo test -f '${escapeSingleQuotes(remoteInst)}' && sudo sha256sum '${escapeSingleQuotes(remoteInst)}' | awk '{print $1}'`,
@@ -1231,25 +1354,193 @@ ipcMain.handle('ssh:restoreClientInstaller', async (event, payload) => {
 })
 
 ipcMain.handle('ssh:listBackupSummary', async () => {
-  const inner = [
-    'echo "=== Backup dữ liệu + DB (HTQL) ==="',
-    `sudo du -sh '${PATH_BACKUP_DF}' 2>/dev/null || echo "(không đọc được ${PATH_BACKUP_DF})"`,
-    `sudo ls -1t '${PATH_BACKUP_DF}' 2>/dev/null | head -25 || true`,
-    'echo ""',
-    'echo "=== Backup chứng từ / thiết kế (HTQL) ==="',
-    `sudo du -sh '${PATH_BACKUP_CT}' 2>/dev/null || echo "(không đọc được ${PATH_BACKUP_CT})"`,
-    `sudo ls -1t '${PATH_BACKUP_CT}' 2>/dev/null | head -20 || true`,
-    'echo ""',
-    'echo "=== Thư mục legacy /hdd_4tb/backup (nếu có) ==="',
-    `sudo du -sh '${PATH_BACKUP_LEGACY}' 2>/dev/null || echo "(chưa có hoặc không đọc được)"`,
-    `sudo ls -1t '${PATH_BACKUP_LEGACY}' 2>/dev/null | head -20 || true`,
+  const b = escapeSingleQuotes(PATH_BACKUP_DF)
+  const c = escapeSingleQuotes(PATH_BACKUP_CT)
+  const leg = escapeSingleQuotes(PATH_BACKUP_LEGACY)
+  const script = [
+    "printf '%s\\n' '=== Backup dữ liệu + DB (HTQL) ==='",
+    `sudo du -sh '${b}' 2>/dev/null || echo "(không đọc được thư mục backup)"`,
+    `sudo ls -1t '${b}' 2>/dev/null | head -25 || true`,
+    "printf '%s\\n' ''",
+    "printf '%s\\n' '=== Backup chứng từ / thiết kế (HTQL) ==='",
+    `sudo du -sh '${c}' 2>/dev/null || echo "(không đọc được thư mục đồng bộ)"`,
+    `sudo ls -1t '${c}' 2>/dev/null | head -20 || true`,
+    "printf '%s\\n' ''",
+    "printf '%s\\n' '=== Thư mục legacy /hdd_4tb/backup (nếu có) ==='",
+    `sudo du -sh '${leg}' 2>/dev/null || echo "(chưa có hoặc không đọc được)"`,
+    `sudo ls -1t '${leg}' 2>/dev/null | head -20 || true`,
   ].join('\n')
-  const cmd = `bash -lc ${JSON.stringify(inner)}`
+  const cmd = `bash -lc ${JSON.stringify(script)}`
   try {
     const r = await sshExecInternal(cmd, 35_000)
     if (r.error) return { ok: false, error: r.error, text: '' }
     return { ok: r.code === 0, text: (r.out || '').trim() || '(Trống)' }
   } catch (e) {
     return { ok: false, error: String(e.message || e), text: '' }
+  }
+})
+
+ipcMain.handle('ssh:getBackupCatalog', async () => {
+  const root = escapeSingleQuotes(REMOTE_HTQL_ROOT)
+  const script = [
+    'set +e',
+    `BACKUP_DF='${PATH_BACKUP_DF}'`,
+    `BACKUP_CT='${PATH_BACKUP_CT}'`,
+    `HTQL_ROOT='${REMOTE_HTQL_ROOT}'`,
+    'sudo mkdir -p "$BACKUP_DF" "$BACKUP_CT" "$HTQL_ROOT/logs" 2>/dev/null || true',
+    'count_bytes(){ local d="$1"; if [ ! -d "$d" ]; then echo "0|0"; return; fi; local c b; c=$(find "$d" -type f 2>/dev/null | wc -l | tr -d " "); b=$(du -sb "$d" 2>/dev/null | cut -f1); echo "${c}|${b:-0}"; }',
+    'HDCT=$(count_bytes "$BACKUP_CT/hdct")',
+    'THIETKE=$(count_bytes "$BACKUP_CT/thietke")',
+    "DISK_ROOT=$(df -B1P / 2>/dev/null | awk 'NR==2{print $2\"|\"$3\"|\"$4}')",
+    "DISK_SSD=$(df -B1P /ssd_2tb 2>/dev/null | awk 'NR==2{print $2\"|\"$3\"|\"$4}')",
+    "DISK_HDD=$(df -B1P /hdd_4tb 2>/dev/null | awk 'NR==2{print $2\"|\"$3\"|\"$4}')",
+    'DISK_ROOT=${DISK_ROOT:-0|0|0}',
+    'DISK_SSD=${DISK_SSD:-0|0|0}',
+    'DISK_HDD=${DISK_HDD:-0|0|0}',
+    "echo '__META__'",
+    'echo "HDCT=$HDCT"',
+    'echo "THIETKE=$THIETKE"',
+    'echo "DISK_ROOT=$DISK_ROOT"',
+    'echo "DISK_SSD=$DISK_SSD"',
+    'echo "DISK_HDD=$DISK_HDD"',
+    "echo '__SNAPSHOTS__'",
+    'find "$BACKUP_DF" -type f -name "*.gz" -printf "%f\\t%s\\t%TY-%Tm-%Td %TH:%TM\\n" 2>/dev/null | sort -k3,3r | head -80 || true',
+    "echo '__LOG_BACKUP__'",
+    `sudo tail -n 30 '${root}/logs/htql550-backup.log' 2>/dev/null || printf '%s\\n' '(chưa có log backup — chờ cron 01:00 hoặc chạy /usr/local/bin/htql550-backup.sh)'`,
+    "echo '__LOG_SYNC__'",
+    `sudo tail -n 30 '${root}/logs/htql550-sync-cttk.log' 2>/dev/null || printf '%s\\n' '(chưa có log đồng bộ — chờ cron 01:30 hoặc /usr/local/bin/htql550-sync-cttk.sh)'`,
+    "echo '__CRON__'",
+    "(crontab -l 2>/dev/null | grep -E 'htql550-backup|htql550-sync-cttk' || echo '(chưa thấy dòng cron — chạy setup_server.sh trên server)')",
+    'exit 0',
+  ].join('\n')
+  const cmd = `bash -lc ${JSON.stringify(script)}`
+  try {
+    const r = await sshExecInternal(cmd, 60_000)
+    if (r.error) return { ok: false, error: r.error, snapshots: [], meta: {}, logBackup: '', logSync: '', cronHint: '' }
+    if (r.code !== 0) return { ok: false, error: `SSH thoát mã ${r.code}`, snapshots: [], meta: {}, logBackup: '', logSync: '', cronHint: '' }
+    const out = String(r.out || '')
+    const lines = out.split(/\r?\n/)
+    let mode = ''
+    const meta = {}
+    const snapshots = []
+    const logBackupLines = []
+    const logSyncLines = []
+    const cronLines = []
+    for (const lineRaw of lines) {
+      const t = lineRaw.trimEnd()
+      if (t.trim() === '__META__') {
+        mode = 'meta'
+        continue
+      }
+      if (t.trim() === '__SNAPSHOTS__') {
+        mode = 'snap'
+        continue
+      }
+      if (t.trim() === '__LOG_BACKUP__') {
+        mode = 'logB'
+        continue
+      }
+      if (t.trim() === '__LOG_SYNC__') {
+        mode = 'logS'
+        continue
+      }
+      if (t.trim() === '__CRON__') {
+        mode = 'cron'
+        continue
+      }
+      if (mode === 'meta') {
+        const line = t.trim()
+        if (!line) continue
+        const eq = line.indexOf('=')
+        if (eq > 0) meta[line.slice(0, eq)] = line.slice(eq + 1)
+        continue
+      }
+      if (mode === 'snap') {
+        const line = t.trim()
+        if (!line) continue
+        const parts = line.split('\t')
+        if (parts.length < 3) continue
+        const fileName = String(parts[0] || '').trim()
+        const sizeBytes = Number(parts[1] || 0) || 0
+        const mtime = String(parts.slice(2).join('\t') || '').trim()
+        if (!/^[\w.\-]+\.gz$/i.test(fileName)) continue
+        const type = fileName.startsWith('mysql_')
+          ? 'mysql'
+          : fileName.startsWith('postgres_')
+            ? 'postgres'
+            : fileName.startsWith('data_')
+              ? 'data'
+              : 'other'
+        snapshots.push({ fileName, sizeBytes, mtime, type })
+        continue
+      }
+      if (mode === 'logB') {
+        logBackupLines.push(lineRaw)
+        continue
+      }
+      if (mode === 'logS') {
+        logSyncLines.push(lineRaw)
+        continue
+      }
+      if (mode === 'cron') {
+        if (t.trim()) cronLines.push(t.trimEnd())
+        continue
+      }
+    }
+    return {
+      ok: true,
+      meta,
+      snapshots,
+      logBackup: logBackupLines.join('\n').trim(),
+      logSync: logSyncLines.join('\n').trim(),
+      cronHint: cronLines.join('\n').trim(),
+    }
+  } catch (e) {
+    return { ok: false, error: String(e.message || e), snapshots: [], meta: {}, logBackup: '', logSync: '', cronHint: '' }
+  }
+})
+
+ipcMain.handle('ssh:restoreBackupSnapshot', async (event, payload) => {
+  const fileName = String(payload?.fileName || '').trim()
+  if (!/^[\w.\-]+\.gz$/i.test(fileName)) {
+    return { ok: false, error: 'Tên backup không hợp lệ.' }
+  }
+  const src = `${PATH_BACKUP_DF}/${fileName}`
+  const pw = escapeSingleQuotes(loadSettings().ubuntuPassword || '')
+  const root = escapeSingleQuotes(REMOTE_HTQL_ROOT)
+  const pm2n = escapeSingleQuotes(PM2_APP_NAME)
+  const inner = [
+    'set -e',
+    `echo "${pw}" | sudo -S -v`,
+    `sudo test -f '${escapeSingleQuotes(src)}'`,
+    `echo ">>> Phục hồi từ backup: ${escapeSingleQuotes(fileName)}"`,
+    `if [[ '${escapeSingleQuotes(fileName)}' == data_* ]]; then`,
+    `  SNAP="/tmp/htql_data_before_restore_$(date +%Y%m%d_%H%M%S).tgz";`,
+    `  sudo tar -czf "$SNAP" -C '${root}' data 2>/dev/null || true;`,
+    `  sudo tar -xzf '${escapeSingleQuotes(src)}' -C '${root}';`,
+    `elif [[ '${escapeSingleQuotes(fileName)}' == mysql_* ]]; then`,
+    `  MYSQL_USER=$(grep -E '^HTQL_MYSQL_USER=' '${root}/server/.env' | tail -n1 | cut -d= -f2- || true);`,
+    `  MYSQL_DB=$(grep -E '^HTQL_MYSQL_DATABASE=' '${root}/server/.env' | tail -n1 | cut -d= -f2- || true);`,
+    `  MYSQL_PW=$(cat '${root}/.mysql_password' 2>/dev/null || true);`,
+    `  [ -n "$MYSQL_USER" ] && [ -n "$MYSQL_DB" ] && [ -n "$MYSQL_PW" ] || { echo "Thiếu cấu hình MySQL"; exit 2; };`,
+    `  gunzip -c '${escapeSingleQuotes(src)}' | mysql -h127.0.0.1 -P3306 --protocol=TCP -u"$MYSQL_USER" -p"$MYSQL_PW" "$MYSQL_DB";`,
+    `elif [[ '${escapeSingleQuotes(fileName)}' == postgres_* ]]; then`,
+    `  source '${root}/server/.env' >/dev/null 2>&1 || true;`,
+    `  PGPW=$(cat '${root}/.pg_password' 2>/dev/null || true);`,
+    `  [ -n "$PGPW" ] || { echo "Thiếu .pg_password"; exit 2; };`,
+    `  export PGPASSWORD="$PGPW";`,
+    `  gunzip -c '${escapeSingleQuotes(src)}' | psql -h127.0.0.1 -U"\${PG_DB_USER:-htql_user}" -d "\${PG_DB_NAME:-htql_550_db}";`,
+    `else`,
+    `  echo "Loại backup chưa hỗ trợ tự phục hồi."; exit 2;`,
+    `fi`,
+    `pm2 restart '${pm2n}' || pm2 restart all`,
+    'echo ">>> Phục hồi hoàn tất."',
+  ].join(' ')
+  const cmd = `bash -lc ${JSON.stringify(inner)}`
+  try {
+    const r = await sshExecStream(event, cmd)
+    return { ok: r.code === 0, code: r.code, out: r.out }
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) }
   }
 })

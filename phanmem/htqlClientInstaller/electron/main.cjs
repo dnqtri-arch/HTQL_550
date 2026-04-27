@@ -480,6 +480,8 @@ async function checkInstallerUpdateFromServer() {
 }
 
 function createWindow() {
+  const iconIco = path.join(__dirname, '..', 'build', 'icon.ico')
+  const iconPng = path.join(__dirname, '..', 'build', 'icon.png')
   const winOpts = {
     width: 1440,
     height: 900,
@@ -497,6 +499,8 @@ function createWindow() {
       webSecurity: false,
     },
   }
+  if (fs.existsSync(iconIco)) winOpts.icon = iconIco
+  else if (fs.existsSync(iconPng)) winOpts.icon = iconPng
   if (process.platform === 'win32') {
     winOpts.titleBarOverlay = {
       color: '#2d1f0f',
@@ -530,6 +534,11 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
+    try {
+      if (!mainWindow.isDestroyed() && !mainWindow.isMaximized()) mainWindow.maximize()
+    } catch {
+      /* ignore */
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
