@@ -670,6 +670,8 @@ const THUE_SUAT_GTGT_OPTIONS = [
 const mau_dhmcodongia = [
   'Mã',
   'Tên VTHH',
+  'Độ dày/ ĐL',
+  'Khổ giấy',
   'ĐVT',
   'Số lượng',
   'ĐG mua',
@@ -763,10 +765,61 @@ function dvtHienThiLabel(
   return d ? (d.ky_hieu || d.ten_dvt || d.ma_dvt) : v
 }
 
+function buildDoDayOptionsForVthh(vthh?: VatTuHangHoaRecord | null): string[] | null {
+  if (!vthh) return null
+  const set = new Set<string>()
+  const push = (raw?: string | null) => {
+    const parts = String(raw ?? '').split(/[;,]/).map((x) => x.trim()).filter(Boolean)
+    parts.forEach((v) => set.add(v))
+  }
+  push(vthh.do_day)
+  push(vthh.dinh_luong)
+  const matrix = Array.isArray(vthh.pricing_matrix) ? vthh.pricing_matrix : []
+  matrix.forEach((row) => { push(row.do_day); push(row.dinh_luong) })
+  const out = Array.from(set)
+  return out.length > 0 ? out : null
+}
+
+function buildKhoGiayOptionsForVthh(vthh?: VatTuHangHoaRecord | null): string[] | null {
+  if (!vthh) return null
+  const set = new Set<string>()
+  const push = (raw?: string | null) => {
+    const parts = String(raw ?? '').split(/[;,]/).map((x) => x.trim()).filter(Boolean)
+    parts.forEach((v) => set.add(v))
+  }
+  push(vthh.kho_giay)
+  const matrix = Array.isArray(vthh.pricing_matrix) ? vthh.pricing_matrix : []
+  matrix.forEach((row) => {
+    push(row.kho_giay)
+  })
+  const out = Array.from(set)
+  return out.length > 0 ? out : null
+}
+
+function donGiaContextFromDonHangMuaLine(row: DonHangMuaGridLineRow) {
+  const doDay = (row['Độ dày/ ĐL'] ?? '').trim()
+  const khoGiay = (row['Khổ giấy'] ?? '').trim()
+  if (!doDay && !khoGiay) return undefined
+  return { doDay, dinhLuong: doDay, khoGiay }
+}
+
+function insertVariantColumns(cols: readonly string[]): readonly string[] {
+  const out = [...cols]
+  if (out.includes('Độ dày/ ĐL') && out.includes('Khổ giấy')) return out
+  const idxDvt = out.indexOf('ĐVT')
+  if (idxDvt >= 0) {
+    out.splice(idxDvt, 0, 'Độ dày/ ĐL', 'Khổ giấy')
+    return out
+  }
+  return [...out, 'Độ dày/ ĐL', 'Khổ giấy']
+}
+
 /** Độ rộng cột cố định (rule mau_gia: STT, Mã, Tên, ĐVT, Số lượng giữ nguyên khi chuyển mẫu). */
 const COL_WIDTH_STT = 36
 const COL_WIDTH_MA = 88
 const COL_WIDTH_TEN = 220
+const COL_WIDTH_DO_DAY = 92
+const COL_WIDTH_KHO_GIAY = 104
 const COL_WIDTH_DVT = 64
 const COL_WIDTH_SO_LUONG = 68
 const COL_WIDTH_ACTION = 28
@@ -776,6 +829,8 @@ const OFFSET_TRAI_COT_MA_VTHH = COL_WIDTH_ACTION + COL_WIDTH_STT + 5
 function colWidthStyle(col: string, ghiChuFill?: boolean): React.CSSProperties {
   if (col === 'Mã') return { width: COL_WIDTH_MA, minWidth: COL_WIDTH_MA, maxWidth: COL_WIDTH_MA }
   if (col === 'Tên VTHH') return { width: COL_WIDTH_TEN, minWidth: COL_WIDTH_TEN, maxWidth: COL_WIDTH_TEN }
+  if (col === 'Độ dày/ ĐL') return { width: COL_WIDTH_DO_DAY, minWidth: COL_WIDTH_DO_DAY, maxWidth: COL_WIDTH_DO_DAY }
+  if (col === 'Khổ giấy') return { width: COL_WIDTH_KHO_GIAY, minWidth: COL_WIDTH_KHO_GIAY, maxWidth: COL_WIDTH_KHO_GIAY }
   if (col === 'ĐVT') return { width: COL_WIDTH_DVT, minWidth: COL_WIDTH_DVT, maxWidth: COL_WIDTH_DVT }
   if (col === 'Số lượng') return { width: COL_WIDTH_SO_LUONG, minWidth: COL_WIDTH_SO_LUONG, maxWidth: COL_WIDTH_SO_LUONG }
   if (col === 'Ghi chú') return ghiChuFill ? { minWidth: 120 } : { width: 180, minWidth: 120 }
@@ -792,7 +847,7 @@ const STICKY_Z_TH_TOP = 5
 const STICKY_Z_TH_CORNER = 6
 const STICKY_Z_TD_LEFT = 4
 
-type StickyTraiKind = 'action' | 'stt' | 'ma' | 'ten' | 'dvt'
+type StickyTraiKind = 'action' | 'stt' | 'ma' | 'ten' | 'do_day' | 'kho_giay' | 'dvt'
 
 function gridStickyTraiPx(kind: StickyTraiKind): number {
   switch (kind) {
@@ -804,14 +859,20 @@ function gridStickyTraiPx(kind: StickyTraiKind): number {
       return COL_WIDTH_ACTION + COL_WIDTH_STT
     case 'ten':
       return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA
-    case 'dvt':
+    case 'do_day':
       return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN
+    case 'kho_giay':
+      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_DO_DAY
+    case 'dvt':
+      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_DO_DAY + COL_WIDTH_KHO_GIAY
   }
 }
 
 function cotChiTietLaCotTraiCoDinh(col: string): StickyTraiKind | null {
   if (col === 'Mã') return 'ma'
   if (col === 'Tên VTHH') return 'ten'
+  if (col === 'Độ dày/ ĐL') return 'do_day'
+  if (col === 'Khổ giấy') return 'kho_giay'
   if (col === 'ĐVT') return 'dvt'
   return null
 }
@@ -1975,8 +2036,8 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
   }
 
   /** ĐG mua khi ĐVT là ĐVT chính (gọi từ handleChonVthh lúc mới chọn). */
-  const getDonGiaHienThiWhenDvtChinh = (vthh: VatTuHangHoaRecord): string => {
-    return getDonGiaMuaTheoDvt(vthh, vthh.dvt_chinh ?? '')
+  const getDonGiaHienThiWhenDvtChinh = (vthh: VatTuHangHoaRecord, row?: DonHangMuaGridLineRow): string => {
+    return getDonGiaMuaTheoDvt(vthh, vthh.dvt_chinh ?? '', row ? donGiaContextFromDonHangMuaLine(row) : undefined)
   }
 
   /** Nạp draft chỉ khi form thêm mới (không có initialDon), không ở chế độ xem. */
@@ -2041,16 +2102,26 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
     const row = { ...next[rowIndex] } as Record<string, string> & { _dvtOptions?: string[]; _vthh?: VatTuHangHoaRecord }
     row['Mã'] = vthh.ma
     row['Tên VTHH'] = vthh.ten ?? ''
+    const doDayOpts = buildDoDayOptionsForVthh(vthh)
+    const khoGiayOpts = buildKhoGiayOptionsForVthh(vthh)
+    row['Độ dày/ ĐL'] = doDayOpts && doDayOpts.length > 0
+      ? doDayOpts[0]
+      : (((vthh.do_day ?? vthh.dinh_luong ?? '').trim().split(/[;,]/).map((x) => x.trim()).find(Boolean)) ?? '')
+    row['Khổ giấy'] = khoGiayOpts && khoGiayOpts.length > 0
+      ? khoGiayOpts[0]
+      : (((vthh.kho_giay ?? '').trim().split(/[;,]/).map((x) => x.trim()).find(Boolean)) ?? '')
     row['ĐVT'] = vthh.dvt_chinh ?? ''
     row._vthh = vthh
     const isCodongia = initialDon != null || mauHienTai === 'codongia'
     if (isCodongia) {
-      row['% thuế GTGT'] = vthh.thue_suat_gtgt ?? ''
-      row['ĐG mua'] = getDonGiaHienThiWhenDvtChinh(vthh)
+      row['ĐG mua'] = getDonGiaHienThiWhenDvtChinh(vthh, row)
     }
+    row['% thuế GTGT'] = vthh.thue_suat_gtgt ?? ''
     const opts = buildDvtOptionsForVthh(vthh)
     if (opts) row._dvtOptions = opts
     else delete row._dvtOptions
+    ;(row as DonHangMuaGridLineRow & { _doDayOptions?: string[]; _khoGiayOptions?: string[] })._doDayOptions = doDayOpts ?? undefined
+    ;(row as DonHangMuaGridLineRow & { _doDayOptions?: string[]; _khoGiayOptions?: string[] })._khoGiayOptions = khoGiayOpts ?? undefined
     if ((row[COL_DD_GH] ?? '').trim() === '') row[COL_DD_GH] = '0'
     next[rowIndex] = row
     setLines(next)
@@ -2346,7 +2417,7 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
   /** Cột hiển thị theo rule mau_gia.mdc — codongia khi đang xem/sửa đơn; khongdongia khi chọn mẫu không đơn giá; luôn kèm cột ĐĐGH. */
   const coBangCoDonGiaTuDau =
     initialDon != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0)
-  const currentColumns = (coBangCoDonGiaTuDau ? mauDhmCoDonGiaDisplay : mauHienTai === 'codongia' ? mauDhmCoDonGiaDisplay : mauDhmKhongDonGiaDisplay) as readonly string[]
+  const currentColumns = insertVariantColumns((coBangCoDonGiaTuDau ? mauDhmCoDonGiaDisplay : mauHienTai === 'codongia' ? mauDhmCoDonGiaDisplay : mauDhmKhongDonGiaDisplay) as readonly string[])
   /** Mẫu không đơn giá (thêm mới): ẩn tổng tiền / thuế / thanh toán ở footer. */
   const hienThiFooterTongTien = coBangCoDonGiaTuDau || mauHienTai === 'codongia'
   const ghiChuLaCotCuoi = currentColumns.length > 0 && currentColumns[currentColumns.length - 1] === 'Ghi chú'
@@ -4712,7 +4783,7 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                                 readOnly
                                 tabIndex={-1}
                                 className="misa-input-solo"
-                                style={{ ...inputStyle, ...chiTietNumericInputStyle(col), width: '100%', border: '1px solid transparent', minHeight: 22, height: 22, cursor: 'default' }}
+                                style={{ ...inputStyle, ...chiTietNumericInputStyle(col), width: '100%', border: '1px solid transparent', minHeight: 22, height: 22, cursor: 'default', background: 'var(--bg-secondary)' }}
                                 value={
                                   col === 'ĐVT'
                                     ? dvtHienThiLabel(line['ĐVT'], dvtList)
@@ -4745,21 +4816,37 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                                     const item = vatTuList.find((o) => o.ma === ma)
                                     const cleared = !ma.trim()
                                     const prev = r[idx] as DonHangMuaGridLineRow
-                                    const nextRow = { ...prev, [col]: ma, 'Tên VTHH': cleared ? '' : (item ? item.ten : prev['Tên VTHH']), 'ĐVT': cleared ? '' : (item ? (item.dvt_chinh ?? '') : prev['ĐVT']) } as unknown as DonHangMuaGridLineRow
+                                    const nextRow = {
+                                      ...prev,
+                                      [col]: ma,
+                                      'Tên VTHH': cleared ? '' : (item ? item.ten : prev['Tên VTHH']),
+                                      'Độ dày/ ĐL': cleared ? '' : item ? (((item.do_day ?? item.dinh_luong ?? '').trim().split(/[;,]/).map((x) => x.trim()).find(Boolean)) || '') : prev['Độ dày/ ĐL'],
+                                      'Khổ giấy': cleared ? '' : item ? (((item.kho_giay ?? '').trim().split(/[;,]/).map((x) => x.trim()).find(Boolean)) || '') : prev['Khổ giấy'],
+                                      'ĐVT': cleared ? '' : (item ? (item.dvt_chinh ?? '') : prev['ĐVT']),
+                                    } as unknown as DonHangMuaGridLineRow
                                     const isCodongia = initialDon != null || mauHienTai === 'codongia'
                                     if (cleared || !item) {
                                       delete nextRow._dvtOptions
                                       delete nextRow._vthh
-                                      if (cleared && isCodongia) { nextRow['ĐG mua'] = ''; nextRow['% thuế GTGT'] = '' }
+                                      ;(nextRow as DonHangMuaGridLineRow & { _doDayOptions?: string[]; _khoGiayOptions?: string[] })._doDayOptions = undefined
+                                      ;(nextRow as DonHangMuaGridLineRow & { _doDayOptions?: string[]; _khoGiayOptions?: string[] })._khoGiayOptions = undefined
+                                      if (cleared && isCodongia) { nextRow['ĐG mua'] = '' }
+                                      if (cleared) nextRow['% thuế GTGT'] = ''
                                     } else {
                                       nextRow._vthh = item
                                       const opts = buildDvtOptionsForVthh(item)
                                       if (opts) nextRow._dvtOptions = opts
                                       else delete nextRow._dvtOptions
+                                      const doDayOpts = buildDoDayOptionsForVthh(item)
+                                      ;(nextRow as DonHangMuaGridLineRow & { _doDayOptions?: string[] })._doDayOptions = doDayOpts ?? undefined
+                                      nextRow['Độ dày/ ĐL'] = doDayOpts && doDayOpts.length > 0 ? doDayOpts[0] : nextRow['Độ dày/ ĐL']
+                                      const khoGiayOpts = buildKhoGiayOptionsForVthh(item)
+                                      ;(nextRow as DonHangMuaGridLineRow & { _khoGiayOptions?: string[] })._khoGiayOptions = khoGiayOpts ?? undefined
+                                      nextRow['Khổ giấy'] = khoGiayOpts && khoGiayOpts.length > 0 ? khoGiayOpts[0] : nextRow['Khổ giấy']
                                       if (isCodongia) {
-                                        nextRow['ĐG mua'] = getDonGiaHienThiWhenDvtChinh(item)
-                                        nextRow['% thuế GTGT'] = item.thue_suat_gtgt ?? ''
+                                        nextRow['ĐG mua'] = getDonGiaHienThiWhenDvtChinh(item, nextRow)
                                       }
+                                      nextRow['% thuế GTGT'] = item.thue_suat_gtgt ?? ''
                                     }
                                     r[idx] = nextRow
                                     setLines(r)
@@ -4801,7 +4888,31 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                                 </span>
                               </div>
                             ) : col === 'Tên VTHH' ? (
-                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }} value={line[col] ?? ''} />
+                              <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22, background: 'var(--bg-secondary)' }} value={line[col] ?? ''} />
+                            ) : col === 'Độ dày/ ĐL' ? (
+                              (() => {
+                                const opts = (line as DonHangMuaGridLineRow & { _doDayOptions?: string[] })._doDayOptions ?? buildDoDayOptionsForVthh(line._vthh)
+                                if (opts && opts.length > 0) {
+                                  return (
+                                    <select className="misa-input-solo" style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: 'pointer' }} value={line['Độ dày/ ĐL'] ?? opts[0]} onChange={(e) => { const r = [...lines]; const row = { ...r[idx], 'Độ dày/ ĐL': e.target.value } as unknown as DonHangMuaGridLineRow; if ((initialDon != null || mauHienTai === 'codongia') && row._vthh) row['ĐG mua'] = getDonGiaMuaTheoDvt(row._vthh, (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? ''), donGiaContextFromDonHangMuaLine(row)); r[idx] = row; setLines(r) }}>
+                                      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  )
+                                }
+                                return <input className="misa-input-solo" style={{ ...inputStyle, width: '100%', border: '1px solid transparent', minHeight: 22, height: 22, background: 'var(--bg-secondary)' }} value={line['Độ dày/ ĐL'] ?? ''} onChange={(e) => { const r = [...lines]; r[idx] = { ...r[idx], 'Độ dày/ ĐL': e.target.value } as unknown as DonHangMuaGridLineRow; setLines(r) }} />
+                              })()
+                            ) : col === 'Khổ giấy' ? (
+                              (() => {
+                                const opts = (line as DonHangMuaGridLineRow & { _khoGiayOptions?: string[] })._khoGiayOptions ?? buildKhoGiayOptionsForVthh(line._vthh)
+                                if (opts && opts.length > 0) {
+                                  return (
+                                    <select className="misa-input-solo" style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: 'pointer' }} value={line['Khổ giấy'] ?? opts[0]} onChange={(e) => { const r = [...lines]; const row = { ...r[idx], 'Khổ giấy': e.target.value } as unknown as DonHangMuaGridLineRow; if ((initialDon != null || mauHienTai === 'codongia') && row._vthh) row['ĐG mua'] = getDonGiaMuaTheoDvt(row._vthh, (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? ''), donGiaContextFromDonHangMuaLine(row)); r[idx] = row; setLines(r) }}>
+                                      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  )
+                                }
+                                return <input className="misa-input-solo" style={{ ...inputStyle, width: '100%', border: '1px solid transparent', minHeight: 22, height: 22, background: 'var(--bg-secondary)' }} value={line['Khổ giấy'] ?? ''} onChange={(e) => { const r = [...lines]; r[idx] = { ...r[idx], 'Khổ giấy': e.target.value } as unknown as DonHangMuaGridLineRow; setLines(r) }} />
+                              })()
                             ) : col === 'ĐVT' ? (
                               (() => {
                                 const opts = line._dvtOptions
@@ -4818,7 +4929,7 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                                         const newDvt = e.target.value
                                         const updates = { ...row, 'ĐVT': newDvt } as unknown as DonHangMuaGridLineRow
                                         if ((initialDon != null || mauHienTai === 'codongia') && row._vthh) {
-                                          updates['ĐG mua'] = getDonGiaMuaTheoDvt(row._vthh, newDvt)
+                                          updates['ĐG mua'] = getDonGiaMuaTheoDvt(row._vthh, newDvt, donGiaContextFromDonHangMuaLine(updates))
                                         }
                                         r[idx] = updates
                                         setLines(r)
@@ -4831,7 +4942,7 @@ export function DonHangMuaForm({ onClose, onSaved, onHeaderPointerDown, dragging
                                   )
                                 }
                                 return (
-                                  <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }} value={dvtHienThiLabel(line['ĐVT'], dvtList)} />
+                                  <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22, background: 'var(--bg-secondary)' }} value={dvtHienThiLabel(line['ĐVT'], dvtList)} />
                                 )
                               })()
                             ) : col === 'Số lượng' ? (

@@ -234,6 +234,17 @@ function pmDinhLuongTokens(pm: VthhPricingMatrixItem): string[] {
   return out
 }
 
+function tenKemHeMau(baseTen: string, heMau?: string): string {
+  const ten = String(baseTen ?? '').trim()
+  const hm = String(heMau ?? '').trim()
+  if (!hm) return ten
+  const normalized = ten.toLowerCase()
+  const hmLower = hm.toLowerCase()
+  if (normalized.includes(`(${hmLower})`)) return ten
+  if (normalized.endsWith(hmLower)) return ten
+  return `${ten} (${hm})`
+}
+
 /** Khớp dòng matrix trên cha với phiên bản con: `ma_quy_cach` đủ (phụ 2), phụ 2 là tiếp nối phụ 1 (`mqc.startsWith(childMaU)` + chữ), hoặc cùng định lượng. */
 function matrixPmMatchesChildVariant(r: VatTuHangHoaRecord, pm: VthhPricingMatrixItem, childMaU: string): boolean {
   const mqc = (pm.ma_quy_cach ?? '').trim().toUpperCase()
@@ -298,7 +309,7 @@ function expandVthhPricingMatrixDisplayRows(rows: VatTuHangHoaGridRow[]): VatTuH
   ) => {
     const src = priceSourcePm ?? pm
     const khoTokens = splitKhoGiayDisplayTokens(pm.kho_giay)
-    const tenPhu1 = vthhTenPhu1TheoDl(anchor.ten, pm.dinh_luong)
+    const tenPhu1 = tenKemHeMau(vthhTenPhu1TheoDl(anchor.ten, pm.dinh_luong), (pm as { he_mau?: string }).he_mau ?? (anchor as { he_mau?: string }).he_mau)
     const maChinhGoc = vthhMachinhFromAnyVariantMa(String(anchor.ma ?? ''))
 
     const emit = (khoSingle: string | undefined, slug: string, fullMaOverride?: string) => {
@@ -416,7 +427,7 @@ function expandVthhPricingMatrixDisplayRows(rows: VatTuHangHoaGridRow[]): VatTuH
         String(first.ma_quy_cach ?? '').trim() ||
         gk
       const dlLabel = String(first.dinh_luong ?? '').trim()
-      const tenSafe = vthhTenPhu1TheoDl(r.ten, dlLabel || undefined)
+      const tenSafe = tenKemHeMau(vthhTenPhu1TheoDl(r.ten, dlLabel || undefined), (first as { he_mau?: string }).he_mau ?? (r as { he_mau?: string }).he_mau)
       out.push({
         ...r,
         ma: p1Ma,
@@ -448,6 +459,63 @@ function expandVthhPricingMatrixDisplayRows(rows: VatTuHangHoaGridRow[]): VatTuH
 /** Dòng tổng hợp từ matrix (không có bản ghi riêng) — không nhân bản; vẫn mở Sửa để xem/chỉnh bản ghi gốc. */
 function vthhGridLaDongTongHopMatrix(row: VatTuHangHoaGridRow): boolean {
   return Boolean(row._vthhIsSyntheticPhu1 || row._vthhIsMatrixVariant)
+}
+
+function dedupeVthhRowsPreferHighest(rows: VatTuHangHoaGridRow[]): VatTuHangHoaGridRow[] {
+  const keyOf = (r: VatTuHangHoaGridRow) => {
+    const root = vthhMaNormalize(r._vthhMaChinhGoc || r.ma || '')
+    const short = vthhMaHienThiSauMaChinh(String(r.ma ?? ''), r._vthhMaChinhGoc).trim().toUpperCase()
+    return `${root}::${short}`
+  }
+  const out: VatTuHangHoaGridRow[] = []
+  const idxByKey = new Map<string, number>()
+  const score = (r: VatTuHangHoaGridRow) => {
+    const indent = r._vthhTreeIndent ?? 0
+    const matrixPenalty = r._vthhIsMatrixVariant ? 2 : 0
+    const syntheticPenalty = r._vthhIsSyntheticPhu1 ? 1 : 0
+    return indent * 10 + matrixPenalty + syntheticPenalty
+  }
+  rows.forEach((r) => {
+    const key = keyOf(r)
+    if (!key) {
+      out.push(r)
+      return
+    }
+    const existedIdx = idxByKey.get(key)
+    if (existedIdx == null) {
+      idxByKey.set(key, out.length)
+      out.push(r)
+      return
+    }
+    const existed = out[existedIdx]
+    if (score(r) < score(existed)) out[existedIdx] = r
+  })
+  return out
+}
+
+function dropDuplicateChildRowsByParentEquality(rows: VatTuHangHoaGridRow[]): VatTuHangHoaGridRow[] {
+  const out: VatTuHangHoaGridRow[] = []
+  const stack: VatTuHangHoaGridRow[] = []
+  const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
+  const price = (v: unknown) => Number(v ?? 0) || 0
+  rows.forEach((row) => {
+    const indent = row._vthhTreeIndent ?? 0
+    while (stack.length > indent) stack.pop()
+    const parent = indent > 0 ? stack[indent - 1] : undefined
+    const duplicatedWithParent = parent != null && (
+      norm(row.ten) === norm(parent.ten) &&
+      norm(row.dvt_chinh) === norm(parent.dvt_chinh) &&
+      norm(row.kho_ngam_dinh) === norm(parent.kho_ngam_dinh) &&
+      norm(row.thue_suat_gtgt_dau_ra) === norm(parent.thue_suat_gtgt_dau_ra) &&
+      price(row.don_gia_ban) === price(parent.don_gia_ban) &&
+      price(row.gia_mua_gan_nhat ?? row.don_gia_mua_co_dinh ?? row.don_gia_mua) === price(parent.gia_mua_gan_nhat ?? parent.don_gia_mua_co_dinh ?? parent.don_gia_mua)
+    )
+    if (!duplicatedWithParent) {
+      out.push(row)
+      stack[indent] = row
+    }
+  })
+  return out
 }
 
 function tinhDgMuaGanNhatTheoChungTu(): Map<string, number> {
@@ -595,8 +663,8 @@ const modalBox: React.CSSProperties = {
   background: 'var(--bg-secondary)',
   border: '1px solid var(--border-strong)',
   borderRadius: '6px',
-  width: '94vw',
-  maxWidth: 1000,
+  width: '97vw',
+  maxWidth: 1280,
   height: '85vh',
   maxHeight: '85vh',
   display: 'flex',
@@ -694,6 +762,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
   /** Dòng đang mở form cảnh báo xóa (null = đóng form) */
   const [deleteTarget, setDeleteTarget] = useState<VatTuHangHoaRecord | null>(null)
   const [vthhGridListRowId, setVthhGridListRowId] = useState<string | null>(null)
+  const [expandedRootMaSet, setExpandedRootMaSet] = useState<string[]>([])
 
   /** `silent`: đồng bộ từ máy khác — không bật «đang tải» (tránh giật layout). */
   const napLai = useCallback(async (opts?: { silent?: boolean }) => {
@@ -737,10 +806,39 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
   }, [danhSach])
 
   const hierarchicalDanhSach = useMemo(() => buildVthhHierarchyDisplayRows(danhSach), [danhSach])
-  const gridHierarchyRows = useMemo(
-    () => expandVthhPricingMatrixDisplayRows(hierarchicalDanhSach),
-    [hierarchicalDanhSach]
-  )
+  const gridHierarchyRows = useMemo(() => {
+    const expanded = expandVthhPricingMatrixDisplayRows(hierarchicalDanhSach)
+    const dedupedByLevel = dedupeVthhRowsPreferHighest(expanded)
+    return dropDuplicateChildRowsByParentEquality(dedupedByLevel)
+  }, [hierarchicalDanhSach])
+  const rootHasDescendantsMap = useMemo(() => {
+    const out = new Map<string, boolean>()
+    gridHierarchyRows.forEach((r) => {
+      const rootMa = vthhMaNormalize(r._vthhMaChinhGoc || r.ma || '')
+      if (!rootMa) return
+      if ((r._vthhTreeIndent ?? 0) > 0) out.set(rootMa, true)
+      else if (!out.has(rootMa)) out.set(rootMa, false)
+    })
+    return out
+  }, [gridHierarchyRows])
+  const visibleGridHierarchyRows = useMemo(() => {
+    return gridHierarchyRows.filter((r) => {
+      const indent = r._vthhTreeIndent ?? 0
+      if (indent <= 0) return true
+      const rootMa = vthhMaNormalize(r._vthhMaChinhGoc || r.ma || '')
+      return rootMa !== '' && expandedRootMaSet.includes(rootMa)
+    })
+  }, [gridHierarchyRows, expandedRootMaSet])
+
+  useEffect(() => {
+    const validRoots = new Set(
+      gridHierarchyRows
+        .filter((r) => (r._vthhTreeIndent ?? 0) === 0)
+        .map((r) => vthhMaNormalize(r._vthhMaChinhGoc || r.ma || ''))
+        .filter(Boolean)
+    )
+    setExpandedRootMaSet((prev) => prev.filter((k) => validRoots.has(k)))
+  }, [gridHierarchyRows])
 
   /** Khi bản ghi chọn theo mã nguồn đổi (hoặc làm mới), giữ dòng con/matrix nếu cùng `id`, ngược lại gán dòng mặc định `id::0`. */
   useEffect(() => {
@@ -756,7 +854,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
 
   /** Lưới: ĐVT theo ký hiệu/tên; tồn lấy từ module Tồn kho (báo cáo nhập − xuất). Dòng matrix dùng mã tồn theo bản ghi nguồn. */
   const displayData = useMemo(() => {
-    return gridHierarchyRows.map((r) => {
+    return visibleGridHierarchyRows.map((r) => {
       const maU = (() => {
         if (r._vthhIsMatrixVariant || r._vthhIsSyntheticPhu1) {
           const p = danhSach.find((x) => x.id === r._vthhSourceRecordId)
@@ -777,7 +875,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
         gia_tri_ton: tk?.gia_tri ?? 0,
       }
     })
-  }, [gridHierarchyRows, dvtList, tonTheoMa, latestDgMuaByMa, khoLabelToMa, danhSach])
+  }, [visibleGridHierarchyRows, dvtList, tonTheoMa, latestDgMuaByMa, khoLabelToMa, danhSach])
 
   const selectedVthhGridRow = useMemo(() => {
     const id = vthhGridListRowId ?? (dongChon ? `${dongChon.id}::0` : null)
@@ -801,11 +899,19 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
           const isSynP1 = Boolean(row._vthhIsSyntheticPhu1)
           const fullMa = String(v ?? '')
           const shortMa = vthhMaHienThiSauMaChinh(fullMa, row._vthhMaChinhGoc)
+          const rootMa = vthhMaNormalize(row._vthhMaChinhGoc || row.ma || '')
+          const rootExpandable = indent === 0 && (rootHasDescendantsMap.get(rootMa) === true)
+          const rootExpanded = rootExpandable && expandedRootMaSet.includes(rootMa)
           return (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, paddingLeft: indent * 14, whiteSpace: 'nowrap' }}>
+              {rootExpandable ? (
+                <span style={{ color: 'rgba(217,119,6,0.85)', fontSize: 9, fontWeight: 700 }}>
+                  {rootExpanded ? '▾' : '▸'}
+                </span>
+              ) : null}
               {isChild ? (
                 <span
-                  style={{ color: 'var(--connector, #d97706)', fontSize: 11, fontWeight: 700 }}
+                  style={{ color: 'rgba(217,119,6,0.75)', fontSize: 9, fontWeight: 700 }}
                   title={
                     isMatrix
                       ? 'Phiên bản theo quy cách (matrix — khổ giấy)'
@@ -814,7 +920,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
                         : 'Phiên bản con (mã cấp cha)'
                   }
                 >
-                  {isMatrix ? '⤷' : '└'}
+                  {isMatrix ? '·' : '•'}
                 </span>
               ) : null}
               <span title={shortMa !== fullMa ? fullMa : undefined}>{shortMa}</span>
@@ -886,7 +992,7 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
         renderCell: (v) => formatNumberDisplay(Number(v), 0),
       },
     ],
-    []
+    [expandedRootMaSet, rootHasDescendantsMap]
   )
 
   useEffect(() => {
@@ -1152,6 +1258,12 @@ export function VatTuHangHoa({ onQuayLai, filterMode = 'all' }: VatTuHangHoaProp
             }}
             selectedRowId={vthhGridListRowId ?? (dongChon != null ? `${dongChon.id}::0` : null)}
             onRowSelect={(row) => {
+              const rootMa = vthhMaNormalize(row._vthhMaChinhGoc || row.ma || '')
+              const isRootRow = (row._vthhTreeIndent ?? 0) === 0
+              const canToggle = isRootRow && rootMa !== '' && rootHasDescendantsMap.get(rootMa) === true
+              if (canToggle) {
+                setExpandedRootMaSet((prev) => (prev.includes(rootMa) ? prev.filter((x) => x !== rootMa) : [...prev, rootMa]))
+              }
               setVthhGridListRowId(row._vthhListRowId)
               const sourceId = row._vthhSourceRecordId
               const original = danhSach.find((r) => r.id === sourceId) ?? null

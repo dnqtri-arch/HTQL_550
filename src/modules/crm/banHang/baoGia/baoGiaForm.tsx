@@ -1173,6 +1173,7 @@ function baoGiaListChoPhieuNhanTuBaoGia(): BaoGiaRecord[] {
 
 function gridColumnHeaderLabel(col: string): React.ReactNode {
   if (col === 'Mã') return 'Mã SPHH'
+  if (col === 'Độ dày/ ĐL') return 'Độ dày/ KT'
   if (col === BAN_HANG_COL_DCNH) return 'ĐCNH'
   if (col === '% thuế GTGT') return (<>% thuế<br />GTGT</>)
   return col

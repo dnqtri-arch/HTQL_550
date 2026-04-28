@@ -77,6 +77,7 @@ export interface TabNgamDinhProps {
   heMauOptions: string[]
   onToggleVariantDropdown: (kind: 'dinh-luong' | 'kho-giay' | 'he-mau') => void
   onToggleVariantValue: (field: 'dinh_luong' | 'kho_giay' | 'he_mau', value: string) => void
+  onAddVariantOption?: (kind: 'dinh-luong' | 'kho-giay' | 'he-mau') => void
   isVariantOptionDisabled?: (kind: 'dinh-luong' | 'kho-giay' | 'he-mau', value: string) => boolean
 }
 
@@ -137,6 +138,7 @@ export function VatTuHangHoaFormTabNgamDinh({
   heMauOptions,
   onToggleVariantDropdown,
   onToggleVariantValue,
+  onAddVariantOption,
   isVariantOptionDisabled,
 }: TabNgamDinhProps) {
   const nhieuPhienBan = watch('nhieu_phien_ban') === true
@@ -203,6 +205,34 @@ export function VatTuHangHoaFormTabNgamDinh({
     [openVariantDropdown, selectedDinhLuong, selectedKhoGiay, selectedHeMau],
   )
   const optionKind = openVariantDropdown
+  const groupedActiveOptions = useMemo(() => {
+    const options = activeOptions ?? []
+    if (!optionKind) return [{ label: '', items: options }]
+    if (optionKind === 'he-mau') return [{ label: 'Hệ màu', items: options }]
+    if (optionKind === 'dinh-luong') {
+      const groups = new Map<string, string[]>()
+      options.forEach((item) => {
+        const unit = (String(item ?? '').trim().match(/([A-Za-z%]+)\s*$/)?.[1] ?? 'Khác').toUpperCase()
+        const arr = groups.get(unit) ?? []
+        arr.push(item)
+        groups.set(unit, arr)
+      })
+      return Array.from(groups.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
+        .map(([label, items]) => ({ label, items }))
+    }
+    const isMxN = (s: string) => /^\s*\d+([.,]\d+)?\s*m\s*x\s*\d+([.,]\d+)?\s*m\s*$/i.test(String(s ?? ''))
+    const standard: string[] = []
+    const byDimension: string[] = []
+    options.forEach((item) => {
+      if (isMxN(item)) byDimension.push(item)
+      else standard.push(item)
+    })
+    const out: Array<{ label: string; items: string[] }> = []
+    if (standard.length > 0) out.push({ label: 'Khổ tiêu chuẩn', items: standard })
+    if (byDimension.length > 0) out.push({ label: 'Khổ theo kích thước (m x m)', items: byDimension })
+    return out
+  }, [activeOptions, optionKind])
   return (
     <div className="misa-form-grid htql-tab-grid htql-tab-ngam-dinh" onKeyDown={handleEnterNav}>
       {/* Row 1 — Left: Kho | Right: ĐG mua cố định */}
@@ -278,10 +308,10 @@ export function VatTuHangHoaFormTabNgamDinh({
         <input {...register('tai_khoan_kho')} className="misa-input-solo" style={inputStyle} placeholder="152, 156..." />
         <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
       </div>
-      <LabelCell label={nhieuPhienBan ? 'Độ dày/Định lượng' : 'Giá mua gần'} />
+      <LabelCell label={nhieuPhienBan ? 'Độ dày/ Kích thước' : 'Giá mua gần'} />
       <div className="misa-grid-item htql-don-gia-wrap">
         {nhieuPhienBan ? (
-          <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex' }}>
+          <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
             <button
               ref={dinhLuongBtnRef}
               type="button"
@@ -300,12 +330,21 @@ export function VatTuHangHoaFormTabNgamDinh({
                 boxSizing: 'border-box',
               }}
               onClick={() => onToggleVariantDropdown('dinh-luong')}
-              title="Độ dày/Định lượng (chọn nhiều)"
+              title="Độ dày/ Kích thước (chọn nhiều)"
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedDinhLuong.length > 0 ? selectedDinhLuong.join(', ') : 'Độ dày/Định lượng'}
+                {selectedDinhLuong.length > 0 ? selectedDinhLuong.join(', ') : 'Độ dày/ Kích thước'}
               </span>
               <ChevronDown size={12} />
+            </button>
+            <button
+              type="button"
+              className="misa-lookup-btn htql-dvt-plus-btn"
+              style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
+              title="Thêm độ dày/ kích thước"
+              onClick={() => onAddVariantOption?.('dinh-luong')}
+            >
+              +
             </button>
           </div>
         ) : (
@@ -336,7 +375,7 @@ export function VatTuHangHoaFormTabNgamDinh({
       <LabelCell label={nhieuPhienBan ? 'Khổ giấy' : 'Thuế GTGT (%)'} />
       <div className={nhieuPhienBan ? 'misa-grid-item htql-don-gia-wrap' : 'misa-grid-item'} style={nhieuPhienBan ? undefined : { position: 'relative' }}>
         {nhieuPhienBan ? (
-          <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex' }}>
+          <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
             <button
               ref={khoGiayBtnRef}
               type="button"
@@ -362,6 +401,15 @@ export function VatTuHangHoaFormTabNgamDinh({
               </span>
               <ChevronDown size={12} />
             </button>
+            <button
+              type="button"
+              className="misa-lookup-btn htql-dvt-plus-btn"
+              style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
+              title="Thêm khổ giấy"
+              onClick={() => onAddVariantOption?.('kho-giay')}
+            >
+              +
+            </button>
           </div>
         ) : (
           renderThueGtgtSelect(register, thueSuatOptions)
@@ -372,38 +420,47 @@ export function VatTuHangHoaFormTabNgamDinh({
           {activeOptions.length === 0 ? (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {openVariantDropdown === 'dinh-luong'
-                ? 'Chưa có dữ liệu ở module Độ dày/Định lượng'
+                ? 'Chưa có dữ liệu ở module Độ dày/ Kích thước'
                 : openVariantDropdown === 'kho-giay'
                   ? 'Chưa có dữ liệu ở module Khổ giấy'
                   : 'Chưa có dữ liệu ở module Hệ màu'}
             </span>
           ) : (
-            activeOptions.map((item) => {
-              const disabled = Boolean(optionKind && isVariantOptionDisabled?.(optionKind, item))
-              return (
-              <label
-                key={item}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 11,
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  opacity: disabled ? 0.45 : 1,
-                }}
-                title={disabled ? 'Không cho phép chọn' : item}
-              >
-                <input
-                  type="checkbox"
-                  checked={activeSelected.includes(item)}
-                  disabled={disabled}
-                  onChange={() => onToggleVariantValue(openVariantDropdown === 'dinh-luong' ? 'dinh_luong' : openVariantDropdown === 'kho-giay' ? 'kho_giay' : 'he_mau', item)}
-                />
-                <span>{item}</span>
-                {disabled ? <Ban size={12} /> : null}
-              </label>
-              )
-            })
+            groupedActiveOptions.map((group) => (
+              <div key={group.label || 'default'} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {group.label ? (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, padding: '2px 0', borderBottom: '0.5px solid var(--border)' }}>
+                    {group.label}
+                  </div>
+                ) : null}
+                {group.items.map((item) => {
+                  const disabled = Boolean(optionKind && isVariantOptionDisabled?.(optionKind, item))
+                  return (
+                    <label
+                      key={item}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 11,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        opacity: disabled ? 0.45 : 1,
+                      }}
+                      title={disabled ? 'Không cho phép chọn' : item}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={activeSelected.includes(item)}
+                        disabled={disabled}
+                        onChange={() => onToggleVariantValue(openVariantDropdown === 'dinh-luong' ? 'dinh_luong' : openVariantDropdown === 'kho-giay' ? 'kho_giay' : 'he_mau', item)}
+                      />
+                      <span>{item}</span>
+                      {disabled ? <Ban size={12} /> : null}
+                    </label>
+                  )
+                })}
+              </div>
+            ))
           )}
         </div>,
         document.body
@@ -416,7 +473,7 @@ export function VatTuHangHoaFormTabNgamDinh({
       <LabelCell label={nhieuPhienBan ? 'Hệ màu' : ''} />
       <div className="misa-grid-item htql-don-gia-wrap">
         {nhieuPhienBan ? (
-          <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex' }}>
+          <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
             <button
               ref={heMauBtnRef}
               type="button"
@@ -441,6 +498,15 @@ export function VatTuHangHoaFormTabNgamDinh({
                 {selectedHeMau.length > 0 ? selectedHeMau.join(', ') : 'Hệ màu'}
               </span>
               <ChevronDown size={12} />
+            </button>
+            <button
+              type="button"
+              className="misa-lookup-btn htql-dvt-plus-btn"
+              style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
+              title="Thêm hệ màu"
+              onClick={() => onAddVariantOption?.('he-mau')}
+            >
+              +
             </button>
           </div>
         ) : (

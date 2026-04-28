@@ -7,6 +7,43 @@ export const COL_DD_GH = 'ĐĐGH'
 
 export type HopDongMuaGridLineRow = Record<string, string> & { _dvtOptions?: string[]; _vthh?: VatTuHangHoaRecord }
 
+export type VthhVariantContext = {
+  maQuyCach?: string
+  dinhLuong?: string
+  khoGiay?: string
+  doDay?: string
+}
+
+function normalizeVariantValue(value: string | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+function pickPricingMatrixRow(
+  vthh: VatTuHangHoaRecord,
+  context?: VthhVariantContext
+): NonNullable<VatTuHangHoaRecord['pricing_matrix']>[number] | undefined {
+  const matrix = Array.isArray(vthh.pricing_matrix) ? vthh.pricing_matrix : []
+  if (matrix.length === 0) return undefined
+  const maQc = normalizeVariantValue(context?.maQuyCach || vthh.ma_quy_cach)
+  if (maQc) {
+    const byMa = matrix.find((row) => normalizeVariantValue(row.ma_quy_cach) === maQc)
+    if (byMa) return byMa
+  }
+  const dl = normalizeVariantValue(context?.dinhLuong || vthh.dinh_luong)
+  const kg = normalizeVariantValue(context?.khoGiay || vthh.kho_giay)
+  const dd = normalizeVariantValue(context?.doDay || vthh.do_day)
+  if (!dl && !kg && !dd) return undefined
+  return matrix.find((row) => {
+    const rowDl = normalizeVariantValue(row.dinh_luong)
+    const rowKg = normalizeVariantValue(row.kho_giay)
+    const rowDd = normalizeVariantValue(row.do_day)
+    if (dl && rowDl !== dl) return false
+    if (kg && rowKg !== kg) return false
+    if (dd && rowDd !== dd) return false
+    return true
+  })
+}
+
 export function buildDvtOptionsForVthh(vthh: VatTuHangHoaRecord): string[] | undefined {
   const main = (vthh.dvt_chinh ?? '').trim()
   const quyDoi = vthh.don_vi_quy_doi
@@ -22,10 +59,12 @@ export function buildDvtOptionsForVthh(vthh: VatTuHangHoaRecord): string[] | und
 }
 
 /** ĐG mua theo ĐVT — dùng form ĐHM và migrate mẫu. */
-export function getDonGiaMuaTheoDvt(vthh: VatTuHangHoaRecord, dvtMa: string): string {
+export function getDonGiaMuaTheoDvt(vthh: VatTuHangHoaRecord, dvtMa: string, context?: VthhVariantContext): string {
   const dvtChinh = (vthh.dvt_chinh ?? '').trim()
+  const matrixRow = pickPricingMatrixRow(vthh, context)
+  const matrixGiaMua = Number(matrixRow?.gia_mua) || 0
   if (dvtMa === dvtChinh) {
-    const latest = Number(vthh.gia_mua_gan_nhat) || 0
+    const latest = matrixGiaMua || Number(vthh.gia_mua_gan_nhat) || 0
     const fixed = Number(vthh.don_gia_mua_co_dinh) || 0
     if (latest === 0) return fixed > 0 ? formatSoTienHienThi(fixed) : ''
     return formatSoTienHienThi(latest)
@@ -35,7 +74,7 @@ export function getDonGiaMuaTheoDvt(vthh: VatTuHangHoaRecord, dvtMa: string): st
   if (!row) return ''
   const giaMuaInput = (row.gia_mua ?? '').toString().trim()
   if (giaMuaInput) return formatSoTienHienThi(parseFloatVN(giaMuaInput))
-  const base = Number(vthh.gia_mua_gan_nhat) || Number(vthh.don_gia_mua_co_dinh) || 0
+  const base = matrixGiaMua || Number(vthh.gia_mua_gan_nhat) || Number(vthh.don_gia_mua_co_dinh) || 0
   const tiLe = parseFloatVN(row.ti_le_quy_doi ?? '1')
   const phep = row.phep_tinh
   if (tiLe <= 0) return base > 0 ? formatSoTienHienThi(base) : ''

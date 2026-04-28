@@ -17,7 +17,8 @@ export const PAPER_SIZE_SEED = [
   seed('A1', 'A1', 594, 841, ['a1']),
   seed('A2', 'A2', 420, 594, ['a2']),
   seed('A3', 'A3', 297, 420, ['a3']),
-  seed('A3_PLUS', 'A3+', 329, 483, ['a3+', 'a3 plus', 'a3plus']),
+  // Theo chuẩn vận hành HTQL: A3+ dùng 325x430mm.
+  seed('A3_PLUS', 'A3+', 325, 430, ['a3+', 'a3 plus', 'a3plus']),
   seed('A4', 'A4', 210, 297, ['a4']),
   seed('A4_PLUS', 'A4+', 223, 310, ['a4+', 'a4 plus', 'a4plus']),
   seed('A5', 'A5', 148, 210, ['a5']),
@@ -55,6 +56,7 @@ export const PAPER_SIZE_SEED = [
 
 function normalizeText(raw) {
   return String(raw ?? '')
+    .replace(/\+/g, ' PLUS ')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()

@@ -41,7 +41,7 @@ import {
 } from './vthhLoaiNhomSync'
 import { htqlEntityStorage } from '../../utils/htqlEntityStorage'
 import { htqlApiUrl } from '../../config/htqlApiBase'
-import { formatSoTuNhienInput, formatSoTien, formatSoTienHienThi, isZeroDisplay, normalizeKichThuocInput, toStoredNumberString } from '../../utils/numberFormat'
+import { formatSoTien, isZeroDisplay, normalizeKichThuocInput, parseDecimalFlex } from '../../utils/numberFormat'
 
 type ManagerMode = 'loai' | 'nhom' | 'vat' | 'kho-giay' | 'dinh-luong' | 'he-mau'
 
@@ -204,12 +204,18 @@ function collectHeMauTokensFromRecord(r: VatTuHangHoaRecord): string[] {
   return out
 }
 
-function parsePositiveMeter(raw: string): number | null {
-  const cleaned = String(raw ?? '').trim().replace(',', '.')
+function parseNonNegativeMeter(raw: string): number | null {
+  const cleaned = String(raw ?? '').trim()
   if (!cleaned) return null
-  const n = Number.parseFloat(cleaned)
-  if (!Number.isFinite(n) || n <= 0) return null
+  const n = parseDecimalFlex(cleaned)
+  if (!Number.isFinite(n) || n < 0) return null
   return n
+}
+
+function meterDisplayVn(raw: string | undefined): string {
+  const n = parseDecimalFlex(String(raw ?? '').trim())
+  if (!Number.isFinite(n)) return String(raw ?? '').trim().replace('.', ',')
+  return formatSoTien(String(n).replace('.', ','))
 }
 
 export function VthhCategoryManager({ mode, onQuayLai }: Props) {
@@ -478,8 +484,22 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       return [
         { key: 'ma', label: 'Mã', width: '16%', filterable: false },
         { key: 'ten', label: title, width: '28%', filterable: false },
-        { key: 'chieuRongM', label: 'Kích thước (m) - Chiều rộng', width: '16%', align: 'right', filterable: false },
-        { key: 'chieuDaiM', label: 'Kích thước (m) - Chiều dài', width: '16%', align: 'right', filterable: false },
+        {
+          key: 'chieuRongM',
+          label: 'Kích thước (m) - Chiều rộng',
+          width: '16%',
+          align: 'right',
+          filterable: false,
+          renderCell: (v) => meterDisplayVn(String(v ?? '')),
+        },
+        {
+          key: 'chieuDaiM',
+          label: 'Kích thước (m) - Chiều dài',
+          width: '16%',
+          align: 'right',
+          filterable: false,
+          renderCell: (v) => meterDisplayVn(String(v ?? '')),
+        },
         { key: 'count', label: 'Số VTHH sử dụng', width: '24%', align: 'right', filterable: false },
       ]
     }
@@ -564,10 +584,10 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     let chieuRongM = ''
     let chieuDaiM = ''
     if (mode === 'kho-giay') {
-      const w = parsePositiveMeter(pendingChieuRongM)
-      const l = parsePositiveMeter(pendingChieuDaiM)
+      const w = parseNonNegativeMeter(pendingChieuRongM)
+      const l = parseNonNegativeMeter(pendingChieuDaiM)
       if (w == null) {
-        showError('Chiều rộng (m) phải là số lớn hơn 0.')
+        showError('Chiều rộng (m) phải là số thập phân lớn hơn hoặc bằng 0.')
         return
       }
       chieuRongM = String(w)
@@ -696,11 +716,13 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       const payload = await r.json() as {
         match?: { widthM?: number; heightM?: number; name?: string }
       }
-      const width = Number(payload?.match?.widthM ?? 0)
-      const height = Number(payload?.match?.heightM ?? 0)
+      let width = Number(payload?.match?.widthM ?? 0)
+      let height = Number(payload?.match?.heightM ?? 0)
+      if (width > 20) width = width / 1000
+      if (height > 20) height = height / 1000
       if (!(width > 0)) throw new Error('Dữ liệu chiều rộng không hợp lệ.')
-      setPendingChieuRongM(formatSoTien(String(width)))
-      setPendingChieuDaiM(height > 0 ? formatSoTien(String(height)) : '')
+      setPendingChieuRongM(formatSoTien(String(width).replace('.', ',')))
+      setPendingChieuDaiM(height > 0 ? formatSoTien(String(height).replace('.', ',')) : '')
       if (toast) toast.showToast(`Đã nạp kích thước ${width} x ${height > 0 ? height : '?'} m.`, 'success')
     } catch (e) {
       showError(e instanceof Error ? e.message : 'Không nạp được kích thước.')
@@ -779,8 +801,8 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
                       >
                         <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px' }}>{r.ma}</td>
                         <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px' }}>{r.ten}</td>
-                        <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.chieuRongM || ''}</td>
-                        <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.chieuDaiM || ''}</td>
+                        <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{meterDisplayVn(r.chieuRongM || '')}</td>
+                        <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{meterDisplayVn(r.chieuDaiM || '')}</td>
                         <td style={{ borderBottom: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.count}</td>
                       </tr>
                     )
@@ -865,10 +887,10 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
             <>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Chiều rộng (m)</label>
               <input
-                value={formatSoTienHienThi(formatSoTien(pendingChieuRongM))}
+                value={pendingChieuRongM}
                 onChange={(e) => {
-                  const displayed = formatSoTuNhienInput(normalizeKichThuocInput(e.target.value))
-                  setPendingChieuRongM(displayed ? toStoredNumberString(displayed) : '')
+                  const displayed = formatSoTien(normalizeKichThuocInput(e.target.value))
+                  setPendingChieuRongM(displayed || '')
                 }}
                 onFocus={() => {
                   if (isZeroDisplay(String(pendingChieuRongM))) setPendingChieuRongM('')
@@ -880,10 +902,10 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
               />
               <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Chiều dài (m)</label>
               <input
-                value={formatSoTienHienThi(formatSoTien(pendingChieuDaiM))}
+                value={pendingChieuDaiM}
                 onChange={(e) => {
-                  const displayed = formatSoTuNhienInput(normalizeKichThuocInput(e.target.value))
-                  setPendingChieuDaiM(displayed ? toStoredNumberString(displayed) : '')
+                  const displayed = formatSoTien(normalizeKichThuocInput(e.target.value))
+                  setPendingChieuDaiM(displayed || '')
                 }}
                 onFocus={() => {
                   if (isZeroDisplay(String(pendingChieuDaiM))) setPendingChieuDaiM('')

@@ -32,6 +32,7 @@ import { ThemKhoModal } from './themKhoModal'
 import { ThemNhomVTHHModal } from './themNhomVTHHModal'
 import { Modal } from '../../components/common/modal'
 import { VatTuHangHoaFormTabNgamDinh, LabelCell } from './vatTuHangHoaFormTabNgamDinh'
+import { VthhCategoryManager } from './vthhCategoryManager'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 import { lookupActionButtonStyle } from '../../constants/lookupControlStyles'
 import './VatTuHangHoaForm.css'
@@ -603,6 +604,10 @@ function parseTiLeKhoJson(raw: string | null | undefined): Record<string, string
   }
 }
 
+function dvdqTiLeMatrixKey(dlToken: string, khoTen: string): string {
+  return `DL:${dlToken}__KG:${khoTen}`
+}
+
 /** Chiều dài (m) theo tên khổ — đồng bộ parse với form (parseDecimalFlex). */
 function readKhoGiayDaiByTenFromCatalog(): Record<string, number> {
   const daiByTen: Record<string, number> = {}
@@ -776,6 +781,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const nhomVthhRef = useRef<HTMLDivElement>(null)
   const [nhomDropdownRect, setNhomDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null)
   const [showThemNhomVTHHModal, setShowThemNhomVTHHModal] = useState(false)
+  const [variantManagerMode, setVariantManagerMode] = useState<'dinh-luong' | 'kho-giay' | 'he-mau' | null>(null)
   /** Chỉ số các dòng Đơn vị quy đổi đã nhập Tỉ lệ từ bàn phím (auto-fill từ kích thước không tính). */
   const userEnteredTiLeByIndex = useRef<Set<number>>(new Set())
   const overlayKhoLookupMouseDownRef = useRef(false)
@@ -859,18 +865,55 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     return () => window.removeEventListener('mousedown', onMouseDown)
   }, [nvlDropdownRowIdx])
 
+  const sortByUnitThenValue = useCallback((arr: string[]) => {
+    const unitOf = (s: string) => (String(s ?? '').trim().match(/([A-Za-z%]+)\s*$/)?.[1] ?? '').toUpperCase()
+    const numOf = (s: string) => parseDecimalFlex(String(s ?? '').replace(/[^0-9,.-]/g, ''))
+    return [...arr].sort((a, b) => {
+      const ua = unitOf(a)
+      const ub = unitOf(b)
+      if (ua !== ub) return ua.localeCompare(ub, 'vi')
+      const na = numOf(a)
+      const nb = numOf(b)
+      const ha = Number.isFinite(na)
+      const hb = Number.isFinite(nb)
+      if (ha && hb && na !== nb) return na - nb
+      return a.localeCompare(b, 'vi', { numeric: true })
+    })
+  }, [])
+
+  const sortKhoGiayByGroups = useCallback((arr: string[]) => {
+    const isMxN = (s: string) => /^\s*\d+([.,]\d+)?\s*m\s*x\s*\d+([.,]\d+)?\s*m\s*$/i.test(String(s ?? ''))
+    const sizePair = (s: string) => {
+      const m = String(s ?? '').match(/(\d+(?:[.,]\d+)?)\s*m\s*x\s*(\d+(?:[.,]\d+)?)\s*m/i)
+      return { w: m ? parseDecimalFlex(m[1]) : NaN, h: m ? parseDecimalFlex(m[2]) : NaN }
+    }
+    return [...arr].sort((a, b) => {
+      const ga = isMxN(a) ? 1 : 0
+      const gb = isMxN(b) ? 1 : 0
+      if (ga !== gb) return ga - gb
+      if (ga === 1) {
+        const sa = sizePair(a)
+        const sb = sizePair(b)
+        if (Number.isFinite(sa.w) && Number.isFinite(sb.w) && sa.w !== sb.w) return sa.w - sb.w
+        if (Number.isFinite(sa.h) && Number.isFinite(sb.h) && sa.h !== sb.h) return sa.h - sb.h
+      }
+      return a.localeCompare(b, 'vi', { numeric: true })
+    })
+  }, [])
+
   const refreshLoaiNhomDanhMuc = useCallback(async () => {
     try {
       const all = await vatTuHangHoaGetAll()
       setLoaiVthhOptions(buildLoaiVthhSelectOptions(all))
-      setDinhLuongOptions(readVthhDinhLuongCustomFromStorage().map((x) => x.ten).filter(Boolean))
+      setDinhLuongOptions(sortByUnitThenValue(readVthhDinhLuongCustomFromStorage().map((x) => x.ten).filter(Boolean)))
       setHeMauAllOptions(
         readVthhHeMauCustomFromStorage()
           .map((x) => ({ ten: String(x.ten ?? '').trim(), he_mau_in: x.he_mau_in, he_mau_vat_tu: x.he_mau_vat_tu }))
-          .filter((x) => x.ten),
+          .filter((x) => x.ten)
+          .sort((a, b) => a.ten.localeCompare(b.ten, 'vi', { numeric: true })),
       )
       const khoGiayItems = readVthhKhoGiayCustomFromStorage()
-      setKhoGiayOptions(khoGiayItems.map((x) => x.ten).filter(Boolean))
+      setKhoGiayOptions(sortKhoGiayByGroups(khoGiayItems.map((x) => x.ten).filter(Boolean)))
       const widthMap: Record<string, number> = {}
       const daiMap: Record<string, number> = {}
       khoGiayItems.forEach((item) => {
@@ -892,6 +935,10 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     } catch {
       /* ignore */
     }
+  }, [sortByUnitThenValue, sortKhoGiayByGroups])
+
+  const handleAddVariantOption = useCallback((kind: 'dinh-luong' | 'kho-giay' | 'he-mau') => {
+    setVariantManagerMode(kind)
   }, [])
 
   useEffect(() => {
@@ -1288,8 +1335,6 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const dinhLuongValue = watch('dinh_luong') ?? ''
   const khoGiayValue = watch('kho_giay') ?? ''
   const heMauValue = watch('he_mau') ?? ''
-  /** Dùng cho matrix ĐVQĐ khi `kho_giay` root trống nhưng đã có `ti_le_kho_json` (mở Xem/Sửa). */
-  const donViQuyDoiRowsForMatrix = watch('don_vi_quy_doi') ?? []
   const maVthhValue = (watch('ma_vthh') ?? '').trim()
   const nhieuPhienBan = watch('nhieu_phien_ban') === true
   const canAccessBangGiaTab = canShowSaleFields || nhieuPhienBan || watch('la_mat_hang_khuyen_mai') === true
@@ -1327,6 +1372,24 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       : 1,
   )
   const selectedDinhLuong = useMemo(() => parseMultiStoredList(dinhLuongValue), [dinhLuongValue])
+  const parseDinhLuongUnitSuffix = useCallback((raw: string): string => {
+    const t = String(raw ?? '').trim()
+    if (!t) return ''
+    const m = t.match(/([A-Za-z%]+)\s*$/)
+    return (m?.[1] ?? '').toLowerCase()
+  }, [])
+  const selectedDinhLuongUnit = useMemo(
+    () => selectedDinhLuong.map((v) => parseDinhLuongUnitSuffix(v)).find(Boolean) ?? '',
+    [selectedDinhLuong, parseDinhLuongUnitSuffix]
+  )
+  const selectedDinhLuongDisplay = useMemo(() => {
+    if (!selectedDinhLuongUnit) return selectedDinhLuong
+    return selectedDinhLuong.filter((v) => parseDinhLuongUnitSuffix(v) === selectedDinhLuongUnit)
+  }, [selectedDinhLuong, selectedDinhLuongUnit, parseDinhLuongUnitSuffix])
+  const dinhLuongOptionsDisplay = useMemo(() => {
+    if (!selectedDinhLuongUnit) return dinhLuongOptions
+    return dinhLuongOptions.filter((v) => parseDinhLuongUnitSuffix(v) === selectedDinhLuongUnit)
+  }, [dinhLuongOptions, selectedDinhLuongUnit, parseDinhLuongUnitSuffix])
   const selectedKhoGiay = useMemo(() => parseMultiStoredList(khoGiayValue), [khoGiayValue])
   const selectedHeMau = useMemo(() => parseMultiStoredList(heMauValue), [heMauValue])
   const heMauOptions = useMemo(() => {
@@ -1346,11 +1409,11 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   }, [heMauOptions, getValues, setValue])
   const selectedPhu1Axis = useMemo(() => {
     const tagged = [
-      ...selectedDinhLuong.map((v) => `DL:${v}`),
+      ...selectedDinhLuongDisplay.map((v) => `DL:${v}`),
       ...selectedHeMau.map((v) => `HM:${v}`),
     ]
     return tagged.length > 0 ? Array.from(new Set(tagged)) : ['']
-  }, [selectedDinhLuong, selectedHeMau])
+  }, [selectedDinhLuongDisplay, selectedHeMau])
   const persistedPricingMatrixRowCount = useMemo(() => {
     const pm = (initialData as { pricing_matrix?: unknown[] } | undefined)?.pricing_matrix
     return Array.isArray(pm) ? pm.length : 0
@@ -1394,27 +1457,10 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     return selectedKhoGiay
   }, [nhieuPhienBan, selectedKhoGiay, selectedKhoGiayAxis, khoGiayChieuDaiByTen])
 
-  /** Khổ giấy hiển thị matrix ĐVQĐ: ưu tiên `kho_giay` form; nếu trống lấy tên khổ từ `ti_le_kho_json` đã lưu (Xem/Sửa). */
+  /** Khổ giấy hiển thị matrix ĐVQĐ: chỉ lấy từ `kho_giay` đang chọn trên form. */
   const khoGiayNamesForDvdqMatrixUi = useMemo(() => {
-    if (selectedKhoGiay.length > 0) return selectedKhoGiay
-    const fromJson: string[] = []
-    const seen = new Set<string>()
-    for (const row of donViQuyDoiRowsForMatrix) {
-      const m = parseTiLeKhoJson((row as { ti_le_kho_json?: string }).ti_le_kho_json)
-      for (const k of Object.keys(m)) {
-        if (k && !seen.has(k)) {
-          seen.add(k)
-          fromJson.push(k)
-        }
-      }
-    }
-    return fromJson
-  }, [selectedKhoGiay, donViQuyDoiRowsForMatrix])
-
-  const dvdqHasSpecialKhoFromUiList = useMemo(() => {
-    if (!nhieuPhienBan || khoGiayNamesForDvdqMatrixUi.length === 0) return false
-    return khoGiayNamesForDvdqMatrixUi.some((ten) => !(Number.isFinite(khoGiayChieuDaiByTen[ten]) && khoGiayChieuDaiByTen[ten] > 0))
-  }, [nhieuPhienBan, khoGiayNamesForDvdqMatrixUi, khoGiayChieuDaiByTen])
+    return selectedKhoGiay
+  }, [selectedKhoGiay])
 
   const hasAnyNormalKhoForDvdqUi = useMemo(() => {
     if (!nhieuPhienBan || khoGiayNamesForDvdqMatrixUi.length === 0) return false
@@ -1426,11 +1472,11 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
    * - Chỉ khổ đặc biệt: hiển thị khổ đặc biệt.
    */
   const dvdqMatrixKhoTens = useMemo(() => {
-    if (!nhieuPhienBan || khoGiayNamesForDvdqMatrixUi.length === 0 || !dvdqHasSpecialKhoFromUiList) return [] as string[]
+    if (!nhieuPhienBan || khoGiayNamesForDvdqMatrixUi.length === 0) return [] as string[]
     const normals = khoGiayNamesForDvdqMatrixUi.filter((ten) => Number.isFinite(khoGiayChieuDaiByTen[ten]) && khoGiayChieuDaiByTen[ten] > 0)
     if (normals.length > 0) return normals
     return khoGiayNamesForDvdqMatrixUi
-  }, [nhieuPhienBan, khoGiayNamesForDvdqMatrixUi, dvdqHasSpecialKhoFromUiList, khoGiayChieuDaiByTen])
+  }, [nhieuPhienBan, khoGiayNamesForDvdqMatrixUi, khoGiayChieuDaiByTen])
   const isDemToken = useCallback((raw: string) => /\bdem\b/i.test(String(raw ?? '').trim()), [])
   const isKhoGiayNormalToken = useCallback((ten: string) => Number.isFinite(khoGiayChieuDaiByTen[ten]) && khoGiayChieuDaiByTen[ten] > 0, [khoGiayChieuDaiByTen])
   const decodePhu1Token = useCallback((token: string): { dinhLuong?: string; heMau?: string } => {
@@ -1461,7 +1507,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       const nextIsDem = isDemToken(value)
       const hasOpposite = current.some((item) => isDemToken(item) !== nextIsDem)
       if (hasOpposite) {
-        setSubmitError('Độ dày/Định lượng: không được chọn trộn DEM với GSM.')
+        setSubmitError('Độ dày/ Kích thước: không được chọn trộn DEM với GSM.')
         return
       }
     }
@@ -1800,22 +1846,26 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     .map((r) => `${(r.dvt_chinh ?? '')}|${(r.dvt_quy_doi ?? '')}|${(r.ti_le_quy_doi ?? '')}|${(r.phep_tinh ?? '')}|${(r as { ti_le_kho_json?: string }).ti_le_kho_json ?? ''}`)
     .join(';')
   const updateTiLeTheoKhoCell = useCallback(
-    (dvdIdx: number, tenKh: string, rawInput: string) => {
+    (dvdIdx: number, tenKh: string, rawInput: string, dlToken?: string) => {
       const rows = getValues('don_vi_quy_doi') ?? []
       const curRow = rows[dvdIdx]
       if (!curRow) return
       const map = { ...parseTiLeKhoJson((curRow as { ti_le_kho_json?: string }).ti_le_kho_json) }
       const displayed = formatSoTien(rawInput)
       const stored = displayed ? toStoredNumberString(displayed) : ''
-      map[tenKh] = stored
+      const matrixKey = dlToken ? dvdqTiLeMatrixKey(dlToken, tenKh) : tenKh
+      map[matrixKey] = stored
       setValue(`don_vi_quy_doi.${dvdIdx}.ti_le_kho_json`, JSON.stringify(map), { shouldDirty: true, shouldTouch: true })
       userEnteredTiLeByIndex.current.add(dvdIdx)
       const order = parseMultiStoredList(getValues('kho_giay') ?? '')
       const firstPool = dvdqMatrixKhoTens.length > 0 ? dvdqMatrixKhoTens : order
-      const first = firstPool.map((t) => map[t]).find((v) => v && parseFloatVN(v) > 0)
+      const firstDl = selectedPhu1Axis[0] ?? ''
+      const first = firstPool
+        .map((t) => map[firstDl ? dvdqTiLeMatrixKey(firstDl, t) : t] ?? map[t])
+        .find((v) => v && parseFloatVN(v) > 0)
       setValue(`don_vi_quy_doi.${dvdIdx}.ti_le_quy_doi`, first ?? '', { shouldValidate: false })
     },
-    [getValues, setValue, dvdqMatrixKhoTens],
+    [getValues, setValue, dvdqMatrixKhoTens, selectedPhu1Axis],
   )
   /** Thêm dòng bậc giá: luôn cho phép thêm (giống đơn vị quy đổi), giá trị mặc định giống hiện tại. */
   const handleThemDongBangGia = () => {
@@ -1941,34 +1991,10 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     specialOnlyKhoSelection,
   ])
 
-  /* Matrix ĐVQĐ: tỉ lệ = Rộng (m) × Dài (m); Dài chỉ từ ô mD — không nhập mD thì không tự điền. */
+  /* Matrix ĐVQĐ: tỉ lệ người dùng tự nhập, không tự điền theo kích thước. */
   useEffect(() => {
     if (dvdqMatrixKhoTens.length === 0) return
-    const mdNum = parseDecimalFlex(String(kichThuocMd ?? '').trim())
-    if (!(mdNum > 0)) return
-    const rows = getValues('don_vi_quy_doi') ?? []
-    rows.forEach((row, idx) => {
-      const dvtQ = (row.dvt_quy_doi ?? '').trim()
-      const phep = row.phep_tinh
-      if (!dvtQ || (phep !== 'nhan' && phep !== 'chia')) return
-      let map = parseTiLeKhoJson((row as { ti_le_kho_json?: string }).ti_le_kho_json)
-      let changed = false
-      for (const ten of dvdqMatrixKhoTens) {
-        const rong = khoGiayChieuRongByTen[ten] ?? 0
-        if (!(rong > 0)) continue
-        const nextVal = numberToStoredFormat(rong * mdNum)
-        if ((map[ten] ?? '').trim() !== nextVal) {
-          map = { ...map, [ten]: nextVal }
-          changed = true
-        }
-      }
-      if (!changed) return
-      setValue(`don_vi_quy_doi.${idx}.ti_le_kho_json`, JSON.stringify(map), { shouldValidate: false })
-      const firstVal = dvdqMatrixKhoTens.map((t) => map[t]).find((v) => v && parseFloatVN(v) > 0)
-      if (firstVal) setValue(`don_vi_quy_doi.${idx}.ti_le_quy_doi`, firstVal, { shouldValidate: false })
-      userEnteredTiLeByIndex.current.add(idx)
-    })
-  }, [dvdqMatrixKhoTens, kichThuocMd, khoGiayChieuRongByTen, getValues, setValue, donViQuyDoiFields.length, donViQuyDoiInputSignature])
+  }, [dvdqMatrixKhoTens])
 
   /**
    * Tab 3 (Đơn vị quy đổi): không chặn lưu khi có dòng chưa nhập đủ. Chỉ gửi và lưu các dòng đã nhập đủ (ĐV quy đổi + Tỉ lệ); dòng thiếu ô không đưa vào payload.
@@ -2810,14 +2836,15 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                   onOpenThemKho={() => setShowThemKhoModal(true)}
                   khoNgamDinhRef={khoNgamDinhRef}
                   openVariantDropdown={openVariantDropdown}
-                  selectedDinhLuong={selectedDinhLuong}
                   selectedKhoGiay={selectedKhoGiay}
                   selectedHeMau={selectedHeMau}
-                  dinhLuongOptions={dinhLuongOptions}
+                  selectedDinhLuong={selectedDinhLuongDisplay}
+                  dinhLuongOptions={dinhLuongOptionsDisplay}
                   khoGiayOptions={khoGiayOptions}
                   heMauOptions={heMauOptions}
                   onToggleVariantDropdown={(kind) => setOpenVariantDropdown((prev) => (prev === kind ? null : kind))}
                   onToggleVariantValue={toggleVariantMultiValue}
+                  onAddVariantOption={handleAddVariantOption}
                   isVariantOptionDisabled={isVariantOptionDisabled}
                 />
                 <input type="hidden" {...register('he_mau')} />
@@ -3075,7 +3102,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                       {selectedPhu1Axis.length === 0 || matrixKhoGiayAxisBangGia.length === 0 ? (
                         <tr>
                           <td colSpan={Math.max(1, matrixKhoGiayAxisBangGia.length) * matrixPriceColsPerKhoGiay + 1} style={{ ...tdChietKhau, textAlign: 'center', color: 'var(--text-muted)' }}>
-                            Chọn ít nhất 1 Độ dày/Định lượng hoặc 1 Khổ giấy để nhập matrix.
+                            Chọn ít nhất 1 Độ dày/ Kích thước hoặc 1 Khổ giấy để nhập matrix.
                           </td>
                         </tr>
                       ) : (
@@ -3091,11 +3118,8 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                             </td>
                             {matrixKhoGiayAxisBangGia.map((kg, kgIdx) => {
                               const key = variantComboKey(dl, kg)
-                              const refKeyDl = variantComboKey(dl, matrixKhoGiayAxisBangGia[0] ?? '')
-                              const isRefCol = kgIdx === 0 || matrixKhoGiayAxisBangGia.length <= 1
                               const cell = variantMatrix[key] ?? emptyVariantMatrixCell(bacGiaCount)
-                              const refCell = variantMatrix[refKeyDl] ?? emptyVariantMatrixCell(bacGiaCount)
-                              const displayCell = isRefCol ? cell : refCell
+                              const displayCell = cell
                               const groupSepRight = kgIdx < matrixKhoGiayAxisBangGia.length - 1
                               return (
                                 <React.Fragment key={`${dl}-${kg}-${kgIdx}`}>
@@ -3117,17 +3141,15 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                                   <td style={{ ...tdChietKhau }}>
                                     <input
                                       className="misa-input-solo"
-                                      readOnly={!isRefCol}
+                                      readOnly={false}
                                       style={{
                                         ...inputStyle,
                                         width: '100%',
                                         textAlign: 'right',
-                                        ...(!isRefCol ? { opacity: 0.85, cursor: 'default', background: 'var(--bg-secondary)' } : {}),
-                                        ...(showMatrixMissingHint && matrixMissingFieldMap[variantMatrixFieldKey(refKeyDl, 'mua')] ? { borderColor: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)' } : {}),
+                                        ...(showMatrixMissingHint && matrixMissingFieldMap[variantMatrixFieldKey(key, 'mua')] ? { borderColor: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)' } : {}),
                                       }}
                                       value={formatSoTienHienThi(displayCell.gia_mua)}
                                       onChange={(e) => {
-                                        if (!isRefCol) return
                                         const nextVal = formatSoTien(e.target.value)
                                         setVariantMatrix((prev) => ({
                                           ...prev,
@@ -3146,19 +3168,17 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                                     <td style={tdChietKhau}>
                                       <input
                                         className="misa-input-solo"
-                                        readOnly={!isRefCol}
+                                        readOnly={false}
                                         style={{
                                           ...inputStyle,
                                           width: '100%',
                                           textAlign: 'right',
-                                          ...(!isRefCol ? { opacity: 0.85, cursor: 'default', background: 'var(--bg-secondary)' } : {}),
-                                          ...(showMatrixMissingHint && matrixMissingFieldMap[variantMatrixFieldKey(refKeyDl, 'ban_tt')]
+                                          ...(showMatrixMissingHint && matrixMissingFieldMap[variantMatrixFieldKey(key, 'ban_tt')]
                                             ? { borderColor: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)' }
                                             : {}),
                                         }}
                                         value={formatSoTienHienThi(displayCell.gia_ban_tt ?? '')}
                                         onChange={(e) => {
-                                          if (!isRefCol) return
                                           const nextVal = formatSoTien(e.target.value)
                                           setVariantMatrix((prev) => ({
                                             ...prev,
@@ -3185,19 +3205,17 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                                       >
                                         <input
                                           className="misa-input-solo"
-                                          readOnly={!isRefCol}
+                                          readOnly={false}
                                           style={{
                                             ...inputStyle,
                                             width: '100%',
                                             textAlign: 'right',
-                                            ...(!isRefCol ? { opacity: 0.85, cursor: 'default', background: 'var(--bg-secondary)' } : {}),
-                                            ...(showMatrixMissingHint && matrixMissingFieldMap[variantMatrixFieldKey(refKeyDl, 'ban', idx)]
+                                            ...(showMatrixMissingHint && matrixMissingFieldMap[variantMatrixFieldKey(key, 'ban', idx)]
                                               ? { borderColor: 'var(--accent)', background: 'rgba(239, 68, 68, 0.08)' }
                                               : {}),
                                           }}
                                           value={formatSoTienHienThi(displayCell.gia_ban_by_bac[idx] ?? '')}
                                           onChange={(e) => {
-                                            if (!isRefCol) return
                                             const nextVal = formatSoTien(e.target.value)
                                             setVariantMatrix((prev) => {
                                               const old = prev[key] ?? {
@@ -3243,6 +3261,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                       <col style={{ width: 36 }} />
                       <col style={{ width: '28%', maxWidth: 200 }} />
                       <col style={{ width: 148 }} />
+                      {nhieuPhienBan && dvdqMatrixKhoTens.length === 0 ? <col style={{ width: 220 }} /> : null}
                       <col style={{ width: 40 }} />
                     </colgroup>
                     <thead>
@@ -3250,13 +3269,16 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                         <th style={{ ...thChietKhau, textAlign: 'center' }}>STT</th>
                         <th style={thChietKhau}>ĐV quy đổi</th>
                         <th style={{ ...thChietKhau }} title="Phép nhân = nhân toán học, Phép chia = chia toán học">Phép tính</th>
+                        {nhieuPhienBan && dvdqMatrixKhoTens.length === 0 ? (
+                          <th style={{ ...thChietKhau }}>Mô tả</th>
+                        ) : null}
                         <th style={{ ...thChietKhau }} />
                       </tr>
                     </thead>
                     <tbody>
                       {donViQuyDoiFields.length === 0 ? (
                         <tr>
-                          <td colSpan={4} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>
+                          <td colSpan={nhieuPhienBan && dvdqMatrixKhoTens.length === 0 ? 5 : 4} style={{ ...tdChietKhau, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>
                             Chưa có dòng. Bấm &quot;Thêm dòng&quot; để thêm.
                           </td>
                         </tr>
@@ -3302,6 +3324,23 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                                   <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }} value="" />
                                 )}
                               </td>
+                              {nhieuPhienBan && dvdqMatrixKhoTens.length === 0 ? (
+                                <td style={tdChietKhau}>
+                                  <input
+                                    readOnly
+                                    tabIndex={-1}
+                                    className="misa-input-solo"
+                                    style={{ ...inputStyle, width: '100%', background: 'var(--bg-secondary)', cursor: 'default', color: 'var(--text-muted)' }}
+                                    value={(donViQuyDoiValues[idx]?.mo_ta ?? '').trim() || generateMoTaQuyDoi({
+                                      dvtChinh: donViQuyDoiValues[0]?.dvt_chinh ?? '',
+                                      dvtQuyDoi: donViQuyDoiValues[idx]?.dvt_quy_doi ?? '',
+                                      tiLe: donViQuyDoiValues[idx]?.ti_le_quy_doi ?? '',
+                                      phepTinh: donViQuyDoiValues[idx]?.phep_tinh ?? '',
+                                      dvtList,
+                                    })}
+                                  />
+                                </td>
+                              ) : null}
                               <td style={{ ...tdChietKhau, width: 36, padding: '2px 4px', textAlign: 'center' }}>
                                 <input type="hidden" {...register(`don_vi_quy_doi.${idx}.ti_le_quy_doi`)} />
                                 <input type="hidden" {...register(`don_vi_quy_doi.${idx}.gia_mua_gan_nhat`)} />
@@ -3361,7 +3400,6 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                 </div>
                 {dvdqMatrixKhoTens.length > 0 &&
                   (() => {
-                    const mdDim = parseDecimalFlex(String(kichThuocMd ?? '').trim())
                     const dvtLabel = (ma: string) => {
                       const d = dvtList.find((x) => x.ma_dvt === ma)
                       return d ? (d.ky_hieu || d.ten_dvt || ma) : ma
@@ -3389,63 +3427,80 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                               <table className="htql-dvdq-kho-matrix-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                                 <colgroup>
                                   <col style={{ width: 44 }} />
-                                  <col style={{ width: 140 }} />
-                                  <col style={{ width: 96 }} />
-                                  <col style={{ width: 96 }} />
-                                  <col style={{ width: 120 }} />
-                                  <col />
+                                  <col style={{ width: 150 }} />
+                                  {dvdqMatrixKhoTens.map((_, i) => (
+                                    <React.Fragment key={`${field.id}-kg-col-${i}`}>
+                                      <col style={{ width: 78 }} />
+                                      <col style={{ width: 128 }} />
+                                    </React.Fragment>
+                                  ))}
                                 </colgroup>
                                 <thead>
                                   <tr>
-                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }}>STT</th>
-                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }}>Khổ giấy</th>
-                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }}>Rộng (m)</th>
-                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }}>Dài (m)</th>
-                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }}>Tỉ lệ</th>
-                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'left', paddingLeft: 15 }}>Mô tả</th>
+                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }} rowSpan={2}>STT</th>
+                                    <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }} rowSpan={2}>Độ dày/ KT</th>
+                                    {dvdqMatrixKhoTens.map((tenKh) => (
+                                      <th key={`${field.id}-kg-head-${tenKh}`} style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }} colSpan={2}>
+                                        {tenKh}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                  <tr>
+                                    {dvdqMatrixKhoTens.map((tenKh) => (
+                                      <React.Fragment key={`${field.id}-kg-sub-${tenKh}`}>
+                                        <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'center' }}>Tỉ lệ</th>
+                                        <th style={{ ...thChietKhau, ...cellBorder, textAlign: 'left', paddingLeft: 10 }}>Mô tả</th>
+                                      </React.Fragment>
+                                    ))}
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {dvdqMatrixKhoTens.map((tenKh, i) => {
-                                    const rong = khoGiayChieuRongByTen[tenKh] ?? 0
-                                    const storedTi = (khoMap[tenKh] ?? '').trim()
-                                    let dispTi = formatSoTien(storedTi)
-                                    if (dispTi.endsWith(',') && !/,\d+$/.test(dispTi)) dispTi = dispTi.slice(0, -1)
-                                    const moTaHang = generateMoTaQuyDoi({
-                                      dvtChinh: dvtChinhMa,
-                                      dvtQuyDoi: dvtQMa,
-                                      tiLe: storedTi,
-                                      phepTinh: phep === 'chia' ? 'chia' : 'nhan',
-                                      dvtList,
-                                    }).replace(/,\s+(?=[^\d])/g, ' ')
+                                  {selectedPhu1Axis.map((dlToken, i) => {
+                                    const dlLabel = (() => {
+                                      const decoded = decodePhu1Token(dlToken)
+                                      if (decoded.dinhLuong) return decoded.dinhLuong
+                                      if (decoded.heMau) return `Hệ màu: ${decoded.heMau}`
+                                      return 'Không phiên bản phụ 1'
+                                    })()
                                     return (
-                                      <tr key={`${field.id}-${tenKh}`}>
+                                      <tr key={`${field.id}-${dlToken}`}>
                                         <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'center' }}>{i + 1}</td>
-                                        <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'center', fontWeight: 600 }}>{tenKh}</td>
-                                        <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                                          {rong > 0 ? formatSoTienHienThi(numberToStoredFormat(rong)) : '—'}
-                                        </td>
-                                        <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                                          {mdDim > 0 ? formatSoTienHienThi(numberToStoredFormat(mdDim)) : '—'}
-                                        </td>
-                                        <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'right' }}>
-                                          <input
-                                            className="misa-input-solo"
-                                            style={{ ...inputStyle, width: '100%', textAlign: 'right', minWidth: 56, maxWidth: '100%' }}
-                                            value={dispTi}
-                                            onChange={(e) => updateTiLeTheoKhoCell(dvdIdx, tenKh, e.target.value)}
-                                            onFocus={() => {
-                                              if (isZeroDisplay(storedTi)) updateTiLeTheoKhoCell(dvdIdx, tenKh, '')
-                                            }}
-                                            onBlur={() => {
-                                              const n = parseFloatVN(storedTi)
-                                              if (!Number.isNaN(n) && n < 0) updateTiLeTheoKhoCell(dvdIdx, tenKh, '0')
-                                            }}
-                                            placeholder=""
-                                            title="Tỉ lệ theo khổ"
-                                          />
-                                        </td>
-                                        <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'left', fontSize: 12, paddingLeft: 15 }}>{moTaHang || '—'}</td>
+                                        <td style={{ ...tdChietKhau, ...cellBorder, fontWeight: 600, textAlign: 'center' }}>{dlLabel}</td>
+                                        {dvdqMatrixKhoTens.map((tenKh) => {
+                                          const k = dvdqTiLeMatrixKey(dlToken, tenKh)
+                                          const storedTi = (khoMap[k] ?? '').trim()
+                                          let dispTi = formatSoTien(storedTi)
+                                          if (dispTi.endsWith(',') && !/,\d+$/.test(dispTi)) dispTi = dispTi.slice(0, -1)
+                                          const moTaHang = generateMoTaQuyDoi({
+                                            dvtChinh: dvtChinhMa,
+                                            dvtQuyDoi: dvtQMa,
+                                            tiLe: storedTi,
+                                            phepTinh: phep === 'chia' ? 'chia' : 'nhan',
+                                            dvtList,
+                                          }).replace(/,\s+(?=[^\d])/g, ' ')
+                                          return (
+                                            <React.Fragment key={`${field.id}-${dlToken}-${tenKh}`}>
+                                              <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'right' }}>
+                                                <input
+                                                  className="misa-input-solo"
+                                                  style={{ ...inputStyle, width: '100%', textAlign: 'right', minWidth: 44, maxWidth: 72, padding: '0 4px' }}
+                                                  value={dispTi}
+                                                  onChange={(e) => updateTiLeTheoKhoCell(dvdIdx, tenKh, e.target.value, dlToken)}
+                                                  onFocus={() => {
+                                                    if (isZeroDisplay(storedTi)) updateTiLeTheoKhoCell(dvdIdx, tenKh, '', dlToken)
+                                                  }}
+                                                  onBlur={() => {
+                                                    const n = parseFloatVN(storedTi)
+                                                    if (!Number.isNaN(n) && n < 0) updateTiLeTheoKhoCell(dvdIdx, tenKh, '0', dlToken)
+                                                  }}
+                                                  placeholder=""
+                                                  title="Tỉ lệ theo khổ"
+                                                />
+                                              </td>
+                                              <td style={{ ...tdChietKhau, ...cellBorder, textAlign: 'left', fontSize: 12, paddingLeft: 10 }}>{moTaHang || '—'}</td>
+                                            </React.Fragment>
+                                          )
+                                        })}
                                       </tr>
                                     )
                                   })}
@@ -4077,6 +4132,34 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
           onClose={() => setShowThemDvtModal(false)}
           onSaved={async () => { await onRefreshDvtList?.() }}
         />
+      )}
+
+      {variantManagerMode && (
+        <Modal
+          open
+          onClose={() => {
+            setVariantManagerMode(null)
+            setTimeout(() => { void refreshLoaiNhomDanhMuc(); setOpenVariantDropdown(null) }, 0)
+          }}
+          title={
+            variantManagerMode === 'dinh-luong'
+              ? 'Độ dày/ Kích thước'
+              : variantManagerMode === 'kho-giay'
+                ? 'Khổ giấy'
+                : 'Hệ màu'
+          }
+          size="lg"
+        >
+          <div style={{ height: '62vh', minHeight: 420 }}>
+            <VthhCategoryManager
+              mode={variantManagerMode}
+              onQuayLai={() => {
+                setVariantManagerMode(null)
+                setTimeout(() => { void refreshLoaiNhomDanhMuc(); setOpenVariantDropdown(null) }, 0)
+              }}
+            />
+          </div>
+        </Modal>
       )}
 
       {formulaDialogOpen && ReactDOM.createPortal(

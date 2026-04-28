@@ -1,5 +1,17 @@
 import { PAPER_SIZE_SEED, findBestPaperSize } from './paperSizesCatalog.js'
 
+function normalizeMeterFromDb(widthMRaw, widthMmRaw) {
+  const m = Number(widthMRaw)
+  if (Number.isFinite(m) && m > 0) {
+    // Dữ liệu cũ có thể lưu nhầm mm vào cột *_m.
+    if (m > 20) return Number((m / 1000).toFixed(4))
+    return m
+  }
+  const mm = Number(widthMmRaw)
+  if (Number.isFinite(mm) && mm > 0) return Number((mm / 1000).toFixed(4))
+  return 0
+}
+
 function toClientRow(row) {
   return {
     code: String(row.code ?? ''),
@@ -28,8 +40,8 @@ async function listPaperSizesFromMysql(pool) {
     return {
       code: String(r.code ?? ''),
       name: String(r.name ?? ''),
-      widthM: Number(r.width_m) || (Number(r.width_mm) || 0) / 1000,
-      heightM: Number(r.height_m) || (Number(r.height_mm) || 0) / 1000,
+      widthM: normalizeMeterFromDb(r.width_m, r.width_mm),
+      heightM: normalizeMeterFromDb(r.height_m, r.height_mm),
       aliases,
     }
   })

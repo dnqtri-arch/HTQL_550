@@ -101,6 +101,8 @@ export function migrateDonHangLinesToCoDonGia(prev: DonHangMuaGridLineRow[], vat
     const row: DonHangMuaGridLineRow = {
       'Mã': line['Mã'] ?? '',
       'Tên VTHH': line['Tên VTHH'] ?? '',
+      'Độ dày/ ĐL': line['Độ dày/ ĐL'] ?? '',
+      'Khổ giấy': line['Khổ giấy'] ?? '',
       'ĐVT': line['ĐVT'] ?? '',
       'Số lượng': line['Số lượng'] ?? '',
       'ĐG mua': '',
@@ -115,7 +117,13 @@ export function migrateDonHangLinesToCoDonGia(prev: DonHangMuaGridLineRow[], vat
       row._vthh = vthh
       const opts = buildDvtOptionsForVthh(vthh)
       if (opts) row._dvtOptions = opts
-      row['ĐG mua'] = getDonGiaMuaTheoDvt(vthh, dvt)
+      const context: VthhVariantContext | undefined = (() => {
+        const doDay = String(row['Độ dày/ ĐL'] ?? '').trim()
+        const khoGiay = String(row['Khổ giấy'] ?? '').trim()
+        if (!doDay && !khoGiay) return undefined
+        return { doDay, dinhLuong: doDay, khoGiay }
+      })()
+      row['ĐG mua'] = getDonGiaMuaTheoDvt(vthh, dvt, context)
       const ts = vthh.thue_suat_gtgt
       row['% thuế GTGT'] = ts != null && String(ts) !== '' ? String(ts) : ''
     }
@@ -211,7 +219,10 @@ export function enrichDonHangGridLinesWithVthh(
     const vthh = vatTuList.find((v) => v.ma === ma)
     if (!vthh) return line
     const dvt = (line['ĐVT'] ?? '').trim() || (vthh.dvt_chinh ?? '')
-    const donGiaStr = getDonGiaMuaTheoDvt(vthh, dvt)
+    const doDay = String(line['Độ dày/ ĐL'] ?? '').trim()
+    const khoGiay = String(line['Khổ giấy'] ?? '').trim()
+    const context: VthhVariantContext | undefined = doDay || khoGiay ? { doDay, dinhLuong: doDay, khoGiay } : undefined
+    const donGiaStr = getDonGiaMuaTheoDvt(vthh, dvt, context)
     const donGia = parseFloatVN(donGiaStr)
     const soLuong = parseFloatVN(line['Số lượng'] ?? '')
     const thanhTien = donGia * soLuong
