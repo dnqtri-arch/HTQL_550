@@ -6,12 +6,13 @@ import fs from 'fs'
 import path from 'path'
 
 import {
-  appendSyncLogMysqlConn,
+  appendSyncLogMysqlConnBatch,
   bumpAfterKvBatchFile,
   bumpSystemVersionMysqlConn,
   getSystemVersionValue,
   pruneSyncLogIfNeededMysql,
 } from './htqlSyncBump.js'
+import { ensureModuleMysqlTable, moduleIdFromKvKey } from './moduleMysqlTables.js'
 
 /**
  * @param {import('express').Express} app
@@ -20,6 +21,40 @@ import {
 export function mountHtqlKvRoutes(app, ctx) {
   const { mysqlPool, dataDir } = ctx
   const kvFile = path.join(dataDir, 'htql_kv_store.json')
+  const kvSseClients = new Set()
+  const KV_SSE_HEARTBEAT_MS = 15000
+
+  function writeSseEvent(res, eventName, payload) {
+    res.write(`event: ${eventName}\n`)
+    res.write(`data: ${JSON.stringify(payload)}\n\n`)
+  }
+
+  function broadcastKvPush(keys, systemVersion) {
+    if (!Array.isArray(keys) || keys.length === 0 || kvSseClients.size === 0) return
+    const payload = {
+      keys: keys.slice(0, 500),
+      total: keys.length,
+      systemVersion: Number(systemVersion) || 0,
+      at: Date.now(),
+    }
+    for (const client of [...kvSseClients]) {
+      try {
+        writeSseEvent(client, 'kv', payload)
+      } catch {
+        kvSseClients.delete(client)
+      }
+    }
+  }
+
+  setInterval(() => {
+    for (const client of [...kvSseClients]) {
+      try {
+        client.write(`: keep-alive ${Date.now()}\n\n`)
+      } catch {
+        kvSseClients.delete(client)
+      }
+    }
+  }, KV_SSE_HEARTBEAT_MS)
 
   function loadFileKv() {
     try {
@@ -35,6 +70,25 @@ export function mountHtqlKvRoutes(app, ctx) {
     fs.mkdirSync(path.dirname(kvFile), { recursive: true })
     fs.writeFileSync(kvFile, JSON.stringify(obj, null, 2), 'utf8')
   }
+
+  app.get('/api/htql-kv/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    if (typeof res.flushHeaders === 'function') res.flushHeaders()
+    res.write('retry: 1000\n\n')
+    writeSseEvent(res, 'ready', { ok: true, at: Date.now() })
+    kvSseClients.add(res)
+    req.on('close', () => {
+      kvSseClients.delete(res)
+      try {
+        res.end()
+      } catch {
+        /* ignore */
+      }
+    })
+  })
 
   app.get('/api/htql-kv', async (req, res) => {
     const prefix = String(req.query.prefix ?? 'htql')
@@ -76,6 +130,26 @@ export function mountHtqlKvRoutes(app, ctx) {
     if (!entries.length) return res.status(400).json({ error: 'Thiếu entries' })
     try {
       if (mysqlPool) {
+        const moduleIdsNeeded = new Set()
+        for (const e of entries) {
+          const key = String(e.key ?? '').slice(0, 512)
+          if (!key.startsWith('htql')) continue
+          const moduleId = moduleIdFromKvKey(key)
+          if (moduleId) moduleIdsNeeded.add(moduleId)
+        }
+        const moduleInfoByModuleId = new Map()
+        for (const mid of moduleIdsNeeded) {
+          moduleInfoByModuleId.set(mid, await ensureModuleMysqlTable(mysqlPool, mid, 'kv'))
+        }
+        const moduleInfoByKey = new Map()
+        for (const e of entries) {
+          const key = String(e.key ?? '').slice(0, 512)
+          if (!key.startsWith('htql')) continue
+          const moduleId = moduleIdFromKvKey(key)
+          if (!moduleId) continue
+          const info = moduleInfoByModuleId.get(moduleId)
+          if (info) moduleInfoByKey.set(key, info)
+        }
         const conn = await mysqlPool.getConnection()
         try {
           await conn.beginTransaction()
@@ -85,8 +159,15 @@ export function mountHtqlKvRoutes(app, ctx) {
             const key = String(e.key ?? '').slice(0, 512)
             if (!key.startsWith('htql')) continue
             const value = String(e.value ?? '')
+            const moduleInfo = moduleInfoByKey.get(key)
             if (value === '') {
               await conn.query(`DELETE FROM htql_kv_store WHERE store_key = ?`, [key])
+              if (moduleInfo) {
+                await conn.query(`DELETE FROM ${moduleInfo.tableName} WHERE module_id = ? AND record_key = ?`, [
+                  moduleInfo.moduleId,
+                  key,
+                ])
+              }
               written++
               writtenKeys.push(key)
               continue
@@ -111,20 +192,47 @@ export function mountHtqlKvRoutes(app, ctx) {
                 `UPDATE htql_kv_store SET value_str = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP(3) WHERE store_key = ?`,
                 [value, key],
               )
+              if (moduleInfo) {
+                const [mcur] = await conn.query(
+                  `SELECT version FROM ${moduleInfo.tableName} WHERE module_id = ? AND record_key = ? FOR UPDATE`,
+                  [moduleInfo.moduleId, key],
+                )
+                if (mcur.length) {
+                  await conn.query(
+                    `UPDATE ${moduleInfo.tableName}
+                     SET value_str = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP(3)
+                     WHERE module_id = ? AND record_key = ?`,
+                    [value, moduleInfo.moduleId, key],
+                  )
+                } else {
+                  await conn.query(
+                    `INSERT INTO ${moduleInfo.tableName} (module_id, record_key, value_str, version) VALUES (?, ?, ?, 1)`,
+                    [moduleInfo.moduleId, key, value],
+                  )
+                }
+              }
             } else {
               await conn.query(
                 `INSERT INTO htql_kv_store (store_key, value_str, version) VALUES (?, ?, 1)`,
                 [key, value],
               )
+              if (moduleInfo) {
+                await conn.query(
+                  `INSERT INTO ${moduleInfo.tableName} (module_id, record_key, value_str, version) VALUES (?, ?, ?, 1)
+                   ON DUPLICATE KEY UPDATE value_str = VALUES(value_str), version = version + 1, updated_at = CURRENT_TIMESTAMP(3)`,
+                  [moduleInfo.moduleId, key, value],
+                )
+              }
             }
             written++
             writtenKeys.push(key)
           }
           if (writtenKeys.length) {
             await bumpSystemVersionMysqlConn(conn)
-            for (const k of writtenKeys) {
-              await appendSyncLogMysqlConn(conn, 'kv', k, null)
-            }
+            await appendSyncLogMysqlConnBatch(
+              conn,
+              writtenKeys.map((k) => ({ scope: 'kv', refKey: k, moduleId: null })),
+            )
           }
           await conn.commit()
           let systemVersion = 0
@@ -134,6 +242,7 @@ export function mountHtqlKvRoutes(app, ctx) {
           } catch {
             systemVersion = await getSystemVersionValue(mysqlPool, dataDir)
           }
+          if (writtenKeys.length) broadcastKvPush(writtenKeys, systemVersion)
           return res.json({ ok: true, written, systemVersion })
         } catch (e) {
           await conn.rollback()
@@ -177,6 +286,7 @@ export function mountHtqlKvRoutes(app, ctx) {
       } else {
         systemVersion = await getSystemVersionValue(null, dataDir)
       }
+      if (writtenKeys.length) broadcastKvPush(writtenKeys, systemVersion)
       return res.json({ ok: true, written, systemVersion })
     } catch (e) {
       res.status(500).json({ error: String(e.message || e) })

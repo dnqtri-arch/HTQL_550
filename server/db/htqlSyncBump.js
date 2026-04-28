@@ -89,6 +89,24 @@ export async function appendSyncLogMysqlConn(conn, scope, refKey, moduleId) {
   )
 }
 
+/**
+ * Một câu INSERT nhiều dòng — giảm round-trip khi batch PUT /api/htql-kv.
+ * @param {import('mysql2/promise').PoolConnection} conn
+ * @param {{ scope: string, refKey: string | null, moduleId: string | null }[]} rows
+ */
+export async function appendSyncLogMysqlConnBatch(conn, rows) {
+  if (!rows.length) return
+  const placeholders = rows.map(() => '(?, ?, ?)').join(', ')
+  const vals = []
+  for (const r of rows) {
+    vals.push(r.scope, r.refKey, r.moduleId)
+  }
+  await conn.query(
+    `INSERT INTO htql_sync_log (scope, ref_key, module_id) VALUES ${placeholders}`,
+    vals,
+  )
+}
+
 /** Sau khi insert log — giữ khoảng 100k dòng gần nhất khi bảng quá lớn. */
 export async function pruneSyncLogIfNeededMysql(pool) {
   const [mx] = await pool.query(`SELECT COALESCE(MAX(id), 0) AS m FROM htql_sync_log`)

@@ -17,7 +17,7 @@ import { formFooterButtonCancel, formFooterButtonSave } from '../../../../consta
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { hoaDonBanGetAll, getDefaultHoaDonBanFilter } from '../hoaDon/hoaDonBanApi'
 import type { TraLaiHangBanRecord, TraLaiHangBanChiTiet, HoaDonBanRecord } from '../../../../types/banHang'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import styles from '../BanHang.module.css'
 

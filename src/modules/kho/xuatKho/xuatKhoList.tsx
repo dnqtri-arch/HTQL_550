@@ -5,8 +5,9 @@ import { Plus, Search, Printer, Send, ChevronDown, Trash2 } from 'lucide-react'
 import type { PhieuXuatKho, TinhTrangXuatKho } from './type'
 import { xuatKhoGetAll, xuatKhoCreate, xuatKhoUpdate, xuatKhoDelete } from './api'
 import { XuatKhoForm } from './xuatKhoForm'
-import { loadKhoListFromStorage, type KhoStorageItem } from '../khoHang/khoStorage'
+import { loadKhoListFromStorage, type KhoStorageItem } from '../khoStorage'
 import { formatSoNguyen } from '../../../utils/numberFormat'
+import { ConfirmXoaCaptchaModal } from '../../../components/common/confirmXoaCaptchaModal'
 import { htqlDatePickerPopper } from '../../../constants/datePickerPlacement'
 import { DatePickerReadOnlyTriggerInput } from '../../../components/datePickerReadOnlyTriggerInput'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -112,6 +113,8 @@ export function XuatKhoList() {
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [editPhieu, setEditPhieu] = useState<PhieuXuatKho | undefined>()
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
+  const [deleteCaptchaOpen, setDeleteCaptchaOpen] = useState(false)
+  const [phieuDangXoa, setPhieuDangXoa] = useState<PhieuXuatKho | null>(null)
 
   /* Filter */
   const [filterKho, setFilterKho] = useState('')
@@ -203,10 +206,17 @@ export function XuatKhoList() {
     taiDuLieu()
   }
 
-  const xacNhanXoa = (phieu: PhieuXuatKho) => {
-    if (!window.confirm(`Xóa vĩnh viễn phiếu ${phieu.sophieu}?\nThao tác này không thể hoàn tác.`)) return
-    xuatKhoDelete(phieu.id)
-    if (selected === phieu.id) setSelected(null)
+  const moXoaPhieu = (phieu: PhieuXuatKho) => {
+    setPhieuDangXoa(phieu)
+    setDeleteCaptchaOpen(true)
+  }
+
+  const xoaVinhVienSauCaptcha = () => {
+    if (!phieuDangXoa) return
+    xuatKhoDelete(phieuDangXoa.id)
+    if (selected === phieuDangXoa.id) setSelected(null)
+    setDeleteCaptchaOpen(false)
+    setPhieuDangXoa(null)
     taiDuLieu()
   }
 
@@ -236,7 +246,7 @@ export function XuatKhoList() {
         <button type="button"
           style={{ ...btnSt, background: 'var(--bg-tab)', color: selected ? '#e53935' : 'var(--text-muted)', border: `0.5px solid ${selected ? '#e53935' : 'var(--border)'}` }}
           disabled={!selected}
-          onClick={() => selectedPhieu && xacNhanXoa(selectedPhieu)}>
+          onClick={() => selectedPhieu && moXoaPhieu(selectedPhieu)}>
           <Trash2 size={12} />Xóa
         </button>
 
@@ -385,7 +395,7 @@ export function XuatKhoList() {
             {
               label: '🗑️ Xóa',
               danger: true,
-              action: () => { xacNhanXoa(contextMenu.phieu); setContextMenu(null) },
+              action: () => { moXoaPhieu(contextMenu.phieu); setContextMenu(null) },
             },
           ].map(({ label, action, disabled, danger }) => (
             <button key={label} type="button"
@@ -399,6 +409,20 @@ export function XuatKhoList() {
           ))}
         </div>
       )}
+
+      <ConfirmXoaCaptchaModal
+        open={deleteCaptchaOpen}
+        onClose={() => { setDeleteCaptchaOpen(false); setPhieuDangXoa(null) }}
+        onConfirm={xoaVinhVienSauCaptcha}
+        title="Xóa phiếu xuất kho"
+        message={
+          <div>
+            Bạn sắp xóa vĩnh viễn phiếu <strong>{phieuDangXoa?.sophieu}</strong>.
+            <br />
+            Thao tác không hoàn tác.
+          </div>
+        }
+      />
 
       {/* Form modal */}
       {formMode && (

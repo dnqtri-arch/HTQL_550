@@ -14,14 +14,23 @@ import os from 'node:os'
 import dotenv from 'dotenv'
 import { createMysqlPool, useMysqlStorage } from './db/mysqlPool.js'
 import { resolveMysqlEnv, mysqlEnvMissingKeys } from './db/mysqlEnv.js'
-import { ensureSchema, HTQL_MYSQL_SCHEMA_VERSION, HTQL_ENSURED_TABLES } from './db/ensureSchema.js'
-import { createJsonEntityRepo } from './db/jsonEntityRepo.js'
+import {
+  ensureSchema,
+  HTQL_MYSQL_SCHEMA_VERSION,
+  HTQL_ENSURED_TABLES,
+  compactHtqlHttpSessionTable,
+  purgeStaleHtqlHttpSessions,
+} from './db/ensureSchema.js'
+import { createJsonEntityPartitionRepo, createJsonEntityRepo } from './db/jsonEntityRepo.js'
 import { migrateJsonFilesIfEmpty } from './db/migrateJsonFiles.js'
 import { mountHtqlKvRoutes } from './db/htqlKvRoutes.js'
 import { mountHtqlModuleBundleRoutes } from './db/htqlModuleBundleRoutes.js'
+import { backfillModuleMysqlTables } from './db/moduleMysqlTables.js'
 import { mountHtqlSyncRoutes } from './db/htqlSyncRoutes.js'
 import { mountHtqlSequenceRoutes } from './db/htqlSequenceRoutes.js'
+import { mountHtqlRecordEditLockRoutes } from './db/htqlRecordEditLockRoutes.js'
 import { mountUserPreferencesRoutes } from './db/userPreferencesRoutes.js'
+import { mountPaperSizeRoutes } from './db/paperSizeRoutes.js'
 import { mountHtqlUploadRoutes } from './htqlUploadRoutes.js'
 import { tryBootstrapMysqlDatabase } from './db/mysqlBootstrap.js'
 
@@ -78,7 +87,7 @@ const PATH_BACKUP_CT_TK = process.env.HTQL_PATH_BACKUP_CT_TK
   ? path.resolve(process.env.HTQL_PATH_BACKUP_CT_TK)
   : '/hdd_4tb/htql_550/backup_ct_tk'
 
-/** Gói cài client (.exe / .dmg) + manifest — mặc định dưới thư mục cài đặt: INSTALL_ROOT/update/… (không dùng SSD). */
+/** Gói cài client (.exe) + manifest — mặc định dưới thư mục cài đặt: INSTALL_ROOT/update/… (không dùng SSD). */
 const HTQL_UPDATE_CLIENT_DIR = process.env.HTQL_UPDATE_CLIENT_DIR
   ? path.resolve(process.env.HTQL_UPDATE_CLIENT_DIR)
   : path.join(INSTALL_ROOT, 'update', 'client')
@@ -150,7 +159,7 @@ function warnIfSsdDirsMissing() {
 
 function safeInstallerBasename(name) {
   const b = path.basename(String(name || ''))
-  if (!/\.(exe|dmg)$/i.test(b)) return null
+  if (!/\.exe$/i.test(b)) return null
   if (/[/\\]|\.\./.test(b)) return null
   return b
 }
@@ -253,6 +262,15 @@ function htqlHttpSessionMysqlEnabled() {
   return v !== '0' && v !== 'false' && v !== 'off'
 }
 
+/**
+ * Ghi dòng `client_key IS NULL` (mỗi request cookie mới → một dòng) — dễ phình bảng (bot/crawler).
+ * Mặc định **tắt**; bật lại: HTQL_HTTP_SESSION_ANONYMOUS_DB=1.
+ */
+function htqlHttpSessionAnonymousMysqlEnabled() {
+  const v = String(process.env.HTQL_HTTP_SESSION_ANONYMOUS_DB ?? '0').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'on'
+}
+
 function htqlCookieSecure(req) {
   if (process.env.HTQL_COOKIE_SECURE === '1') return true
   if (process.env.HTQL_COOKIE_SECURE === '0') return false
@@ -267,6 +285,9 @@ function htqlCookieSecure(req) {
  */
 app.use(async (req, res, next) => {
   if (req.method === 'OPTIONS') return next()
+  if (req.method === 'GET' && req.path === '/api/health') return next()
+  if (req.method === 'POST' && req.path === '/api/htql-maintenance/purge-http-sessions') return next()
+  if (req.method === 'POST' && req.path === '/api/htql-maintenance/compact-http-sessions') return next()
   try {
     let token =
       req.cookies && req.cookies[HTQL_SESSION_COOKIE] ? String(req.cookies[HTQL_SESSION_COOKIE]) : ''
@@ -284,17 +305,39 @@ app.use(async (req, res, next) => {
       const ip = getRequestClientIp(req) || ''
       const ua = String(req.headers['user-agent'] || '').slice(0, 512)
       const ckRaw = String(req.headers['x-htql-client-id'] || '').trim().slice(0, 128)
-      const ck = ckRaw.length ? ckRaw : null
-      await mysqlPool.query(
-        `INSERT INTO htql_http_session (session_token, client_key, ip, user_agent)
-         VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           last_seen_at = CURRENT_TIMESTAMP(3),
-           client_key = IF(CHAR_LENGTH(IFNULL(VALUES(client_key), '')) > 0, VALUES(client_key), client_key),
-           ip = VALUES(ip),
-           user_agent = VALUES(user_agent)`,
-        [token, ck, ip, ua],
-      )
+      let ck = ckRaw.length ? ckRaw.slice(0, 128) : null
+      if (ck && (ck.toLowerCase() === 'unknown' || ck === '-')) ck = null
+      /**
+       * Một hàng / thiết bị khi có client_key — tránh mỗi request tạo dòng mới nếu cookie không gửi lại được.
+       * (Index UNIQUE(client_key) do ensureSchema tạo khi dedupe xong.)
+       */
+      if (ck) {
+        const [ur] = await mysqlPool.query(
+          `UPDATE htql_http_session SET session_token = ?, ip = ?, user_agent = ?, last_seen_at = CURRENT_TIMESTAMP(3) WHERE client_key = ? LIMIT 1`,
+          [token, ip, ua, ck],
+        )
+        const n = typeof ur?.affectedRows === 'number' ? ur.affectedRows : 0
+        if (!n) {
+          await mysqlPool.query(
+            `INSERT INTO htql_http_session (session_token, client_key, ip, user_agent) VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               last_seen_at = CURRENT_TIMESTAMP(3),
+               ip = VALUES(ip),
+               user_agent = VALUES(user_agent),
+               client_key = IF(CHAR_LENGTH(IFNULL(VALUES(client_key), '')) > 0, VALUES(client_key), client_key)`,
+            [token, ck, ip, ua],
+          )
+        }
+      } else if (htqlHttpSessionAnonymousMysqlEnabled()) {
+        await mysqlPool.query(
+          `INSERT INTO htql_http_session (session_token, client_key, ip, user_agent) VALUES (?, NULL, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             last_seen_at = CURRENT_TIMESTAMP(3),
+             ip = VALUES(ip),
+             user_agent = VALUES(user_agent)`,
+          [token, ip, ua],
+        )
+      }
     }
   } catch (e) {
     console.error('[HTQL_550] http session', e)
@@ -302,7 +345,7 @@ app.use(async (req, res, next) => {
   next()
 })
 
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 
 /** Chế độ demo (dữ liệu thử nghiệm từ Cursor / máy dev) — bật trên server: HTQL_DEMO_MODE=1; DB MySQL nên dùng DB riêng (vd htql_550_db_demo) qua HTQL_MYSQL_DATABASE. */
 const DEMO_MODE =
@@ -381,6 +424,9 @@ async function recordHtqlClientVisit(req) {
 app.use(async (req, res, next) => {
   try {
     if (req.method === 'OPTIONS') return next()
+    if (req.method === 'GET' && req.path === '/api/health') return next()
+    if (req.method === 'POST' && req.path === '/api/htql-maintenance/purge-http-sessions') return next()
+    if (req.method === 'POST' && req.path === '/api/htql-maintenance/compact-http-sessions') return next()
     if (String(req.path || '').startsWith('/api/htql-client-installer')) return next()
     await recordHtqlClientVisit(req)
   } catch (e) {
@@ -390,6 +436,108 @@ app.use(async (req, res, next) => {
 })
 
 function mountRoutes() {
+  const maintenanceLogTables = ['htql_sync_log', 'htql_record_edit_lock', 'htql_client_registry']
+  const maintenanceAllowedTargets = new Set(['session', 'logs', 'all'])
+
+  function canAccessMaintenance(req, res) {
+    const token = String(process.env.HTQL_MAINTENANCE_TOKEN || '').trim()
+    const hdrRaw = String(req.headers['x-htql-maintenance-token'] || '').trim()
+    const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+    const hdr = hdrRaw || auth
+    const ip = getRequestClientIp(req) || ''
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1'
+    if (token) {
+      if (hdr !== token) {
+        res.status(403).json({ error: 'Forbidden' })
+        return false
+      }
+      return true
+    }
+    if (!isLocal) {
+      res.status(404).end()
+      return false
+    }
+    return true
+  }
+
+  async function compactLogLikeTables(mode) {
+    let deletedTotal = 0
+    const details = []
+    for (const t of maintenanceLogTables) {
+      const item = { table: t, deleted: 0, mode: mode === 'optimize' ? 'optimize' : 'truncate' }
+      if (mode === 'optimize') {
+        await mysqlPool.query(`OPTIMIZE TABLE \`${t}\``)
+        details.push(item)
+        continue
+      }
+      const [[{ c }]] = await mysqlPool.query(`SELECT COUNT(*) AS c FROM \`${t}\``)
+      const n = Number(c) || 0
+      item.deleted = n
+      deletedTotal += n
+      await mysqlPool.query(`TRUNCATE TABLE \`${t}\``)
+      await mysqlPool.query(`ANALYZE TABLE \`${t}\``)
+      details.push(item)
+    }
+    return { deletedTotal, details }
+  }
+
+  app.get('/api/health', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store')
+    res.status(200).json({
+      ok: true,
+      pid: process.pid,
+      uptime: Math.round(process.uptime()),
+      mysql: Boolean(mysqlPool),
+      schemaVersion: useMysqlStorage() ? HTQL_MYSQL_SCHEMA_VERSION : null,
+    })
+  })
+
+  /**
+   * Purge `htql_http_session` (batch). Nội bộ / cron:
+   * - Không set HTQL_MAINTENANCE_TOKEN: chỉ chấp nhận từ 127.0.0.1 (vd `curl -sS -X POST http://127.0.0.1:3001/api/htql-maintenance/purge-http-sessions`).
+   * - Có token: header `X-HTQL-Maintenance-Token: <token>` hoặc `Authorization: Bearer <token>`.
+   */
+  app.post('/api/htql-maintenance/purge-http-sessions', async (req, res) => {
+    if (!canAccessMaintenance(req, res)) return
+    if (!mysqlPool) return res.status(503).json({ error: 'MySQL không kết nối' })
+    const roundsCap = Math.min(Math.max(Number(req.query?.rounds) || 1200, 1), 5000)
+    try {
+      const deleted = await purgeStaleHtqlHttpSessions(mysqlPool, {
+        force: true,
+        yieldMs: Math.min(Math.max(Number(process.env.HTQL_HTTP_SESSION_PURGE_YIELD_MS ?? 15) || 15, 0), 2000),
+        maxRounds: roundsCap,
+      })
+      res.json({ ok: true, deleted })
+    } catch (e) {
+      res.status(500).json({ error: String(e?.message || e) })
+    }
+  })
+  app.post('/api/htql-maintenance/compact-http-sessions', async (req, res) => {
+    if (!canAccessMaintenance(req, res)) return
+    if (!mysqlPool) return res.status(503).json({ error: 'MySQL không kết nối' })
+    try {
+      const mode = String(req.query?.mode || 'truncate').trim().toLowerCase()
+      if (mode !== 'truncate' && mode !== 'optimize') {
+        return res.status(400).json({ error: 'mode phải là truncate hoặc optimize' })
+      }
+      const target = String(req.query?.target || 'all').trim().toLowerCase()
+      if (!maintenanceAllowedTargets.has(target)) {
+        return res.status(400).json({ error: 'target phải là session | logs | all' })
+      }
+      let session = { mode, deleted: 0 }
+      let logs = { deletedTotal: 0, details: [] }
+      if (target === 'session' || target === 'all') {
+        session = await compactHtqlHttpSessionTable(mysqlPool, mode)
+      }
+      if (target === 'logs' || target === 'all') {
+        logs = await compactLogLikeTables(mode)
+      }
+      res.json({ ok: true, target, mode, session, logs })
+    } catch (e) {
+      res.status(500).json({ error: String(e?.message || e) })
+    }
+  })
+
   if (repoDvt) {
     app.get('/api/don-vi-tinh', async (req, res) => {
       try {
@@ -479,6 +627,65 @@ function mountRoutes() {
   }
 
   if (repoNcc) {
+    const mirrorKhFromNcc = async (nccRow) => {
+      if (!repoKh) return
+      if (!nccRow || !nccRow.khach_hang) return
+      const ma = String(nccRow.ma_ncc || '').trim()
+      if (!ma) return
+      const khPayload = {
+        ma_kh: ma,
+        ten_kh: nccRow.ten_ncc ?? '',
+        loai_kh: nccRow.loai_ncc ?? 'to_chuc',
+        isNhaCungCap: true,
+        dia_chi: nccRow.dia_chi,
+        nhom_kh: nccRow.nhom_kh_ncc,
+        ma_so_thue: nccRow.ma_so_thue,
+        ma_dvqhns: nccRow.ma_dvqhns,
+        dien_thoai: nccRow.dien_thoai,
+        fax: nccRow.fax,
+        email: nccRow.email,
+        website: nccRow.website,
+        dien_giai: nccRow.dien_giai,
+        dieu_khoan_tt: nccRow.dieu_khoan_tt,
+        so_ngay_duoc_no: nccRow.so_ngay_duoc_no,
+        han_muc_no_kh: nccRow.so_no_toi_da,
+        nv_ban_hang: nccRow.nv_mua_hang,
+        tk_ngan_hang: nccRow.tk_ngan_hang,
+        ten_ngan_hang: nccRow.ten_ngan_hang,
+        nguoi_lien_he: nccRow.nguoi_lien_he,
+        tai_khoan_ngan_hang: nccRow.tai_khoan_ngan_hang,
+        ngung_theo_doi: Boolean(nccRow.ngung_theo_doi),
+        quoc_gia: nccRow.quoc_gia,
+        quyen_huyen: nccRow.quyen_huyen,
+        tinh_tp: nccRow.tinh_tp,
+        xa_phuong: nccRow.xa_phuong,
+        xung_ho: nccRow.xung_ho,
+        gioi_tinh: nccRow.gioi_tinh,
+        ho_va_ten_lien_he: nccRow.ho_va_ten_lien_he,
+        chuc_danh: nccRow.chuc_danh,
+        dt_di_dong: nccRow.dt_di_dong,
+        dtdd_khac: nccRow.dtdd_khac,
+        dt_co_dinh: nccRow.dt_co_dinh,
+        dia_chi_lien_he: nccRow.dia_chi_lien_he,
+        dai_dien_theo_pl: nccRow.dai_dien_theo_pl,
+        dia_diem_giao_hang: nccRow.dia_diem_giao_hang,
+        dia_diem_nhan_hang: nccRow.dia_diem_nhan_hang,
+        dia_diem_nhan_trung_giao: nccRow.dia_diem_giao_trung_nhan,
+        so_ho_chieu: nccRow.so_ho_chieu,
+        so_cccd: nccRow.so_cccd,
+        ngay_cap: nccRow.ngay_cap,
+        noi_cap: nccRow.noi_cap,
+      }
+      const khList = await repoKh.list()
+      const found = khList.find((x) => String(x.ma_kh || '').trim() === ma)
+      if (found) {
+        await repoKh.update(found.id, { ...khPayload, id: found.id })
+      } else {
+        const nextId = khList.length > 0 ? Math.max(...khList.map((x) => Number(x.id) || 0)) + 1 : 1
+        await repoKh.insert({ ...khPayload, id: nextId })
+      }
+    }
+
     app.get('/api/nha-cung-cap', async (req, res) => {
       try {
         res.json(await repoNcc.list())
@@ -492,6 +699,11 @@ function mountRoutes() {
         const payload = req.body
         const id = list.length > 0 ? Math.max(...list.map((r) => r.id)) + 1 : 1
         const newRow = await repoNcc.insert({ ...payload, id })
+        try {
+          await mirrorKhFromNcc(newRow)
+        } catch (mirrorErr) {
+          console.warn('[HTQL_550] mirror KH từ NCC (POST):', mirrorErr?.message || mirrorErr)
+        }
         res.json(newRow)
       } catch (e) {
         res.status(500).json({ error: String(e.message || e) })
@@ -502,6 +714,11 @@ function mountRoutes() {
         const id = parseInt(req.params.id, 10)
         const updated = await repoNcc.update(id, { ...req.body, id })
         if (!updated) return res.status(404).json({ error: 'Không tìm thấy' })
+        try {
+          await mirrorKhFromNcc(updated)
+        } catch (mirrorErr) {
+          console.warn('[HTQL_550] mirror KH từ NCC (PUT):', mirrorErr?.message || mirrorErr)
+        }
         res.json(updated)
       } catch (e) {
         res.status(500).json({ error: String(e.message || e) })
@@ -548,8 +765,69 @@ function mountRoutes() {
   mountHtqlSyncRoutes(app, { mysqlPool, dataDir: DATA_DIR })
   mountHtqlSequenceRoutes(app, { mysqlPool, dataDir: DATA_DIR })
   mountUserPreferencesRoutes(app, { mysqlPool, dataDir: DATA_DIR })
+  mountHtqlRecordEditLockRoutes(app, { mysqlPool })
+  mountPaperSizeRoutes(app, { mysqlPool })
 
   if (repoKh) {
+    const mirrorNccFromKh = async (khRow) => {
+      if (!repoNcc) return
+      if (!khRow || !khRow.isNhaCungCap) return
+      const ma = String(khRow.ma_kh || '').trim()
+      if (!ma) return
+      const nccPayload = {
+        ma_ncc: ma,
+        ten_ncc: khRow.ten_kh ?? '',
+        loai_ncc: khRow.loai_kh ?? 'to_chuc',
+        khach_hang: true,
+        dia_chi: khRow.dia_chi,
+        nhom_kh_ncc: khRow.nhom_kh,
+        ma_so_thue: khRow.ma_so_thue,
+        ma_dvqhns: khRow.ma_dvqhns,
+        dien_thoai: khRow.dien_thoai,
+        fax: khRow.fax,
+        email: khRow.email,
+        website: khRow.website,
+        dien_giai: khRow.dien_giai,
+        dieu_khoan_tt: khRow.dieu_khoan_tt,
+        so_ngay_duoc_no: khRow.so_ngay_duoc_no,
+        so_no_toi_da: khRow.han_muc_no_kh,
+        nv_mua_hang: khRow.nv_ban_hang,
+        tk_ngan_hang: khRow.tk_ngan_hang,
+        ten_ngan_hang: khRow.ten_ngan_hang,
+        nguoi_lien_he: khRow.nguoi_lien_he,
+        tai_khoan_ngan_hang: khRow.tai_khoan_ngan_hang,
+        ngung_theo_doi: Boolean(khRow.ngung_theo_doi),
+        quoc_gia: khRow.quoc_gia,
+        quyen_huyen: khRow.quyen_huyen,
+        tinh_tp: khRow.tinh_tp,
+        xa_phuong: khRow.xa_phuong,
+        xung_ho: khRow.xung_ho,
+        gioi_tinh: khRow.gioi_tinh,
+        ho_va_ten_lien_he: khRow.ho_va_ten_lien_he,
+        chuc_danh: khRow.chuc_danh,
+        dt_di_dong: khRow.dt_di_dong,
+        dtdd_khac: khRow.dtdd_khac,
+        dt_co_dinh: khRow.dt_co_dinh,
+        dia_chi_lien_he: khRow.dia_chi_lien_he,
+        dai_dien_theo_pl: khRow.dai_dien_theo_pl,
+        dia_diem_giao_hang: khRow.dia_diem_giao_hang,
+        dia_diem_nhan_hang: khRow.dia_diem_nhan_hang,
+        dia_diem_giao_trung_nhan: khRow.dia_diem_nhan_trung_giao,
+        so_ho_chieu: khRow.so_ho_chieu,
+        so_cccd: khRow.so_cccd,
+        ngay_cap: khRow.ngay_cap,
+        noi_cap: khRow.noi_cap,
+      }
+      const nccList = await repoNcc.list()
+      const found = nccList.find((x) => String(x.ma_ncc || '').trim() === ma)
+      if (found) {
+        await repoNcc.update(found.id, { ...nccPayload, id: found.id })
+      } else {
+        const nextId = nccList.length > 0 ? Math.max(...nccList.map((x) => Number(x.id) || 0)) + 1 : 1
+        await repoNcc.insert({ ...nccPayload, id: nextId })
+      }
+    }
+
     app.get('/api/khach-hang', async (req, res) => {
       try {
         res.json(await repoKh.list())
@@ -563,6 +841,11 @@ function mountRoutes() {
         const payload = req.body
         const id = list.length > 0 ? Math.max(...list.map((r) => r.id)) + 1 : 1
         const newRow = await repoKh.insert({ ...payload, id })
+        try {
+          await mirrorNccFromKh(newRow)
+        } catch (mirrorErr) {
+          console.warn('[HTQL_550] mirror NCC từ KH (POST):', mirrorErr?.message || mirrorErr)
+        }
         res.json(newRow)
       } catch (e) {
         res.status(500).json({ error: String(e.message || e) })
@@ -573,6 +856,11 @@ function mountRoutes() {
         const id = parseInt(req.params.id, 10)
         const updated = await repoKh.update(id, { ...req.body, id })
         if (!updated) return res.status(404).json({ error: 'Không tìm thấy' })
+        try {
+          await mirrorNccFromKh(updated)
+        } catch (mirrorErr) {
+          console.warn('[HTQL_550] mirror NCC từ KH (PUT):', mirrorErr?.message || mirrorErr)
+        }
         res.json(updated)
       } catch (e) {
         res.status(500).json({ error: String(e.message || e) })
@@ -736,9 +1024,9 @@ app.get('/api/htql-meta', (req, res) => {
     kvSyncEnabled: true,
     /** system_version + delta log: GET /api/htql-sync-state, GET /api/sync/delta */
     htqlSyncStateApi: true,
-    /** Báo giá / ĐHB / …: không có bảng SQL riêng — đồng bộ qua htql_kv_store */
+    /** Mô hình lưu tối ưu: KV tách htql_mod_*; bundle giữ chuẩn ở htql_module_bundle; DVT/KH/NCC là entity riêng */
     kvStoreBusinessDataNote:
-      'Chứng từ nghiệp vụ (báo giá, đơn hàng bán, …) lưu trong localStorage và đồng bộ bảng htql_kv_store — không hiện dưới dạng bảng riêng trong phpMyAdmin.',
+      'Module/KV: htql_kv_store + bảng vật lý htql_mod_<moduleId>; module bundle: htql_module_bundle (không mirror htql_mod để tránh trùng dữ liệu). DVT: don_vi_tinh. KH/NCC: gộp lưu chung htql_doi_tac (phân vùng partner_type).',
     /** POST /api/htql-upload (multipart) + GET /api/htql-files?kind=&rel= — file trên SSD */
     fileUploadApi: true,
   })
@@ -774,6 +1062,117 @@ app.get('/api/htql-mysql-tables', async (req, res) => {
       }
     })
     res.json({ ok: true, database: schema, tables: list })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message || e) })
+  }
+})
+
+function parseMysqlPreviewLimit(raw) {
+  const n = Number.parseInt(String(raw ?? ''), 10)
+  if (!Number.isFinite(n) || n <= 0) return 50
+  return Math.min(n, 200)
+}
+
+function sqlIdentSafe(name) {
+  const v = String(name || '').trim()
+  if (!/^[a-zA-Z0-9_]+$/.test(v)) return ''
+  return `\`${v}\``
+}
+
+/**
+ * Admin: liệt kê module đã auto tạo bảng vật lý `htql_mod_*` + số dòng từng bảng.
+ * Dùng cho Tool kiểm tra sau deploy.
+ */
+app.get('/api/htql-admin-module-tables', async (req, res) => {
+  try {
+    if (!mysqlPool) {
+      return res.status(503).json({ ok: false, error: 'MySQL chưa cấu hình (API đang dùng JSON).' })
+    }
+    const [dbRows] = await mysqlPool.query('SELECT DATABASE() AS db')
+    const schema = dbRows[0]?.db
+    if (!schema) {
+      return res.status(503).json({ ok: false, error: 'Không xác định được database hiện tại.' })
+    }
+    const [rows] = await mysqlPool.query(
+      `SELECT r.module_id AS moduleId, r.table_name AS tableName, r.source,
+              t.TABLE_ROWS AS rowEstimate, t.DATA_LENGTH AS dataLength, t.INDEX_LENGTH AS indexLength
+       FROM htql_module_registry r
+       LEFT JOIN information_schema.TABLES t
+         ON t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = r.table_name
+       WHERE r.table_name LIKE 'htql_mod_%'
+       ORDER BY r.table_name, r.module_id`,
+    )
+    const list = []
+    for (const r of rows || []) {
+      const tableName = String(r.tableName || '').trim()
+      const safeTable = sqlIdentSafe(tableName)
+      let rowCount = null
+      if (safeTable) {
+        try {
+          const [[x]] = await mysqlPool.query(`SELECT COUNT(*) AS c FROM ${safeTable}`)
+          rowCount = Number(x?.c)
+          if (!Number.isFinite(rowCount)) rowCount = 0
+        } catch {
+          rowCount = null
+        }
+      }
+      const dataBytes = Number(r.dataLength) || 0
+      const indexBytes = Number(r.indexLength) || 0
+      list.push({
+        moduleId: String(r.moduleId || ''),
+        tableName,
+        source: String(r.source || 'kv'),
+        rowCount,
+        rowEstimate: Number(r.rowEstimate) || 0,
+        dataBytes,
+        indexBytes,
+        totalBytes: dataBytes + indexBytes,
+      })
+    }
+    res.json({ ok: true, database: schema, moduleTables: list })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message || e) })
+  }
+})
+
+/**
+ * Admin: xem nhanh dữ liệu bảng MySQL (preview) cho Tool.
+ */
+app.get('/api/htql-mysql-table-preview', async (req, res) => {
+  try {
+    if (!mysqlPool) {
+      return res.status(503).json({ ok: false, error: 'MySQL chưa cấu hình (API đang dùng JSON).' })
+    }
+    const tableName = String(req.query.table ?? '').trim()
+    const safeTable = sqlIdentSafe(tableName)
+    if (!safeTable) {
+      return res.status(400).json({ ok: false, error: 'Tên bảng không hợp lệ.' })
+    }
+    const limit = parseMysqlPreviewLimit(req.query.limit)
+    const [existsRows] = await mysqlPool.query(
+      `SELECT TABLE_NAME AS name
+       FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+       LIMIT 1`,
+      [tableName],
+    )
+    if (!Array.isArray(existsRows) || !existsRows.length) {
+      return res.status(404).json({ ok: false, error: `Không tìm thấy bảng ${tableName}.` })
+    }
+    const [countRows] = await mysqlPool.query(`SELECT COUNT(*) AS c FROM ${safeTable}`)
+    const totalRows = Number(countRows?.[0]?.c) || 0
+    const [rows] = await mysqlPool.query(`SELECT * FROM ${safeTable} LIMIT ?`, [limit])
+    const list = Array.isArray(rows) ? rows : []
+    const columns = list.length ? Object.keys(list[0] || {}) : []
+    res.json({
+      ok: true,
+      tableName,
+      totalRows,
+      limit,
+      fetchedRows: list.length,
+      columns,
+      rows: list,
+    })
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) })
   }
@@ -839,7 +1238,7 @@ app.get('/api/htql-client-update-manifest', (req, res) => {
       return res.json({
         version: null,
         latestFile: null,
-        message: 'Chưa có gói cài trên máy chủ (Control Center → tải .exe/.dmg).',
+        message: 'Chưa có gói cài trên máy chủ (Control Center → tải .exe).',
       })
     }
     const j = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
@@ -998,8 +1397,14 @@ async function start() {
     )
     await migrateLegacyRegistryToWorkstation(mysqlPool)
     repoDvt = createJsonEntityRepo(mysqlPool, 'don_vi_tinh')
-    repoNcc = createJsonEntityRepo(mysqlPool, 'nha_cung_cap')
-    repoKh = createJsonEntityRepo(mysqlPool, 'khach_hang')
+    repoNcc = createJsonEntityPartitionRepo(mysqlPool, 'htql_doi_tac', 'partner_type', 'nha_cung_cap')
+    repoKh = createJsonEntityPartitionRepo(mysqlPool, 'htql_doi_tac', 'partner_type', 'khach_hang')
+    try {
+      await backfillModuleMysqlTables(mysqlPool)
+      process.stdout.write('[HTQL_550] MySQL module tables: đã đồng bộ registry và tự tạo bảng theo module khi có dữ liệu mới.\n')
+    } catch (e) {
+      process.stderr.write(`[HTQL_550] Cảnh báo backfill module tables: ${String(e?.message || e)}\n`)
+    }
     await migrateJsonFilesIfEmpty(mysqlPool, { dataDir: DATA_DIR })
     const rcfg = resolveMysqlEnv()
     process.stdout.write(
@@ -1037,6 +1442,14 @@ async function start() {
     process.stdout.write(
       '[HTQL_550] Upload: POST /api/htql-upload | GET /api/htql-files — client dùng /api (proxy hoặc LAN).\n',
     )
+    if (mysqlPool) {
+      const yieldBg = Math.min(Math.max(Number(process.env.HTQL_HTTP_SESSION_PURGE_YIELD_MS ?? 25) || 25, 0), 2000)
+      setImmediate(() => {
+        purgeStaleHtqlHttpSessions(mysqlPool, { yieldMs: yieldBg }).catch((e) =>
+          console.warn('[HTQL_550] htql_http_session purge (nền):', e?.message || e),
+        )
+      })
+    }
   })
 }
 

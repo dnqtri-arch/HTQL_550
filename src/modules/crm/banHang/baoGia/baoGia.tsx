@@ -49,7 +49,7 @@ import {
   baoGiaFetchBundleAndApply,
   BAO_GIA_BUNDLE_QUERY_KEY,
 } from './baoGiaApi'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { BaoGiaApiProvider, type BaoGiaApi } from './baoGiaApiContext'
@@ -106,6 +106,24 @@ function baoGiaCoPhuLucHopDongLienKet(baoGiaId: string): boolean {
   }
 }
 
+function baoGiaIdsCoPhuLucHopDongLienKet(): Set<string> {
+  const out = new Set<string>()
+  if (typeof htqlEntityStorage === 'undefined') return out
+  try {
+    const raw = htqlEntityStorage.getItem(LS_PHU_LUC_HDB_CT)
+    if (!raw) return out
+    const arr = JSON.parse(raw) as { bao_gia_id?: string }[]
+    if (!Array.isArray(arr)) return out
+    arr.forEach((row) => {
+      const id = (row.bao_gia_id ?? '').trim()
+      if (id) out.add(id)
+    })
+  } catch {
+    return out
+  }
+  return out
+}
+
 /**
  * Sửa «Đã chuyển ĐHB/HĐ» khi không còn chứng từ gắn `bao_gia_id` (hoặc đổi cho khớp khi chỉ còn ĐHB hoặc chỉ còn HĐ/phụ lục).
  * Tránh hiển thị đã chuyển trong khi cột Giao dịch trống.
@@ -138,12 +156,18 @@ function baoGiaDamBaoTinhTrangTheoLienKetDonHangHopDong(): void {
     } else if (t === TINH_TRANG_BG_DA_CHUYEN_HD) {
       if (hasH) continue
       nextT = hasD ? TINH_TRANG_BG_DA_CHUYEN_DHB : TINH_TRANG_BG_MOI_TAO
+    } else if (t !== TINH_TRANG_BG_KH_KHONG_DONG_Y) {
+      if (hasH) nextT = TINH_TRANG_BG_DA_CHUYEN_HD
+      else if (hasD) nextT = TINH_TRANG_BG_DA_CHUYEN_DHB
+      else continue
     } else {
       continue
     }
 
     const ct = baoGiaGetChiTiet(id)
-    baoGiaPut(id, { ...baoGiaBuildCreatePayloadFromRecord(row, ct), tinh_trang: nextT })
+    void baoGiaPut(id, { ...baoGiaBuildCreatePayloadFromRecord(row, ct), tinh_trang: nextT }).catch(() => {
+      /* đồng bộ nền — lỗi ghi CSDL không chặn vòng lặp */
+    })
   }
 }
 
@@ -475,6 +499,37 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
 
   const tongTien = useMemo(() => filteredByTinhTrang.reduce((s, r) => s + r.tong_thanh_toan, 0), [filteredByTinhTrang])
   const selectedRow = useMemo(() => selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null, [selectedId, danhSach])
+  const baoGiaBiKhoaTheoLienKetIds = useMemo(() => {
+    const ids = new Set<string>()
+    const filterTatCa = { ky: 'tat-ca' as const, tu: '', den: '' }
+    donHangBanGetAll(filterTatCa).forEach((d) => {
+      const id = (d.bao_gia_id ?? '').trim()
+      if (id) ids.add(id)
+    })
+    hopDongBanChungTuGetAll(filterTatCa).forEach((h) => {
+      const id = (h.bao_gia_id ?? '').trim()
+      if (id) ids.add(id)
+    })
+    baoGiaIdsCoPhuLucHopDongLienKet().forEach((id) => ids.add(id))
+    return ids
+  }, [giaoDichEpoch, danhSach.length])
+  const baoGiaBiKhoaChinhSuaTheoLienKet = useCallback(
+    (row: BaoGiaRecord | null | undefined) => {
+      if (!row) return false
+      return baoGiaBiKhoaTheoLienKetIds.has(row.id)
+    },
+    [baoGiaBiKhoaTheoLienKetIds],
+  )
+  const baoGiaBiKhoaThaoTac = useCallback(
+    (row: BaoGiaRecord | null | undefined) => {
+      if (!row) return true
+      return (
+        baoGiaBiKhoaChinhSuaTheoTinhTrang(row.tinh_trang ?? '') ||
+        baoGiaBiKhoaChinhSuaTheoLienKet(row)
+      )
+    },
+    [baoGiaBiKhoaChinhSuaTheoLienKet],
+  )
 
   const columnsBaoGiaList = useMemo((): DataGridColumn<BaoGiaRecord>[] => {
     void giaoDichEpoch
@@ -639,9 +694,20 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
     setShowForm(true)
   }
   const moFormXem  = (row: BaoGiaRecord) => { setFormRecord(row); setFormMode('view'); setFormKey((k) => k + 1); setShowForm(true) }
-  const moFormSua  = (row: BaoGiaRecord) => { setFormRecord(row); setFormMode('edit'); setFormKey((k) => k + 1); setShowForm(true) }
+  const moFormSua  = (row: BaoGiaRecord) => {
+    if (baoGiaBiKhoaThaoTac(row)) {
+      toast?.showToast('Báo giá đã liên kết chứng từ, không cho phép chỉnh sửa.', 'error')
+      return
+    }
+    setFormRecord(row); setFormMode('edit'); setFormKey((k) => k + 1); setShowForm(true)
+  }
 
   const xacNhanXoa = (row: BaoGiaRecord) => {
+    if (baoGiaBiKhoaThaoTac(row)) {
+      toast?.showToast('Báo giá đã liên kết chứng từ, không cho phép xóa.', 'error')
+      setXoaModalRow(null)
+      return
+    }
     const filterTatCa = { ky: 'tat-ca' as const, tu: '', den: '' }
     for (const d of donHangBanGetAll(filterTatCa)) {
       if ((d.bao_gia_id ?? '').trim() === row.id) donHangBanDelete(d.id)
@@ -649,11 +715,17 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
     for (const h of hopDongBanChungTuGetAll(filterTatCa)) {
       if ((h.bao_gia_id ?? '').trim() === row.id) hopDongBanChungTuDelete(h.id)
     }
-    baoGiaDelete(row.id)
-    loadData()
-    if (selectedId === row.id) setSelectedId(null)
-    toast?.showToast(`Đã xóa báo giá ${row.so_bao_gia}.`, 'info')
-    setXoaModalRow(null)
+    void baoGiaDelete(row.id)
+      .then(() => {
+        loadData()
+        if (selectedId === row.id) setSelectedId(null)
+        toast?.showToast(`Đã xóa báo giá ${row.so_bao_gia}.`, 'info')
+        setXoaModalRow(null)
+      })
+      .catch(() => {
+        toast?.showToast('Không xóa được báo giá (lỗi ghi CSDL hoặc mạng).', 'error')
+        setXoaModalRow(null)
+      })
   }
 
   // [YC23 Mục 8] Lập đơn hàng từ báo giá (toolbar / menu ngữ cảnh)
@@ -692,7 +764,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
         <button
           type="button"
           className={styles.toolbarBtnDanger}
-          disabled={!selectedRow || baoGiaBiKhoaChinhSuaTheoTinhTrang(selectedRow.tinh_trang ?? '')}
+          disabled={!selectedRow || baoGiaBiKhoaThaoTac(selectedRow)}
           onClick={() => selectedRow && setXoaModalRow(selectedRow)}
         >
           <Trash2 size={13} /><span>Xóa</span>
@@ -991,7 +1063,13 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
           <button
             type="button"
             className={styles.contextMenuItem}
+            disabled={baoGiaBiKhoaThaoTac(contextMenu.row!)}
+            style={{
+              opacity: baoGiaBiKhoaThaoTac(contextMenu.row!) ? 0.45 : 1,
+              cursor: baoGiaBiKhoaThaoTac(contextMenu.row!) ? 'default' : 'pointer',
+            }}
             onClick={() => {
+              if (baoGiaBiKhoaThaoTac(contextMenu.row!)) return
               moFormSua(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
             }}
@@ -1113,12 +1191,12 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             className={styles.contextMenuItem}
             style={{
               color: '#dc2626',
-              opacity: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '') ? 0.45 : 1,
-              cursor: baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '') ? 'default' : 'pointer',
+              opacity: baoGiaBiKhoaThaoTac(contextMenu.row!) ? 0.45 : 1,
+              cursor: baoGiaBiKhoaThaoTac(contextMenu.row!) ? 'default' : 'pointer',
             }}
-            disabled={baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '')}
+            disabled={baoGiaBiKhoaThaoTac(contextMenu.row!)}
             onClick={() => {
-              if (baoGiaBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang ?? '')) return
+              if (baoGiaBiKhoaThaoTac(contextMenu.row!)) return
               setXoaModalRow(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
             }}
@@ -1335,7 +1413,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             <DonHangBanChungTuApiProvider api={donHangBanChungTuApiImpl}>
               <DonHangBanForm
                 key={xemDhbKeyTuBang}
-                readOnly={false}
+                readOnly
                 initialDhb={xemDhbTuBang}
                 initialChiTiet={donHangBanGetChiTiet(xemDhbTuBang.id)}
                 onClose={() => setXemDhbTuBang(null)}
@@ -1359,7 +1437,7 @@ function BaoGiaContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: string)
             <HopDongBanChungTuApiProvider api={hopDongBanChungTuApiImpl}>
               <HopDongBanForm
                 key={xemHdbKeyTuBang}
-                readOnly={false}
+                readOnly
                 initialHdbCt={xemHdbTuBang}
                 initialChiTiet={hopDongBanChungTuGetChiTiet(xemHdbTuBang.id)}
                 onClose={() => setXemHdbTuBang(null)}

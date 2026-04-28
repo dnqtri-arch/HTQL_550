@@ -1,6 +1,6 @@
 {
   "name": "htql-550-client",
-  "version": "2026.4.27-4",
+  "version": "2026.4.28-1",
   "private": true,
   "author": "Nam Bac AD",
   "description": "HTQL_550 Windows desktop client (Electron + NSIS x64)",
@@ -51,7 +51,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "HTQL_550_Setup_V2026_04_27_04.exe",
+      "artifactName": "HTQL_550_Setup_V2026_04_28_01.exe",
       "signAndEditExecutable": false
     },
     "nsis": {

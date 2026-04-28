@@ -58,9 +58,9 @@ const NganHang = lazy(() => import('../modules/nganhang').then((m) => ({ default
 const ThuQuy = lazy(() => import('../modules/thuquy').then((m) => ({ default: m.ThuQuy })))
 
 // Kho
-const KhoHang = lazy(() => import('../modules/kho/khoHang').then((m) => ({ default: m.Kho })))
+const KhoHang = lazy(() => import('../modules/kho').then((m) => ({ default: m.Kho })))
 const TonKho = lazy(() => import('../modules/kho/tonKho/page').then((m) => ({ default: m.KhoVthhPage })))
-const DonViTinhPage = lazy(() => import('../modules/kho/khoHang/donViTinhPage').then((m) => ({ default: m.DonViTinhPage })))
+const DonViTinhPage = lazy(() => import('../modules/kho/donViTinh/page').then((m) => ({ default: m.DonViTinhPage })))
 const ThuKho = lazy(() => import('../modules/thukho').then((m) => ({ default: m.ThuKho })))
 const CongCuDungCu = lazy(() => import('../modules/congcudungcu').then((m) => ({ default: m.CongCuDungCu })))
 const TaiSanCoDinh = lazy(() => import('../modules/taisancodinh').then((m) => ({ default: m.TaiSanCoDinh })))

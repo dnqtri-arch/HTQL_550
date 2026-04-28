@@ -12,6 +12,8 @@ export interface DonViQuyDoiItem {
   ti_le_quy_doi: string
   phep_tinh: 'nhan' | 'chia'
   mo_ta?: string
+  /** Nhiều phiên bản + khổ đặc biệt: tỉ lệ riêng theo tên khổ giấy (đơn vị chính / ĐVQĐ). */
+  ti_le_theo_kho_giay?: Record<string, string>
   gia_mua: string
   gia_ban: string
   gia_ban_1?: string
@@ -26,6 +28,25 @@ export interface DinhMucNvlItem {
   dvt: string
   so_luong: string
   hao_hut: string
+}
+
+export interface VthhPricingMatrixItem {
+  /** Mã phiên bản phụ 2 (khổ): `{maPhu1}{a|b|…}` — cùng một `dinh_luong` dùng chung tiền tố `maPhu1` (`vthhBuildMaPhu1` / `vthhBuildMaPhu2` trong `vthhVariantMa.ts`). */
+  ma_quy_cach?: string
+  dinh_luong?: string
+  he_mau?: string
+  kho_giay?: string
+  do_day?: string
+  dvt?: string
+  gia_mua?: number
+  /** Giá mua gần nhất (tham chiếu, song song cột Giá mua trên matrix tab Bậc giá). */
+  gia_mua_gan_nhat?: number
+  /** Giá bán tối thiểu khi SL dưới 1 (tách khỏi Giá bán B1/B2… trên matrix). */
+  gia_ban_tt?: number
+  gia_ban?: number
+  gia_ban_1?: number
+  gia_ban_2?: number
+  gia_ban_3?: number
 }
 
 export interface VatTuHangHoaRecord {
@@ -86,6 +107,12 @@ export interface VatTuHangHoaRecord {
   loai_chiet_khau?: string
   bang_chiet_khau?: ChietKhauItem[]
   dac_tinh?: string
+  ma_quy_cach?: string
+  dinh_luong?: string
+  he_mau?: string
+  kho_giay?: string
+  do_day?: string
+  pricing_matrix?: VthhPricingMatrixItem[]
   cong_thuc_tinh_so_luong?: string
   dinh_muc_nvl?: DinhMucNvlItem[]
   ma_vthh_cap_cha?: string

@@ -6,6 +6,7 @@
  * Hiện tại: htqlEntityStorage-based (tách biệt khỏi /api/purchase/orders)
  */
 
+import { htqlSortCopyNewestFirst } from '@/utils/htqlListSortNewestFirst'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
 import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
@@ -105,7 +106,7 @@ const MOCK_CHI_TIET: HopDongBanChungTuChiTiet[] = [
     hop_dong_ban_chung_tu_id: 'dhb_full1',
     ma_hang: 'VT00001',
     ten_hang: 'decal trang sus',
-    ma_quy_cach: '',
+    ma_quy_cach: 'VT00001',
     dvt: 'Cây',
     chieu_dai: 0,
     chieu_rong: 0,
@@ -338,11 +339,14 @@ export const KY_OPTIONS = [
 
 export function hopDongBanChungTuGetAll(filter: HopDongBanChungTuFilter): HopDongBanChungTuRecord[] {
   const { tu, den } = filter
-  if (!tu || !den) return [..._hopDongBanChungTuList]
-  return _hopDongBanChungTuList.filter((d) => {
-    const ngay = d.ngay_lap_hop_dong
-    return ngay >= tu && ngay <= den
-  })
+  const rows =
+    !tu || !den
+      ? [..._hopDongBanChungTuList]
+      : _hopDongBanChungTuList.filter((d) => {
+          const ngay = d.ngay_lap_hop_dong
+          return ngay >= tu && ngay <= den
+        })
+  return htqlSortCopyNewestFirst(rows)
 }
 
 export function hopDongBanChungTuGetChiTiet(donHangBanId: string): HopDongBanChungTuChiTiet[] {
@@ -763,7 +767,7 @@ export async function hopDongBanChungTuPost(
       hop_dong_ban_chung_tu_id: id,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: c.chieu_dai ?? 0,
       chieu_rong: c.chieu_rong ?? 0,
@@ -863,7 +867,7 @@ export function hopDongBanChungTuPut(donHangBanId: string, payload: HopDongBanCh
       hop_dong_ban_chung_tu_id: donHangBanId,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: c.chieu_dai ?? 0,
       chieu_rong: c.chieu_rong ?? 0,

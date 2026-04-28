@@ -14,6 +14,7 @@ import { useToastOptional } from '../../context/toastContext'
 import {
   NHOM_VTHH_BASE_ITEMS,
   STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM,
+  STORAGE_KEY_VTHH_HE_MAU_CUSTOM,
   STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM,
   STORAGE_KEY_VTHH_LOAI_CUSTOM,
   STORAGE_KEY_VTHH_NHOM_DISABLED,
@@ -28,6 +29,7 @@ import {
   replaceNhomTokenInStored,
   type VthhDanhMucItem,
   readVthhDinhLuongCustomFromStorage,
+  readVthhHeMauCustomFromStorage,
   readVthhKhoGiayCustomFromStorage,
   readVthhLoaiCustomFromStorage,
   readVthhNhomDisabledFromStorage,
@@ -41,7 +43,7 @@ import { htqlEntityStorage } from '../../utils/htqlEntityStorage'
 import { htqlApiUrl } from '../../config/htqlApiBase'
 import { formatSoTuNhienInput, formatSoTien, formatSoTienHienThi, isZeroDisplay, normalizeKichThuocInput, toStoredNumberString } from '../../utils/numberFormat'
 
-type ManagerMode = 'loai' | 'nhom' | 'vat' | 'kho-giay' | 'dinh-luong'
+type ManagerMode = 'loai' | 'nhom' | 'vat' | 'kho-giay' | 'dinh-luong' | 'he-mau'
 
 interface Props {
   mode: ManagerMode
@@ -54,6 +56,9 @@ interface RowItem {
   ten: string
   chieuRongM: string
   chieuDaiM: string
+  dienGiai: string
+  heMauIn: boolean
+  heMauVatTu: boolean
   count: number
 }
 
@@ -62,6 +67,7 @@ function titleByMode(mode: ManagerMode): string {
   if (mode === 'nhom') return 'Nhóm VTHH'
   if (mode === 'kho-giay') return 'Khổ giấy'
   if (mode === 'dinh-luong') return 'Độ dày/ Định lượng'
+  if (mode === 'he-mau') return 'Hệ màu'
   return 'Thuế GTGT'
 }
 
@@ -93,6 +99,7 @@ function readCustomValuesByMode(mode: ManagerMode): VthhDanhMucItem[] {
   if (mode === 'nhom') return readVthhNhomCustomFromStorage()
   if (mode === 'kho-giay') return readVthhKhoGiayCustomFromStorage()
   if (mode === 'dinh-luong') return readVthhDinhLuongCustomFromStorage()
+  if (mode === 'he-mau') return readVthhHeMauCustomFromStorage()
   return readVthhThueVatCustomFromStorage()
 }
 
@@ -101,14 +108,14 @@ function readDisabledNhomTokens(): string[] {
 }
 
 function autoCodeFromTen(raw: string, mode: ManagerMode): string {
-  if (mode === 'vat' || mode === 'kho-giay' || mode === 'dinh-luong') return ''
+  if (mode === 'vat' || mode === 'kho-giay' || mode === 'dinh-luong' || mode === 'he-mau') return ''
   const initials = buildUpperInitialCode(raw)
   if (initials) return initials
   return mode === 'loai' ? 'LOAI' : 'NHOM'
 }
 
 function isNumericCodeMode(mode: ManagerMode): boolean {
-  return mode === 'vat' || mode === 'kho-giay' || mode === 'dinh-luong'
+  return mode === 'vat' || mode === 'kho-giay' || mode === 'dinh-luong' || mode === 'he-mau'
 }
 
 function sortByMaNumericThenText(a: string, b: string): number {
@@ -178,6 +185,25 @@ function collectDinhLuongTokensFromRecord(r: VatTuHangHoaRecord): string[] {
   return out
 }
 
+function collectHeMauTokensFromRecord(r: VatTuHangHoaRecord): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const push = (s: string) => {
+    const t = String(s ?? '').trim()
+    if (!t || seen.has(t)) return
+    seen.add(t)
+    out.push(t)
+  }
+  for (const x of splitStoredTokens(String((r as { he_mau?: string }).he_mau ?? r.mau_sac ?? ''))) push(x)
+  const pm = r.pricing_matrix as Array<{ he_mau?: string }> | undefined
+  if (Array.isArray(pm)) {
+    for (const row of pm) {
+      push(String(row?.he_mau ?? ''))
+    }
+  }
+  return out
+}
+
 function parsePositiveMeter(raw: string): number | null {
   const cleaned = String(raw ?? '').trim().replace(',', '.')
   if (!cleaned) return null
@@ -198,6 +224,9 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
   const [pendingTen, setPendingTen] = useState('')
   const [pendingChieuRongM, setPendingChieuRongM] = useState('')
   const [pendingChieuDaiM, setPendingChieuDaiM] = useState('')
+  const [pendingDienGiai, setPendingDienGiai] = useState('')
+  const [pendingHeMauIn, setPendingHeMauIn] = useState(false)
+  const [pendingHeMauVatTu, setPendingHeMauVatTu] = useState(false)
   const [napKichThuocDangTai, setNapKichThuocDangTai] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
@@ -211,6 +240,8 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
           ? STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM
           : mode === 'dinh-luong'
             ? STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM
+            : mode === 'he-mau'
+              ? STORAGE_KEY_VTHH_HE_MAU_CUSTOM
             : STORAGE_KEY_VTHH_THUE_VAT_CUSTOM
 
   const showError = useCallback(
@@ -327,7 +358,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       }
       return [...countMap.entries()]
         .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
-        .map(([ma, count]) => ({ id: ma, ma, ten: tenByMa.get(ma) ?? ma, chieuRongM: '', chieuDaiM: '', count }))
+        .map(([ma, count]) => ({ id: ma, ma, ten: tenByMa.get(ma) ?? ma, chieuRongM: '', chieuDaiM: '', dienGiai: '', heMauIn: false, heMauVatTu: false, count }))
     }
 
     if (mode === 'vat') {
@@ -358,11 +389,14 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
           ten: tenByMa.get(ma) ?? thueVatTokenDisplayLabel(ma, customValues),
           chieuRongM: '',
           chieuDaiM: '',
+          dienGiai: '',
+          heMauIn: false,
+          heMauVatTu: false,
           count,
         }))
     }
 
-    if (mode === 'kho-giay' || mode === 'dinh-luong') {
+    if (mode === 'kho-giay' || mode === 'dinh-luong' || mode === 'he-mau') {
       /** Chỉ hiển thị dòng danh mục đã khai báo (custom); «Số VTHH sử dụng» = token khớp ma/ten + pricing_matrix. */
       const countByMa = new Map<string, number>()
       for (const item of customValues) {
@@ -374,7 +408,11 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       }
       for (const r of danhSach) {
         const tokens =
-          mode === 'kho-giay' ? collectKhoGiayTokensFromRecord(r) : collectDinhLuongTokensFromRecord(r)
+          mode === 'kho-giay'
+            ? collectKhoGiayTokensFromRecord(r)
+            : mode === 'dinh-luong'
+              ? collectDinhLuongTokensFromRecord(r)
+              : collectHeMauTokensFromRecord(r)
         for (const token of tokens) {
           for (const item of customValues) {
             const ma = String(item.ma ?? '').trim()
@@ -394,6 +432,9 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
             ten,
             chieuRongM: mode === 'kho-giay' ? String(item.chieu_rong_m ?? '').trim() : '',
             chieuDaiM: mode === 'kho-giay' ? String(item.chieu_dai_m ?? '').trim() : '',
+            dienGiai: mode === 'he-mau' ? String(item.dien_giai ?? '').trim() : '',
+            heMauIn: mode === 'he-mau' ? item.he_mau_in === true : false,
+            heMauVatTu: mode === 'he-mau' ? item.he_mau_vat_tu === true : false,
             count: countByMa.get(ma) ?? 0,
           }
         })
@@ -425,6 +466,9 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
         ten: tenByMa.get(ma) ?? nhomTokenDisplayLabel(ma, customValues),
         chieuRongM: '',
         chieuDaiM: '',
+        dienGiai: '',
+        heMauIn: false,
+        heMauVatTu: false,
         count,
       }))
   }, [customValues, danhSach, disabledNhomTokens, disabledVatTokens, mode])
@@ -439,6 +483,14 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
         { key: 'count', label: 'Số VTHH sử dụng', width: '24%', align: 'right', filterable: false },
       ]
     }
+    if (mode === 'he-mau') {
+      return [
+        { key: 'ma', label: 'Mã', width: '14%', filterable: false },
+        { key: 'ten', label: title, width: '26%', filterable: false },
+        { key: 'dienGiai', label: 'Diễn giải', width: '34%', filterable: false },
+        { key: 'count', label: 'Số VTHH sử dụng', width: '12%', align: 'right', filterable: false },
+      ]
+    }
     return [
       { key: 'ma', label: 'Mã', width: '22%', filterable: false },
       { key: 'ten', label: title, width: '54%', filterable: false },
@@ -451,6 +503,9 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     setPendingTen('')
     setPendingChieuRongM('')
     setPendingChieuDaiM('')
+    setPendingDienGiai('')
+    setPendingHeMauIn(false)
+    setPendingHeMauVatTu(false)
     setEditModal('add')
   }
 
@@ -460,6 +515,9 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     setPendingTen(selected.ten)
     setPendingChieuRongM(selected.chieuRongM ?? '')
     setPendingChieuDaiM(selected.chieuDaiM ?? '')
+    setPendingDienGiai(selected.dienGiai ?? '')
+    setPendingHeMauIn(Boolean(selected.heMauIn))
+    setPendingHeMauVatTu(Boolean(selected.heMauVatTu))
     setEditModal('edit')
   }
 
@@ -526,6 +584,10 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       showError(`${title} có tên "${ten}" đã tồn tại.`)
       return
     }
+    if (mode === 'he-mau' && pendingHeMauIn && pendingHeMauVatTu) {
+      showError('Chỉ được chọn một trong hai: Hệ màu in hoặc Hệ màu vật tư.')
+      return
+    }
 
     if (editModal === 'add') {
       saveCustomValues([
@@ -534,6 +596,13 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
           ma,
           ten,
           ...(mode === 'kho-giay' ? { chieu_rong_m: chieuRongM, chieu_dai_m: chieuDaiM } : {}),
+          ...(mode === 'he-mau'
+            ? {
+                dien_giai: pendingDienGiai.trim() || undefined,
+                he_mau_in: pendingHeMauIn,
+                he_mau_vat_tu: pendingHeMauVatTu,
+              }
+            : {}),
         },
       ])
       if (toast) toast.showToast(`Đã thêm ${title.toLowerCase()} mới.`, 'success')
@@ -570,13 +639,29 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       return
     }
 
-    if (mode === 'kho-giay' || mode === 'dinh-luong') {
+    if (mode === 'kho-giay' || mode === 'dinh-luong' || mode === 'he-mau') {
       upsertCustomValue(
         ma,
         ten,
         selected.ma,
         mode === 'kho-giay' ? { chieuRongM, chieuDaiM } : undefined,
       )
+      if (mode === 'he-mau') {
+        saveCustomValues(
+          customValues.map((x) =>
+            x.ma === selected.ma
+              ? {
+                  ...x,
+                  ma,
+                  ten,
+                  dien_giai: pendingDienGiai.trim() || undefined,
+                  he_mau_in: pendingHeMauIn,
+                  he_mau_vat_tu: pendingHeMauVatTu,
+                }
+              : x,
+          ),
+        )
+      }
       setEditModal(null)
       return
     }
@@ -808,6 +893,44 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
                 lang="vi"
                 style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
               />
+            </>
+          )}
+          {mode === 'he-mau' && (
+            <>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Diễn giải</label>
+              <input
+                value={pendingDienGiai}
+                onChange={(e) => setPendingDienGiai(e.target.value)}
+                placeholder="Nhập diễn giải hệ màu"
+                style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12 }}
+              />
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Áp dụng</label>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={pendingHeMauIn}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setPendingHeMauIn(checked)
+                      if (checked) setPendingHeMauVatTu(false)
+                    }}
+                  />
+                  Hệ màu in
+                </label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={pendingHeMauVatTu}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setPendingHeMauVatTu(checked)
+                      if (checked) setPendingHeMauIn(false)
+                    }}
+                  />
+                  Hệ màu vật tư
+                </label>
+              </div>
             </>
           )}
         </div>

@@ -3,6 +3,7 @@
  * Mã: {Năm}/HDM/{Số} — rule ma-he-thong.mdc
  */
 
+import { htqlSortCopyNewestFirst } from '@/utils/htqlListSortNewestFirst'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
 import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
@@ -300,11 +301,14 @@ export const KY_OPTIONS = [
 
 export function hopDongMuaGetAll(filter: HopDongMuaFilter): HopDongMuaRecord[] {
   const { tu, den } = filter
-  if (!tu || !den) return [..._donList]
-  return _donList.filter((d) => {
-    const ngay = d.ngay_don_hang
-    return ngay >= tu && ngay <= den
-  })
+  const rows =
+    !tu || !den
+      ? [..._donList]
+      : _donList.filter((d) => {
+          const ngay = d.ngay_don_hang
+          return ngay >= tu && ngay <= den
+        })
+  return htqlSortCopyNewestFirst(rows)
 }
 
 export function hopDongMuaGetChiTiet(donId: string): HopDongMuaChiTiet[] {

@@ -38,7 +38,7 @@ import type { PhuLucHopDongBanChungTuFilter } from '../../../../types/phuLucHopD
 import { buildPhuLucHopDongBanChungTuPrefillFromBaoGia } from './baoGiaToPhuLucHopDongBanChungTuPrefill'
 import { PhuLucHopDongBanForm } from './phuLucHopDongBanForm'
 import { PhuLucHopDongBanChungTuApiProvider } from './phuLucHopDongBanChungTuApiContext'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { HTQL_BAN_HANG_TAB_EVENT, HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'

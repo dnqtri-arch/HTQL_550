@@ -56,11 +56,12 @@ import type { DonHangBanChungTuFilter } from '../../../../types/donHangBanChungT
 import { buildDonHangBanChungTuPrefillFromBaoGia } from './baoGiaToDonHangBanChungTuPrefill'
 import { DonHangBanForm } from './donHangBanForm'
 import { DonHangBanChungTuApiProvider } from './donHangBanChungTuApiContext'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { useDraggable } from '../../../../hooks/useDraggable'
 import { HTQL_BAN_HANG_TAB_EVENT, HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
+import { HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import { HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT } from '../../muaHang/muaHangTabEvent'
 import { ghiNhanDoanhThuGetAll, getDefaultGhiNhanDoanhThuFilter } from '../ghiNhanDoanhThu/ghiNhanDoanhThuApi'
 import styles from '../BanHang.module.css'
@@ -85,6 +86,9 @@ import { tinhDaThuVaConLaiChoDonHangBan as tinhDaChiVaConLaiChoDonHangBan } from
 import type { ChiTienBangChiTiet, ChiTienBangRecord } from '../../../../types/chiTienBang'
 import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
 import { KV_POLL_INTERVAL_MS } from '../../../../utils/htqlKvSync'
+import { hopDongBanChungTuGetAll, getDefaultHopDongBanChungTuFilter } from '../hopDongBan/hopDongBanChungTuApi'
+import { phuLucHopDongBanChungTuGetAll, getDefaultPhuLucHopDongBanChungTuFilter } from '../phuLucHopDongBan/phuLucHopDongBanChungTuApi'
+import { lockReasonDonHangBanByChain } from '../chungTuChainLocks'
 
 const baoGiaApiModal: BaoGiaApi = {
   getAll: baoGiaGetAll,
@@ -205,6 +209,22 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   const [tinhTrangFilterSelected, setTinhTrangFilterSelected] = useState<string[]>([])
 
   const selectedRow = selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null
+  const allHopDongBanRows = useMemo(
+    () => hopDongBanChungTuGetAll({ ...getDefaultHopDongBanChungTuFilter(), tu: '', den: '' }),
+    [danhSach],
+  )
+  const allPhuLucRows = useMemo(
+    () => phuLucHopDongBanChungTuGetAll({ ...getDefaultPhuLucHopDongBanChungTuFilter(), tu: '', den: '' }),
+    [danhSach],
+  )
+  const donHangBanChainLockReasonById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const row of danhSach) {
+      const reason = lockReasonDonHangBanByChain(row, allHopDongBanRows, allPhuLucRows)
+      if (reason) m.set(row.id, reason)
+    }
+    return m
+  }, [danhSach, allHopDongBanRows, allPhuLucRows])
   const chiTietHienThiCoVat = selectedRow == null || selectedRow.ap_dung_vat_gtgt !== false
 
   const thuCongNoById = useMemo(() => {
@@ -254,9 +274,19 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   }
 
   const coTheXoaDonHangBan = (row: DonHangBanChungTuRecord) => {
+    const chainReason = donHangBanChainLockReasonById.get(row.id)
+    if (chainReason) return false
     const thuIds = donHangBanThuTienBangIdsLinked(row).filter((tid) => tid && phieuThuTonTai.has(tid))
     const chiIds = donHangBanChiTienBangIdsLinked(row).filter((cid) => cid && phieuChiTonTai.has(cid))
     return thuIds.length === 0 && chiIds.length === 0
+  }
+  const donHangBanLockReasonForActions = (row: DonHangBanChungTuRecord): string | null => {
+    const chainReason = donHangBanChainLockReasonById.get(row.id)
+    if (chainReason) return chainReason
+    if (donHangBanKhoaViDaTaoPhieuThuHoacChi(row, phieuThuTonTai, phieuChiTonTai)) {
+      return 'Đơn hàng bán đã có phiếu thu/chi liên kết nên không thể sửa hoặc xóa.'
+    }
+    return null
   }
 
   /** Nhãn hiển thị cột Tình trạng — dùng đồng bộ cho lọc Excel (YC82). */
@@ -459,6 +489,15 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     window.addEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, onRefreshList)
     return () => window.removeEventListener(HTQL_DON_HANG_BAN_LIST_REFRESH_EVENT, onRefreshList)
   }, [loadData])
+  useEffect(() => {
+    const onRefreshChain = () => loadData()
+    window.addEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, onRefreshChain)
+    window.addEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, onRefreshChain)
+    return () => {
+      window.removeEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, onRefreshChain)
+      window.removeEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, onRefreshChain)
+    }
+  }, [loadData])
 
   useEffect(() => {
     const h = () => {
@@ -604,7 +643,15 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           type="button"
           className={styles.toolbarBtnDanger}
           disabled={!selectedId || !selectedRow || !coTheXoaDonHangBan(selectedRow)}
-          onClick={() => selectedRow && setXoaModal(selectedRow)}
+          onClick={() => {
+            if (!selectedRow) return
+            const reason = donHangBanLockReasonForActions(selectedRow)
+            if (reason) {
+              toast?.showToast(reason, 'error')
+              return
+            }
+            setXoaModal(selectedRow)
+          }}
         >
           <Trash2 size={13} /><span>Xóa</span>
         </button>
@@ -743,13 +790,17 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           <button
             type="button"
             className={styles.contextMenuItem}
-            disabled={donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
+            disabled={!!donHangBanLockReasonForActions(contextMenu.row!)}
             style={{
-              opacity: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
-              cursor: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
+              opacity: donHangBanLockReasonForActions(contextMenu.row!) ? 0.55 : 1,
+              cursor: donHangBanLockReasonForActions(contextMenu.row!) ? 'not-allowed' : 'pointer',
             }}
             onClick={() => {
-              if (donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
+              const reason = donHangBanLockReasonForActions(contextMenu.row!)
+              if (reason) {
+                toast?.showToast(reason, 'error')
+                return
+              }
               resetFormPrefill()
               setFormRecord(contextMenu.row!)
               setFormMode('edit')
@@ -958,12 +1009,16 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
             className={styles.contextMenuItem}
             style={{
               color: '#dc2626',
-              opacity: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
-              cursor: donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
+              opacity: donHangBanLockReasonForActions(contextMenu.row!) ? 0.55 : 1,
+              cursor: donHangBanLockReasonForActions(contextMenu.row!) ? 'not-allowed' : 'pointer',
             }}
-            disabled={donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
+            disabled={!!donHangBanLockReasonForActions(contextMenu.row!)}
             onClick={() => {
-              if (donHangBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
+              const reason = donHangBanLockReasonForActions(contextMenu.row!)
+              if (reason) {
+                toast?.showToast(reason, 'error')
+                return
+              }
               setXoaModal(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
             }}
@@ -1062,6 +1117,12 @@ function DonHangBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
         onClose={() => setXoaModal(null)}
         onConfirm={() => {
           if (!xoaModal) return
+          const reason = donHangBanLockReasonForActions(xoaModal)
+          if (reason) {
+            toast?.showToast(reason, 'error')
+            setXoaModal(null)
+            return
+          }
           donHangBanDelete(xoaModal.id)
           loadData()
           if (selectedId === xoaModal.id) setSelectedId(null)

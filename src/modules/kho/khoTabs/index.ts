@@ -1,0 +1,1 @@
+export { KhoTabs } from '../khoTabs'

@@ -1,0 +1,1 @@
+export { VatTuHangHoa } from '../vatTuHangHoa'

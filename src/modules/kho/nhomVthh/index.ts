@@ -1,0 +1,1 @@
+export { NhomVthh } from '../nhomVthh'

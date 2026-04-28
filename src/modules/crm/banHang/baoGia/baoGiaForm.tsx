@@ -34,8 +34,9 @@ import { loadDieuKhoanThanhToanKh, saveDieuKhoanThanhToanKh, khachHangGetAll, ty
 import { KhachHang } from '../khachHang/khachHang'
 import type { KhachHangRecord } from '../khachHang/khachHangApi'
 import type { VatTuHangHoaRecord } from '../../../../types/vatTuHangHoa'
-import { vatTuHangHoaGetForBanHang } from '../../../kho/khoHang/vatTuHangHoaApi'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { vatTuHangHoaGetForBanHang } from '../../../kho/vatTuHangHoaApi'
+import { readVthhKhoGiayCustomFromStorage } from '../../../kho/vthhLoaiNhomSync'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { vietTatTenNganHang } from '../../../../utils/nganHangDisplay'
 import { mau_bgkhongdongia, mau_bgcodongia, mau_bgcodongia_khong_vat } from './baoGiaGridMau'
@@ -51,25 +52,32 @@ import {
   normalizeKichThuocInput,
   parseFloatVN,
   parseNumber,
+  parseDecimalFlex,
 } from '../../../../utils/numberFormat'
-import { dvtLaMetVuong } from '../../../../utils/dvtLaMetVuong'
+import {
+  computeBanHangChiTietFooterTotals,
+  formatBanHangChiTietThanhTienDisplay,
+  formatBanHangChiTietTienThueDisplay,
+  formatBanHangChiTietTongTienDisplay,
+  thanhTienChiTietBanHang,
+} from '../../../../utils/banHangChiTietTien'
+import { tinhSoLuongChiTietTuKichThuocVaVthh } from '../../../../utils/banHangChiTietSoLuongKichThuoc'
 import {
   buildDvtOptionsForVthh,
   chiTietToLines,
-  computeDonHangMuaFooterTotals,
-  formatDonHangLineThanhTienDisplay,
-  formatDonHangLineTienThueDisplay,
-  formatDonHangLineTongTienDisplay,
   parsePctThueGtgtFromLine,
   type DonHangMuaGridLineRow,
 } from '../../../../utils/donHangMuaCalculations'
 import {
   BAO_GIA_COL_TEN_SPHH,
+  getBanHangB1TtAdjustment,
   getDonGiaBanBaoGiaLine,
   migrateBaoGiaLinesToCoDonGia,
   enrichBaoGiaGridLinesWithVthh,
 } from '../../../../utils/baoGiaDonGiaBan'
+import { vthhMachinhFromAnyVariantMa } from '../../../../utils/vthhVariantMa'
 import {
+  BAO_GIA_MODULE_ID,
   baoGiaGetAll,
   baoGiaGetChiTiet,
   getDefaultBaoGiaFilter,
@@ -120,6 +128,11 @@ import { useBaoGiaApi } from './baoGiaApiContext'
 import { setUnsavedChanges } from '../../../../context/unsavedChanges'
 import { Modal } from '../../../../components/common/modal'
 import { useToastOptional } from '../../../../context/toastContext'
+import {
+  htqlRecordEditLockAcquire,
+  htqlRecordEditLockHeartbeat,
+  htqlRecordEditLockRelease,
+} from '../../../../utils/htqlRecordEditLockApi'
 import { HTQL_FORM_ERROR_BORDER, htqlFocusAndScrollIntoView } from '../../../../utils/formValidationFocus'
 import { preserveTimeWhenCalendarDayChanges } from '../../../../utils/reactDatepickerPreserveTime'
 import { ThemDieuKhoanThanhToanModal } from '../../shared/themDieuKhoanThanhToanModal'
@@ -159,6 +172,27 @@ const apiNvthhPopup: NhanVatTuHangHoaApi = {
   getDraft: getNhanVatTuHangHoaDraft,
   setDraft: setNhanVatTuHangHoaDraft,
   clearDraft: clearNhanVatTuHangHoaDraft,
+}
+
+function filterBaoGiaVthhOptions(raw: VatTuHangHoaRecord[]): VatTuHangHoaRecord[] {
+  const groups = new Map<string, VatTuHangHoaRecord[]>()
+  for (const item of raw) {
+    const root = vthhMachinhFromAnyVariantMa(item.ma ?? '')
+    const arr = groups.get(root) ?? []
+    arr.push(item)
+    groups.set(root, arr)
+  }
+  const out: VatTuHangHoaRecord[] = []
+  for (const arr of groups.values()) {
+    if (arr.length <= 1) {
+      out.push(arr[0]!)
+      continue
+    }
+    const phu = arr.filter((x) => /_PB\d+/i.test(String(x.ma ?? '')))
+    if (phu.length > 0) out.push(...phu)
+    else out.push(...arr)
+  }
+  return out
 }
 
 registerLocale('vi', vi)
@@ -719,7 +753,7 @@ function deriveApDungVatGtgtTuBanGhi(r: BaoGiaRecord | Partial<BaoGiaRecord> | n
 
 /** [YC37] Một dòng trống theo mẫu — Lượng mặc định 1. */
 function createEmptyBaoGiaLine(mau: 'codongia' | 'khongdongia'): BaoGiaGridLineRow {
-  const cols = mau === 'codongia' ? [...mauBgCoDonGiaDisplay] : [...mauBgKhongDonGiaDisplay]
+  const cols = insertVariantColumns(mau === 'codongia' ? [...mauBgCoDonGiaDisplay] : [...mauBgKhongDonGiaDisplay])
   const acc: Record<string, string> = {}
   for (const c of cols) {
     if (c === 'Lượng') acc[c] = '1'
@@ -739,6 +773,8 @@ function chiTietToBaoGiaLines(ct: BaoGiaChiTiet[]): BaoGiaGridLineRow[] {
     delete row['Tên VTHH']
     delete row['ĐG mua']
     row[BAO_GIA_COL_TEN_SPHH] = ten
+    row['Độ dày/ ĐL'] = ''
+    row['Khổ giấy'] = ''
     row['Nội dung'] = (c as BaoGiaChiTiet).noi_dung ?? ''
     row['Đơn giá'] = dg
     if (c) {
@@ -752,6 +788,20 @@ function chiTietToBaoGiaLines(ct: BaoGiaChiTiet[]): BaoGiaGridLineRow[] {
     }
     return row as unknown as BaoGiaGridLineRow
   })
+}
+
+function insertVariantColumns(cols: readonly string[]): readonly string[] {
+  const out = [...cols]
+  if (out.includes('Độ dày/ ĐL') && out.includes('Khổ giấy')) return out
+  const oldIdx = out.indexOf('Độ dày')
+  if (oldIdx >= 0) out.splice(oldIdx, 1)
+  const idxNoiDung = out.indexOf('Nội dung')
+  if (idxNoiDung >= 0) {
+    out.splice(idxNoiDung, 0, 'Độ dày/ ĐL', 'Khổ giấy')
+    return out
+  }
+  out.push('Độ dày/ ĐL', 'Khổ giấy')
+  return out
 }
 
 /**
@@ -810,10 +860,67 @@ function dvtHienThiLabel(
   return d ? (d.ky_hieu || d.ten_dvt || d.ma_dvt) : v
 }
 
+function buildDoDayOptionsForVthh(vthh?: VatTuHangHoaRecord | null): string[] | null {
+  if (!vthh) return null
+  const set = new Set<string>()
+  const push = (raw?: string | null) => {
+    const parts = String(raw ?? '')
+      .split(/[;,]/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+    parts.forEach((v) => set.add(v))
+  }
+  push(vthh.do_day)
+  push(vthh.dinh_luong)
+  const matrix = Array.isArray(vthh.pricing_matrix) ? vthh.pricing_matrix : []
+  matrix.forEach((row) => {
+    push(row.do_day)
+    push(row.dinh_luong)
+  })
+  const out = Array.from(set)
+  return out.length > 0 ? out : null
+}
+
+function readKhoGiayChieuDaiByTenForBaoGia(): Record<string, number> {
+  const daiByTen: Record<string, number> = {}
+  readVthhKhoGiayCustomFromStorage().forEach((item) => {
+    const ten = String(item.ten ?? '').trim()
+    if (!ten) return
+    const d = parseDecimalFlex(String(item.chieu_dai_m ?? '').trim())
+    if (Number.isFinite(d) && d > 0) daiByTen[ten] = d
+  })
+  return daiByTen
+}
+
+function buildKhoGiayOptionsForVthh(vthh?: VatTuHangHoaRecord | null): string[] | null {
+  if (!vthh) return null
+  const daiByTen = readKhoGiayChieuDaiByTenForBaoGia()
+  const set = new Set<string>()
+  const matrix = Array.isArray(vthh.pricing_matrix) ? vthh.pricing_matrix : []
+  matrix.forEach((row) => {
+    const ten = String(row.kho_giay ?? '').trim()
+    if (!ten) return
+    if (/đặc biệt|dac biet/i.test(ten)) return
+    if (!(daiByTen[ten] > 0)) return
+    set.add(ten)
+  })
+  const out = Array.from(set)
+  return out.length > 0 ? out : null
+}
+
+function donGiaContextFromBaoGiaLine(row: BaoGiaGridLineRow) {
+  const doDay = (row['Độ dày/ ĐL'] ?? '').trim()
+  const khoGiay = (row['Khổ giấy'] ?? '').trim()
+  if (!doDay && !khoGiay) return undefined
+  return { doDay, dinhLuong: doDay, khoGiay }
+}
+
 /** Độ rộng cột cố định (rule mau_gia: STT, Mã, Tên, ĐVT, Kích thước, Số lượng giữ nguyên khi chuyển mẫu). */
 const COL_WIDTH_STT = 36
 const COL_WIDTH_MA = 88
 const COL_WIDTH_TEN = 280
+const COL_WIDTH_DO_DAY = 92
+const COL_WIDTH_KHO_GIAY = 104
 const COL_WIDTH_NOI_DUNG = 140
 const COL_WIDTH_DVT = 76
 const COL_WIDTH_CHIEU_DAI = 68
@@ -827,6 +934,8 @@ const OFFSET_TRAI_COT_MA_SPHH = COL_WIDTH_ACTION + COL_WIDTH_STT + 5
 function colWidthStyle(col: string, ghiChuFill?: boolean): React.CSSProperties {
   if (col === 'Mã') return { width: COL_WIDTH_MA, minWidth: COL_WIDTH_MA, maxWidth: COL_WIDTH_MA }
   if (col === BAO_GIA_COL_TEN_SPHH) return { width: COL_WIDTH_TEN, minWidth: COL_WIDTH_TEN, maxWidth: COL_WIDTH_TEN }
+  if (col === 'Độ dày/ ĐL') return { width: COL_WIDTH_DO_DAY, minWidth: COL_WIDTH_DO_DAY, maxWidth: COL_WIDTH_DO_DAY }
+  if (col === 'Khổ giấy') return { width: COL_WIDTH_KHO_GIAY, minWidth: COL_WIDTH_KHO_GIAY, maxWidth: COL_WIDTH_KHO_GIAY }
   if (col === 'Nội dung') return { width: COL_WIDTH_NOI_DUNG, minWidth: COL_WIDTH_NOI_DUNG, maxWidth: COL_WIDTH_NOI_DUNG }
   if (col === 'ĐVT') return { width: COL_WIDTH_DVT, minWidth: COL_WIDTH_DVT, maxWidth: COL_WIDTH_DVT }
   if (col === 'mD') return { width: COL_WIDTH_CHIEU_DAI, minWidth: COL_WIDTH_CHIEU_DAI, maxWidth: COL_WIDTH_CHIEU_DAI }
@@ -847,7 +956,7 @@ const STICKY_Z_TH_TOP = 5
 const STICKY_Z_TH_CORNER = 6
 const STICKY_Z_TD_LEFT = 4
 
-type StickyTraiKind = 'action' | 'stt' | 'ma' | 'ten' | 'noi_dung' | 'dvt'
+type StickyTraiKind = 'action' | 'stt' | 'ma' | 'ten' | 'do_day' | 'kho_giay' | 'noi_dung' | 'dvt'
 
 function gridStickyTraiPx(kind: StickyTraiKind): number {
   switch (kind) {
@@ -859,16 +968,22 @@ function gridStickyTraiPx(kind: StickyTraiKind): number {
       return COL_WIDTH_ACTION + COL_WIDTH_STT
     case 'ten':
       return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA
-    case 'noi_dung':
+    case 'do_day':
       return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN
+    case 'kho_giay':
+      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_DO_DAY
+    case 'noi_dung':
+      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_DO_DAY + COL_WIDTH_KHO_GIAY
     case 'dvt':
-      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_NOI_DUNG
+      return COL_WIDTH_ACTION + COL_WIDTH_STT + COL_WIDTH_MA + COL_WIDTH_TEN + COL_WIDTH_DO_DAY + COL_WIDTH_KHO_GIAY + COL_WIDTH_NOI_DUNG
   }
 }
 
 function cotChiTietLaCotTraiCoDinh(col: string): StickyTraiKind | null {
   if (col === 'Mã') return 'ma'
   if (col === BAO_GIA_COL_TEN_SPHH) return 'ten'
+  if (col === 'Độ dày/ ĐL') return 'do_day'
+  if (col === 'Khổ giấy') return 'kho_giay'
   if (col === 'Nội dung') return 'noi_dung'
   if (col === 'ĐVT') return 'dvt'
   return null
@@ -952,6 +1067,17 @@ function chiTietNumericInputStyle(col: string): React.CSSProperties {
 
 function chiTietNumericThTdStyle(col: string): React.CSSProperties {
   return CHI_TIET_COLS_NUMERIC.has(col) ? { textAlign: 'right' as const } : {}
+}
+
+/** SL thực &lt; 1: ô không focus hiển thị làm tròn «1»; lookup giá và thành tiền vẫn dùng SL lưu trong state. */
+function soLuongBaoGiaCellHienThi(raw: string | undefined, focused: boolean): string {
+  if (focused) return raw ?? ''
+  const t = (raw ?? '').trim()
+  if (t === '') return ''
+  const n = parseFloatVN(t)
+  if (!Number.isFinite(n) || n <= 0) return raw ?? ''
+  if (n < 1) return formatSoTienHienThi(1)
+  return raw ?? ''
 }
 
 const titleBarWrap: React.CSSProperties = {
@@ -1077,8 +1203,91 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
       initialDon.tinh_trang === TINH_TRANG_NVTHH_DA_NHAP_KHO)
   const donHuyBoChiXem = initialDon != null && initialDon.tinh_trang === 'Hủy bỏ'
   const khoaSauTaoGd = initialDon != null && baoGiaBiKhoaChinhSuaTheoTinhTrang(initialDon.tinh_trang ?? '')
+  /** Khóa chỉnh sửa đa máy (MySQL) — một tab giữ lock; máy khác / tab khác chỉ xem. */
+  const editLockHeldRef = useRef(false)
+  const editLockTokenRef = useRef<string | null>(null)
+  const recordIdForLockRef = useRef<string | null>(null)
+  if (initialDon?.id) recordIdForLockRef.current = initialDon.id
+  const [editLockDeniedOnOpen, setEditLockDeniedOnOpen] = useState(false)
+  const [editLockRevoked, setEditLockRevoked] = useState(false)
+  const [editLockHeartbeatOn, setEditLockHeartbeatOn] = useState(false)
+
   const effectiveReadOnly =
-    (readOnly && !editingFromView) || donDaNhanHangXem || donHuyBoChiXem || viewOnlyLocked || khoaSauTaoGd
+    (readOnly && !editingFromView) ||
+    donDaNhanHangXem ||
+    donHuyBoChiXem ||
+    viewOnlyLocked ||
+    khoaSauTaoGd ||
+    editLockDeniedOnOpen ||
+    editLockRevoked
+
+  useEffect(() => {
+    return () => {
+      const t = editLockTokenRef.current
+      const held = editLockHeldRef.current
+      const rid = recordIdForLockRef.current
+      editLockHeldRef.current = false
+      editLockTokenRef.current = null
+      if (held && t && rid) void htqlRecordEditLockRelease(BAO_GIA_MODULE_ID, rid, t)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!initialDon || readOnly || khoaSauTaoGd) return
+    let cancelled = false
+    const recordId = initialDon.id
+    const token =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `lk${Date.now()}-${Math.random().toString(16).slice(2)}`
+    editLockTokenRef.current = token
+    setEditLockDeniedOnOpen(false)
+    setEditLockRevoked(false)
+    setEditLockHeartbeatOn(false)
+    ;(async () => {
+      try {
+        const r = await htqlRecordEditLockAcquire(BAO_GIA_MODULE_ID, recordId, token)
+        if (cancelled) {
+          if (r.ok) void htqlRecordEditLockRelease(BAO_GIA_MODULE_ID, recordId, token)
+          return
+        }
+        if (!r.ok) {
+          editLockTokenRef.current = null
+          setEditLockDeniedOnOpen(true)
+          return
+        }
+        editLockHeldRef.current = true
+        setEditLockHeartbeatOn(true)
+      } catch {
+        if (!cancelled) {
+          editLockTokenRef.current = null
+          setEditLockDeniedOnOpen(true)
+          toastApi?.showToast('Không lấy được khóa chỉnh sửa — chỉ xem.', 'error')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [initialDon?.id, readOnly, khoaSauTaoGd])
+
+  useEffect(() => {
+    if (!editLockHeartbeatOn || !initialDon?.id) return
+    const id = initialDon.id
+    const tick = () => {
+      const tok = editLockTokenRef.current
+      if (!tok) return
+      void htqlRecordEditLockHeartbeat(BAO_GIA_MODULE_ID, id, tok).then((ok) => {
+        if (!ok) {
+          setEditLockRevoked(true)
+          setEditLockHeartbeatOn(false)
+          toastApi?.showToast('Đã mất quyền sửa (bản ghi được mở ở nơi khác).', 'info')
+        }
+      })
+    }
+    const iv = setInterval(tick, 45_000)
+    return () => clearInterval(iv)
+  }, [editLockHeartbeatOn, initialDon?.id])
   /** Chi tiết VTHH chỉ đọc khi form ở chế độ xem (readOnly). */
   const chiTietReadOnly = effectiveReadOnly
   /** Phiếu nhận từ BG: không thêm/xóa dòng; chỉ sửa cột Số lượng — trừ khi «Thêm mới» từ danh sách (không prefill BG). */
@@ -1280,6 +1489,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     }
     return []
   })
+  const [baoGiaSlFocusIdx, setBaoGiaSlFocusIdx] = useState<number | null>(null)
   const dcnhLineCount = useMemo(() => Math.max(1, splitDiaChiNhanHangLines(diaChiNhanHangJoined).length), [diaChiNhanHangJoined])
   useEffect(() => {
     const maxIdx = dcnhLineCount - 1
@@ -1465,6 +1675,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   const refBGChiTietSection = useRef<HTMLDivElement>(null)
   const refChiTietGridScroll = useRef<HTMLDivElement>(null)
   const scrollChiTietSauThemDongRef = useRef(false)
+  /** Danh sách ĐVT tải xong lần đầu — tính lại SL từ kích thước (trước đó `dvtLaMetVuong` có thể thất bại). */
+  const dvtHydratedForSoLuongRef = useRef(false)
 
   // [BaoGia] Bỏ logic đối chiếu đơn mua - không áp dụng cho Báo giá thông thường
   // const [selectedDoiChieuDonMuaId, setSelectedDoiChieuDonMuaId] = useState<string | null>(null)
@@ -1984,7 +2196,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   useEffect(() => {
     let cancelled = false
     vatTuHangHoaGetForBanHang().then((data) => {
-      if (!cancelled && Array.isArray(data)) setVatTuList(data)
+      if (!cancelled && Array.isArray(data)) setVatTuList(filterBaoGiaVthhOptions(data))
     })
     return () => { cancelled = true }
   }, [])
@@ -2097,7 +2309,28 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     setLines((prev) =>
       prev.map((l) => {
         const v = vatTuList.find((vt) => vt.ma === (l['Mã'] ?? '').trim())
-        return { ...l, _vthh: v, _dvtOptions: v ? buildDvtOptionsForVthh(v) : undefined } as typeof prev[0]
+        const doDayOpts = v ? buildDoDayOptionsForVthh(v) : null
+        const curDoDay = (l['Độ dày/ ĐL'] ?? '').trim()
+        const curKhoGiay = (l['Khổ giấy'] ?? '').trim()
+        const normalizedDoDay =
+          doDayOpts && doDayOpts.length > 0
+            ? (doDayOpts.includes(curDoDay) ? curDoDay : doDayOpts[0])
+            : (curDoDay.split(/[;,]/).map((x) => x.trim()).find(Boolean) ?? '')
+        const khoGiayOpts = v ? buildKhoGiayOptionsForVthh(v) : null
+        const normalizedKhoGiay =
+          khoGiayOpts && khoGiayOpts.length > 0
+            ? (khoGiayOpts.includes(curKhoGiay) ? curKhoGiay : khoGiayOpts[0])
+            : ''
+        const next = {
+          ...l,
+          _vthh: v,
+          _dvtOptions: v ? buildDvtOptionsForVthh(v) : undefined,
+          _doDayOptions: doDayOpts ?? undefined,
+          _khoGiayOptions: khoGiayOpts ?? undefined,
+          'Độ dày/ ĐL': normalizedDoDay,
+          'Khổ giấy': normalizedKhoGiay,
+        } as unknown as typeof prev[0]
+        return next
       })
     )
   }, [editingFromView, vatTuList])
@@ -2120,30 +2353,92 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
   //   setLines((prev) => enrichBaoGiaGridLinesWithVthh(prev, vatTuList))
   // }, [selectedDoiChieuDonMuaId, vatTuList.length, lines.length])
 
-  /** [YC30] Tính Số lượng từ Kích thước nếu VTHH có công thức */
-  const calculateSoLuongFromKichThuoc = (line: BaoGiaGridLineRow): string => {
-    const dvtRaw = (line['ĐVT'] ?? '').trim()
-    if (!dvtLaMetVuong(dvtRaw, dvtList)) return line['Số lượng'] ?? ''
-    const vthh = line._vthh
-    if (!vthh?.cong_thuc_tinh_so_luong) return line['Số lượng'] ?? ''
-    const formula = vthh.cong_thuc_tinh_so_luong.toLowerCase()
-    if (!formula.includes('dài') || !formula.includes('rộng') || !formula.includes('lượng')) {
-      return line['Số lượng'] ?? ''
-    }
-    const dai = parseFloatVN(line['mD'] ?? '') || 0
-    const rong = parseFloatVN(line['mR'] ?? '') || 0
-    const luong = parseFloatVN(line['Lượng'] ?? '1') || 1
-    const result = dai * rong * luong
-    return result > 0 ? formatSoTienHienThi(result) : ''
-  }
+  /** [YC30] Số lượng từ kích thước — dùng chung `tinhSoLuongChiTietTuKichThuocVaVthh` (mD/rộng/Lượng + công thức VTHH). */
+  const calculateSoLuongFromKichThuoc = (line: BaoGiaGridLineRow): string =>
+    tinhSoLuongChiTietTuKichThuocVaVthh(line, dvtList)
 
   /** Sau khi đổi Số lượng (trực tiếp hoặc qua kích thước): áp lại đơn giá theo bậc giá + ĐVT. */
   const syncDonGiaTheoBacVaSl = (row: BaoGiaGridLineRow): BaoGiaGridLineRow => {
     if (!row._vthh || !(initialDon != null || mauHienTai === 'codongia')) return row
     const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
     const dvt = (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? '')
-    return { ...row, 'Đơn giá': getDonGiaBanBaoGiaLine(row._vthh, dvt, sl) } as unknown as BaoGiaGridLineRow
+    const ctx = donGiaContextFromBaoGiaLine(row)
+    const next = {
+      ...row,
+      'Đơn giá': getDonGiaBanBaoGiaLine(row._vthh, dvt, sl, ctx),
+    } as unknown as BaoGiaGridLineRow
+    const minB1 = getBanHangB1TtAdjustment(row._vthh, sl, ctx)
+    if (minB1.ap_dung) {
+      next['ĐVT'] = minB1.dvt_goi_y
+      /** SL lưu giữ giá trị thực (vd. 0,5) để dò bậc giá; ô hiển thị làm tròn khi SL &lt; 1; ĐG TT theo SL thực. */
+      next['Đơn giá'] = getDonGiaBanBaoGiaLine(row._vthh, minB1.dvt_goi_y, sl, ctx)
+      const note = (next['Ghi chú'] ?? '').trim()
+      if (!note.toLowerCase().includes('áp dụng đơn giá tối thiểu')) {
+        next['Ghi chú'] = note ? `${note}; ${minB1.ghi_chu}` : minB1.ghi_chu
+      }
+    }
+    return next
   }
+
+  /** Ref mới nhất — debounce đồng giá không làm chật `setLines` khi gõ kích thước. */
+  const syncDonGiaTheoBacVaSlRef = useRef(syncDonGiaTheoBacVaSl)
+  syncDonGiaTheoBacVaSlRef.current = syncDonGiaTheoBacVaSl
+
+  /** Timer id (browser `number`; tránh xung đột `@types/node` Timeout). */
+  const syncDonGiaRowTimersRef = useRef<Map<number, number>>(new Map())
+  const BG_SYNC_DG_DEBOUNCE_MS = 90
+
+  const cancelSyncDonGiaDebounce = useCallback((rowIndex: number) => {
+    const map = syncDonGiaRowTimersRef.current
+    const existing = map.get(rowIndex)
+    if (existing != null) {
+      window.clearTimeout(existing)
+      map.delete(rowIndex)
+    }
+  }, [])
+
+  const scheduleSyncDonGiaForRow = useCallback((rowIndex: number) => {
+    const map = syncDonGiaRowTimersRef.current
+    const existing = map.get(rowIndex)
+    if (existing != null) window.clearTimeout(existing)
+    const tid = window.setTimeout(() => {
+      map.delete(rowIndex)
+      setLines((prevLines) => {
+        if (rowIndex < 0 || rowIndex >= prevLines.length) return prevLines
+        const synced = syncDonGiaTheoBacVaSlRef.current(prevLines[rowIndex] as BaoGiaGridLineRow)
+        const next = [...prevLines]
+        next[rowIndex] = synced
+        return next
+      })
+    }, BG_SYNC_DG_DEBOUNCE_MS)
+    map.set(rowIndex, tid)
+  }, [])
+
+  useEffect(
+    () => () => {
+      syncDonGiaRowTimersRef.current.forEach((t) => window.clearTimeout(t))
+      syncDonGiaRowTimersRef.current.clear()
+    },
+    [],
+  )
+
+  /** Khi API ĐVT vừa sẵn sàng: tính lại Số lượng từ mD/mR/Lượng (lúc trước thiếu `dvtList` nên không nhận m²). */
+  useEffect(() => {
+    if (dvtList.length === 0 || dvtHydratedForSoLuongRef.current) return
+    dvtHydratedForSoLuongRef.current = true
+    setLines((prev) => {
+      let changed = false
+      const out = prev.map((line) => {
+        const row = line as BaoGiaGridLineRow
+        if (!row._vthh?.cong_thuc_tinh_so_luong?.trim()) return line
+        const slNew = tinhSoLuongChiTietTuKichThuocVaVthh(row, dvtList)
+        if ((row['Số lượng'] ?? '') === slNew) return line
+        changed = true
+        return syncDonGiaTheoBacVaSl({ ...row, 'Số lượng': slNew } as unknown as BaoGiaGridLineRow)
+      })
+      return changed ? out : prev
+    })
+  }, [dvtList])
 
   const handleChonVthh = (vthh: VatTuHangHoaRecord, rowIndex: number) => {
     const next = [...lines]
@@ -2151,19 +2446,28 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     const row = { ...next[rowIndex] } as Record<string, string> & { _dvtOptions?: string[]; _vthh?: VatTuHangHoaRecord }
     row['Mã'] = vthh.ma
     row[BAO_GIA_COL_TEN_SPHH] = vthh.ten ?? ''
+    row['Độ dày/ ĐL'] = ((vthh.do_day ?? vthh.dinh_luong ?? '').trim().split(/[;,]/).map((x) => x.trim()).find(Boolean)) ?? ''
+    row['Khổ giấy'] = ''
     row['ĐVT'] = vthh.dvt_chinh ?? ''
     row._vthh = vthh
+    const doDayOpts = buildDoDayOptionsForVthh(vthh)
+    ;(row as BaoGiaGridLineRow & { _doDayOptions?: string[] })._doDayOptions = doDayOpts ?? undefined
+    if (doDayOpts && doDayOpts.length > 0) row['Độ dày/ ĐL'] = doDayOpts[0]
+    const khoGiayOpts = buildKhoGiayOptionsForVthh(vthh)
+    ;(row as BaoGiaGridLineRow & { _khoGiayOptions?: string[] })._khoGiayOptions = khoGiayOpts ?? undefined
+    if (khoGiayOpts && khoGiayOpts.length > 0) row['Khổ giấy'] = khoGiayOpts[0]
     const isCodongia = initialDon != null || mauHienTai === 'codongia'
     if (isCodongia) {
       if (apDungVatGtgt) row['% thuế GTGT'] = vthh.thue_suat_gtgt ?? ''
       else row['% thuế GTGT'] = ''
-      const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
-      row['Đơn giá'] = getDonGiaBanBaoGiaLine(vthh, (row['ĐVT'] ?? '').trim() || (vthh.dvt_chinh ?? ''), sl)
     }
+    let rowBg = row as BaoGiaGridLineRow
+    rowBg['Số lượng'] = calculateSoLuongFromKichThuoc(rowBg)
+    rowBg = syncDonGiaTheoBacVaSl(rowBg)
     const opts = buildDvtOptionsForVthh(vthh)
-    if (opts) row._dvtOptions = opts
-    else delete row._dvtOptions
-    next[rowIndex] = row
+    if (opts) rowBg._dvtOptions = opts
+    else delete rowBg._dvtOptions
+    next[rowIndex] = rowBg
     setLines(next)
     setVthhDropdownRowIndex(null)
     setVthhDropdownRect(null)
@@ -2173,7 +2477,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     const coBang =
       initialDon != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0) || mauHienTai === 'codongia'
     const apVat = coBang && apDungVatGtgt
-    const { tongTienHang, tienThue: tienThueRaw } = computeDonHangMuaFooterTotals(lines, { apDungVatGtgt: apVat })
+    const { tongTienHang, tienThue: tienThueRaw } = computeBanHangChiTietFooterTotals(lines, { apDungVatGtgt: apVat })
     const tienThue = apVat ? tienThueRaw : 0
     const tienCkTinh = Math.max(0, parseFloatVN(tienCkInput || '0'))
     const ttTongThanhToan = tongTienHang + tienThue - tienCkTinh
@@ -2187,7 +2491,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
       .map((line) => {
         const donGia = isCodongia ? parseFloatVN(line['Đơn giá'] ?? '') : 0
         const soLuong = Math.max(0, parseFloatVN(line['Số lượng'] ?? ''))
-        const thanhTien = isCodongia ? donGia * soLuong : 0
+        const thanhTien = isCodongia ? thanhTienChiTietBanHang(donGia, soLuong) : 0
         const pt = isCodongia && apVat ? parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '') : null
         const tienThueLine = pt != null ? (thanhTien * pt) / 100 : 0
         giaTriDonHang += thanhTien + (apVat ? tienThueLine : 0)
@@ -2393,7 +2697,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
       }
       const payload = buildPayload()
       if (initialDon) {
-        api.put(initialDon.id, payload)
+        await api.put(initialDon.id, payload)
       } else {
         await api.post(payload)
       }
@@ -2433,12 +2737,12 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
     initialDon != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0)
   const hienThiFooterTongTien = coBangCoDonGiaTuDau || mauHienTai === 'codongia'
   const currentColumns = useMemo((): readonly string[] => {
-    if (!hienThiFooterTongTien) return mauBgKhongDonGiaDisplay as readonly string[]
-    return (apDungVatGtgt ? mauBgCoDonGiaDisplay : mauBgCoDonGiaKhongVatDisplay) as readonly string[]
+    if (!hienThiFooterTongTien) return insertVariantColumns(mauBgKhongDonGiaDisplay as readonly string[])
+    return insertVariantColumns((apDungVatGtgt ? mauBgCoDonGiaDisplay : mauBgCoDonGiaKhongVatDisplay) as readonly string[])
   }, [hienThiFooterTongTien, apDungVatGtgt])
   const { tongTienHang, tienThue } = useMemo(
     () =>
-      computeDonHangMuaFooterTotals(lines, {
+      computeBanHangChiTietFooterTotals(lines, {
         apDungVatGtgt: hienThiFooterTongTien ? apDungVatGtgt : true,
       }),
     [lines, apDungVatGtgt, hienThiFooterTongTien],
@@ -2545,10 +2849,51 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
           </button>
         </div>
       </div>
+      {(editLockDeniedOnOpen || editLockRevoked) && initialDon && (
+        <div style={hintBar} role="status">
+          {editLockRevoked
+            ? 'Đã chuyển sang chỉ xem — bản ghi có thể đang được sửa ở máy khác.'
+            : 'Báo giá đang được mở để sửa ở máy khác — chỉ xem (hoặc đợi họ đóng form).'}
+        </div>
+      )}
       <div style={toolbarWrap}>
-        {readOnly && effectiveReadOnly && !donDaNhanHangXem && !donHuyBoChiXem && !viewOnlyLocked && !khoaSauTaoGd && (
-          <button type="button" style={toolbarBtnAccent} onClick={() => setEditingFromView(true)}><Pencil size={14} /> Sửa</button>
-        )}
+        {readOnly &&
+          effectiveReadOnly &&
+          !donDaNhanHangXem &&
+          !donHuyBoChiXem &&
+          !viewOnlyLocked &&
+          !khoaSauTaoGd &&
+          !editLockDeniedOnOpen &&
+          !editLockRevoked && (
+            <button
+              type="button"
+              style={toolbarBtnAccent}
+              onClick={async () => {
+                if (!initialDon) return
+                const token =
+                  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                    ? crypto.randomUUID()
+                    : `lk${Date.now()}-${Math.random().toString(16).slice(2)}`
+                editLockTokenRef.current = token
+                try {
+                  const r = await htqlRecordEditLockAcquire(BAO_GIA_MODULE_ID, initialDon.id, token)
+                  if (!r.ok) {
+                    editLockTokenRef.current = null
+                    toastApi?.showToast('Báo giá đang được sửa ở máy khác — chỉ xem.', 'info')
+                    return
+                  }
+                  editLockHeldRef.current = true
+                  setEditLockHeartbeatOn(true)
+                  setEditingFromView(true)
+                } catch (e) {
+                  editLockTokenRef.current = null
+                  toastApi?.showToast(e instanceof Error ? e.message : 'Không lấy được khóa sửa.', 'error')
+                }
+              }}
+            >
+              <Pencil size={14} /> Sửa
+            </button>
+          )}
         {!effectiveReadOnly && (
           <button type="button" style={toolbarBtnAccent} onClick={handleLuuVaDong} disabled={dangLuu}><Save size={14} /> {dangLuu ? 'Đang lưu...' : 'Lưu'}</button>
         )}
@@ -4329,9 +4674,10 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                   </tr>
                   {/* [YC32] Hàng 2: 3 cột con của Kích thước */}
                   <tr>
-                    {['mD', 'mR', 'Lượng'].map((subCol) => (
+                    {(['mD', 'mR', 'Lượng'] as const).map((subCol) => (
                       <th
                         key={subCol}
+                        title={subCol === 'mD' ? 'Chiều dài (m)' : subCol === 'mR' ? 'Chiều rộng (m)' : 'Lượng'}
                         style={{
                           ...gridThStyle,
                           ...mergeThStickyChiTop(),
@@ -4412,12 +4758,14 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                   col === 'ĐVT'
                                     ? dvtHienThiLabel(line['ĐVT'], dvtList)
                                     : col === 'Thành tiền'
-                                      ? formatDonHangLineThanhTienDisplay(line)
+                                      ? formatBanHangChiTietThanhTienDisplay(line)
                                       : col === 'Tiền thuế GTGT'
-                                        ? formatDonHangLineTienThueDisplay(line)
+                                        ? formatBanHangChiTietTienThueDisplay(line)
                                         : col === 'Tổng tiền'
-                                          ? formatDonHangLineTongTienDisplay(line)
-                                          : (line[col] ?? '')
+                                          ? formatBanHangChiTietTongTienDisplay(line)
+                                          : col === 'Số lượng'
+                                            ? soLuongBaoGiaCellHienThi(line[col], false)
+                                            : (line[col] ?? '')
                                 }
                               />
                             ) : col === 'Mã' ? (
@@ -4436,6 +4784,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                       ...prev,
                                       [col]: ma,
                                       [BAO_GIA_COL_TEN_SPHH]: cleared ? '' : (item ? item.ten : prev[BAO_GIA_COL_TEN_SPHH]),
+                                      'Độ dày/ ĐL': cleared ? '' : (item ? (item.do_day ?? item.dinh_luong ?? '').trim() : prev['Độ dày/ ĐL']),
+                                      'Khổ giấy': cleared ? '' : prev['Khổ giấy'],
                                       'ĐVT': cleared ? '' : (item ? (item.dvt_chinh ?? '') : prev['ĐVT']),
                                     } as unknown as BaoGiaGridLineRow
                                     const isCodongia = initialDon != null || mauHienTai === 'codongia'
@@ -4451,11 +4801,21 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                       const opts = buildDvtOptionsForVthh(item)
                                       if (opts) nextRow._dvtOptions = opts
                                       else delete nextRow._dvtOptions
+                                      const doDayOpts = buildDoDayOptionsForVthh(item)
+                                      ;(nextRow as BaoGiaGridLineRow & { _doDayOptions?: string[] })._doDayOptions = doDayOpts ?? undefined
+                                      nextRow['Độ dày/ ĐL'] = doDayOpts && doDayOpts.length > 0 ? doDayOpts[0] : (((item.do_day ?? item.dinh_luong ?? '').trim().split(/[;,]/).map((x) => x.trim()).find(Boolean)) ?? '')
+                                      const khoGiayOpts = buildKhoGiayOptionsForVthh(item)
+                                      ;(nextRow as BaoGiaGridLineRow & { _khoGiayOptions?: string[] })._khoGiayOptions = khoGiayOpts ?? undefined
+                                      nextRow['Khổ giấy'] = khoGiayOpts && khoGiayOpts.length > 0 ? khoGiayOpts[0] : ''
                                       if (isCodongia) {
-                                        const sl = Math.max(0, parseFloatVN(nextRow['Số lượng'] ?? '')) || 1
-                                        nextRow['Đơn giá'] = getDonGiaBanBaoGiaLine(item, (nextRow['ĐVT'] ?? '').trim() || (item.dvt_chinh ?? ''), sl)
                                         nextRow['% thuế GTGT'] = apDungVatGtgt ? (item.thue_suat_gtgt ?? '') : ''
                                       }
+                                      let nr = nextRow as BaoGiaGridLineRow
+                                      nr['Số lượng'] = calculateSoLuongFromKichThuoc(nr)
+                                      nr = syncDonGiaTheoBacVaSl(nr)
+                                      r[idx] = nr
+                                      setLines(r)
+                                      return
                                     }
                                     r[idx] = nextRow
                                     setLines(r)
@@ -4498,6 +4858,88 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                               </div>
                             ) : col === BAO_GIA_COL_TEN_SPHH ? (
                               <input readOnly tabIndex={-1} className="misa-input-solo" style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }} value={line[col] ?? ''} />
+                            ) : col === 'Độ dày/ ĐL' ? (
+                              (() => {
+                                const opts = (line as BaoGiaGridLineRow & { _doDayOptions?: string[] })._doDayOptions ?? []
+                                if (opts.length > 0) {
+                                  return (
+                                    <select
+                                      className="misa-input-solo"
+                                      style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: 'pointer' }}
+                                      value={line['Độ dày/ ĐL'] ?? ''}
+                                      onChange={(e) => {
+                                        const r = [...lines]
+                                        const row = { ...r[idx], 'Độ dày/ ĐL': e.target.value } as unknown as BaoGiaGridLineRow
+                                        if (row._vthh && (initialDon != null || mauHienTai === 'codongia')) {
+                                          const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
+                                          row['Đơn giá'] = getDonGiaBanBaoGiaLine(
+                                            row._vthh,
+                                            (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? ''),
+                                            sl,
+                                            donGiaContextFromBaoGiaLine(row),
+                                          )
+                                        }
+                                        r[idx] = row
+                                        setLines(r)
+                                      }}
+                                    >
+                                      {opts.map((op) => (
+                                        <option key={op} value={op}>{op}</option>
+                                      ))}
+                                    </select>
+                                  )
+                                }
+                                return (
+                                  <input
+                                    readOnly
+                                    tabIndex={-1}
+                                    className="misa-input-solo"
+                                    style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
+                                    value={line['Độ dày/ ĐL'] ?? ''}
+                                  />
+                                )
+                              })()
+                            ) : col === 'Khổ giấy' ? (
+                              (() => {
+                                const opts = (line as BaoGiaGridLineRow & { _khoGiayOptions?: string[] })._khoGiayOptions ?? []
+                                if (opts.length > 0) {
+                                  return (
+                                    <select
+                                      className="misa-input-solo"
+                                      style={{ ...inputStyle, width: '100%', minHeight: 22, height: 22, cursor: 'pointer' }}
+                                      value={line['Khổ giấy'] ?? ''}
+                                      onChange={(e) => {
+                                        const r = [...lines]
+                                        const row = { ...r[idx], 'Khổ giấy': e.target.value } as unknown as BaoGiaGridLineRow
+                                        if (row._vthh && (initialDon != null || mauHienTai === 'codongia')) {
+                                          const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
+                                          row['Đơn giá'] = getDonGiaBanBaoGiaLine(
+                                            row._vthh,
+                                            (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? ''),
+                                            sl,
+                                            donGiaContextFromBaoGiaLine(row),
+                                          )
+                                        }
+                                        r[idx] = row
+                                        setLines(r)
+                                      }}
+                                    >
+                                      {opts.map((op) => (
+                                        <option key={op} value={op}>{op}</option>
+                                      ))}
+                                    </select>
+                                  )
+                                }
+                                return (
+                                  <input
+                                    readOnly
+                                    tabIndex={-1}
+                                    className="misa-input-solo"
+                                    style={{ ...inputStyle, width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
+                                    value={line['Khổ giấy'] ?? ''}
+                                  />
+                                )
+                              })()
                             ) : col === 'Nội dung' ? (
                               <input
                                 className="misa-input-solo"
@@ -4530,7 +4972,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                         updates['Số lượng'] = calculateSoLuongFromKichThuoc(updates)
                                         if ((initialDon != null || mauHienTai === 'codongia') && row._vthh) {
                                           const sl = Math.max(0, parseFloatVN(updates['Số lượng'] ?? '')) || 1
-                                          updates['Đơn giá'] = getDonGiaBanBaoGiaLine(row._vthh, newDvt, sl)
+                                          updates['Đơn giá'] = getDonGiaBanBaoGiaLine(row._vthh, newDvt, sl, donGiaContextFromBaoGiaLine(updates))
                                         }
                                         r[idx] = updates
                                         setLines(r)
@@ -4554,26 +4996,41 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('mD'), width: '100%', boxSizing: 'border-box', border: '1px solid transparent', minHeight: 22, height: 22 }}
                                 value={line['mD'] ?? ''}
                                 onChange={(e) => {
-                                  const r = [...lines]
-                                  const raw = formatSoTien(normalizeKichThuocInput(e.target.value))
-                                  const updated = { ...r[idx], 'mD': raw } as unknown as BaoGiaGridLineRow
-                                  updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
-                                  r[idx] = syncDonGiaTheoBacVaSl(updated)
-                                  setLines(r)
+                                  setLines((prev) => {
+                                    const r = [...prev]
+                                    const raw = formatSoTien(normalizeKichThuocInput(e.target.value))
+                                    const updated = { ...r[idx], 'mD': raw } as unknown as BaoGiaGridLineRow
+                                    updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
+                                    r[idx] = updated
+                                    return r
+                                  })
+                                  scheduleSyncDonGiaForRow(idx)
                                 }}
                                 onBlur={() => {
-                                  const raw = (lines[idx]?.['mD'] ?? '').trim()
-                                  if (raw === '') return
-                                  const n = parseFloatVN(raw)
-                                  if (n <= 0) {
-                                    toastApi?.showToast('Chiều dài (mD) phải là số thực > 0.', 'info')
-                                    const r = [...lines]
-                                    let row = { ...r[idx], 'mD': '' } as unknown as BaoGiaGridLineRow
-                                    row['Số lượng'] = calculateSoLuongFromKichThuoc(row)
-                                    row = syncDonGiaTheoBacVaSl(row)
-                                    r[idx] = row
-                                    setLines(r)
-                                  }
+                                  cancelSyncDonGiaDebounce(idx)
+                                  setLines((prev) => {
+                                    const raw = (prev[idx]?.['mD'] ?? '').trim()
+                                    if (raw === '') {
+                                      const synced = syncDonGiaTheoBacVaSlRef.current(prev[idx] as BaoGiaGridLineRow)
+                                      const next = [...prev]
+                                      next[idx] = synced
+                                      return next
+                                    }
+                                    const n = parseFloatVN(raw)
+                                    if (n <= 0) {
+                                      toastApi?.showToast('Chiều dài (mD) phải là số thực > 0.', 'info')
+                                      let row = { ...prev[idx], 'mD': '' } as unknown as BaoGiaGridLineRow
+                                      row['Số lượng'] = calculateSoLuongFromKichThuoc(row)
+                                      row = syncDonGiaTheoBacVaSlRef.current(row)
+                                      const next = [...prev]
+                                      next[idx] = row
+                                      return next
+                                    }
+                                    const synced = syncDonGiaTheoBacVaSlRef.current(prev[idx] as BaoGiaGridLineRow)
+                                    const next = [...prev]
+                                    next[idx] = synced
+                                    return next
+                                  })
                                 }}
                                 disabled={chiTietReadOnly || chiTietGridLocked}
                               />
@@ -4585,26 +5042,41 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('mR'), width: '100%', boxSizing: 'border-box', border: '1px solid transparent', minHeight: 22, height: 22 }}
                                 value={line['mR'] ?? ''}
                                 onChange={(e) => {
-                                  const r = [...lines]
-                                  const raw = formatSoTien(normalizeKichThuocInput(e.target.value))
-                                  const updated = { ...r[idx], 'mR': raw } as unknown as BaoGiaGridLineRow
-                                  updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
-                                  r[idx] = syncDonGiaTheoBacVaSl(updated)
-                                  setLines(r)
+                                  setLines((prev) => {
+                                    const r = [...prev]
+                                    const raw = formatSoTien(normalizeKichThuocInput(e.target.value))
+                                    const updated = { ...r[idx], 'mR': raw } as unknown as BaoGiaGridLineRow
+                                    updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
+                                    r[idx] = updated
+                                    return r
+                                  })
+                                  scheduleSyncDonGiaForRow(idx)
                                 }}
                                 onBlur={() => {
-                                  const raw = (lines[idx]?.['mR'] ?? '').trim()
-                                  if (raw === '') return
-                                  const n = parseFloatVN(raw)
-                                  if (n <= 0) {
-                                    toastApi?.showToast('Chiều rộng (mR) phải là số thực > 0.', 'info')
-                                    const r = [...lines]
-                                    let row = { ...r[idx], 'mR': '' } as unknown as BaoGiaGridLineRow
-                                    row['Số lượng'] = calculateSoLuongFromKichThuoc(row)
-                                    row = syncDonGiaTheoBacVaSl(row)
-                                    r[idx] = row
-                                    setLines(r)
-                                  }
+                                  cancelSyncDonGiaDebounce(idx)
+                                  setLines((prev) => {
+                                    const raw = (prev[idx]?.['mR'] ?? '').trim()
+                                    if (raw === '') {
+                                      const synced = syncDonGiaTheoBacVaSlRef.current(prev[idx] as BaoGiaGridLineRow)
+                                      const next = [...prev]
+                                      next[idx] = synced
+                                      return next
+                                    }
+                                    const n = parseFloatVN(raw)
+                                    if (n <= 0) {
+                                      toastApi?.showToast('Chiều rộng (mR) phải là số thực > 0.', 'info')
+                                      let row = { ...prev[idx], 'mR': '' } as unknown as BaoGiaGridLineRow
+                                      row['Số lượng'] = calculateSoLuongFromKichThuoc(row)
+                                      row = syncDonGiaTheoBacVaSlRef.current(row)
+                                      const next = [...prev]
+                                      next[idx] = row
+                                      return next
+                                    }
+                                    const synced = syncDonGiaTheoBacVaSlRef.current(prev[idx] as BaoGiaGridLineRow)
+                                    const next = [...prev]
+                                    next[idx] = synced
+                                    return next
+                                  })
                                 }}
                                 disabled={chiTietReadOnly || chiTietGridLocked}
                               />
@@ -4616,21 +5088,28 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Lượng'), width: '100%', boxSizing: 'border-box', border: '1px solid transparent', minHeight: 22, height: 22 }}
                                 value={line['Lượng'] ?? '1'}
                                 onChange={(e) => {
-                                  const r = [...lines]
-                                  const updated = { ...r[idx], 'Lượng': formatSoNguyenInput(e.target.value) } as unknown as BaoGiaGridLineRow
-                                  updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
-                                  r[idx] = syncDonGiaTheoBacVaSl(updated)
-                                  setLines(r)
+                                  setLines((prev) => {
+                                    const r = [...prev]
+                                    const updated = { ...r[idx], 'Lượng': formatSoNguyenInput(e.target.value) } as unknown as BaoGiaGridLineRow
+                                    updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
+                                    r[idx] = updated
+                                    return r
+                                  })
+                                  scheduleSyncDonGiaForRow(idx)
                                 }}
                                 onBlur={() => {
-                                  const r = [...lines]
-                                  const raw = (r[idx]['Lượng'] ?? '').trim()
-                                  let n = parseInt(parseNumber(raw), 10)
-                                  if (!Number.isFinite(n) || n < 1) n = 1
-                                  const updated = { ...r[idx], 'Lượng': formatSoNguyenInput(String(n)) } as unknown as BaoGiaGridLineRow
-                                  updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
-                                  r[idx] = syncDonGiaTheoBacVaSl(updated)
-                                  setLines(r)
+                                  cancelSyncDonGiaDebounce(idx)
+                                  setLines((prev) => {
+                                    const raw = (prev[idx]['Lượng'] ?? '').trim()
+                                    let n = parseInt(parseNumber(raw), 10)
+                                    if (!Number.isFinite(n) || n < 1) n = 1
+                                    const updated = { ...prev[idx], 'Lượng': formatSoNguyenInput(String(n)) } as unknown as BaoGiaGridLineRow
+                                    updated['Số lượng'] = calculateSoLuongFromKichThuoc(updated)
+                                    const synced = syncDonGiaTheoBacVaSlRef.current(updated)
+                                    const next = [...prev]
+                                    next[idx] = synced
+                                    return next
+                                  })
                                 }}
                                 disabled={chiTietReadOnly || chiTietGridLocked}
                               />
@@ -4649,7 +5128,13 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                   minHeight: 22,
                                   height: 22,
                                 }}
-                                value={line[col] ?? ''}
+                                value={soLuongBaoGiaCellHienThi(
+                                  line[col],
+                                  !chiTietReadOnly && !chiTietGridLocked && baoGiaSlFocusIdx === idx,
+                                )}
+                                onFocus={() => {
+                                  if (!chiTietReadOnly && !chiTietGridLocked) setBaoGiaSlFocusIdx(idx)
+                                }}
                                 onChange={(e) => {
                                   const r = [...lines]
                                   const val = formatSoTuNhienInput(e.target.value)
@@ -4659,7 +5144,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                     row['Đơn giá'] = getDonGiaBanBaoGiaLine(
                                       row._vthh,
                                       (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? ''),
-                                      sl
+                                      sl,
+                                      donGiaContextFromBaoGiaLine(row),
                                     )
                                   }
                                   r[idx] = row
@@ -4667,7 +5153,8 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                   if (valErrKey === `so_luong_${idx}`) setValErrKey(null)
                                 }}
                                 onBlur={() => {
-                                  const raw = (line[col] ?? '').trim()
+                                  setBaoGiaSlFocusIdx(null)
+                                  const raw = (lines[idx]?.[col] ?? '').trim()
                                   if (raw === '') return
                                   const n = parseFloatVN(raw)
                                   const val = Number.isNaN(n) || n < 0 ? 0 : n
@@ -4697,7 +5184,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 tabIndex={-1}
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Thành tiền'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatDonHangLineThanhTienDisplay(line)}
+                                value={formatBanHangChiTietThanhTienDisplay(line)}
                               />
                             ) : col === BAN_HANG_COL_DCNH ? (
                               <select
@@ -4723,7 +5210,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 tabIndex={-1}
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Tiền thuế GTGT'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatDonHangLineTienThueDisplay(line)}
+                                value={formatBanHangChiTietTienThueDisplay(line)}
                               />
                             ) : col === 'Tổng tiền' ? (
                               <input
@@ -4731,7 +5218,7 @@ export function BaoGiaForm({ onClose, onSaved, onHeaderPointerDown, headerDragSt
                                 tabIndex={-1}
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Tổng tiền'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatDonHangLineTongTienDisplay(line)}
+                                value={formatBanHangChiTietTongTienDisplay(line)}
                               />
                             ) : col === '% thuế GTGT' ? (
                               <select

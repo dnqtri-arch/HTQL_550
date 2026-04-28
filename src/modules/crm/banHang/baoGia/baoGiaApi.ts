@@ -5,10 +5,15 @@
  * Dữ liệu: JSON bundle `/api/htql-module-bundle/baoGia` (MySQL `htql_module_bundle` hoặc file fallback).
  */
 
+import { htqlSortCopyNewestFirst } from '@/utils/htqlListSortNewestFirst'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
 import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
-import { htqlModuleBundleGet, htqlModuleBundlePut } from '@/utils/htqlModuleBundleApi'
+import {
+  htqlModuleBundleGet,
+  htqlModuleBundlePut,
+  htqlModuleBundlePutKeepalive,
+} from '@/utils/htqlModuleBundleApi'
 import type {
   BaoGiaAttachmentItem,
   BaoGiaChiTiet,
@@ -131,7 +136,34 @@ let _baoGiaDraft: BaoGiaDraftLine[] | null = null
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 let persistInFlight = false
-const PERSIST_DEBOUNCE_MS = 450
+/** Nháp (draft) đồng bộ nhanh hơn để cúp điện / tắt đột ngột ít mất hơn — Lưu chứng từ vẫn dùng `baoGiaPersistBundleNow` (không debounce). */
+const PERSIST_DEBOUNCE_MS = 180
+
+/** Phiên bản bundle server sau lần PUT thành công gần nhất — tránh GET cũ ghi đè RAM. */
+let _lastPersistedServerVersion = 0
+
+let pagehideFlushRegistered = false
+function flushPendingPersistSyncFireAndForget(): void {
+  if (!persistTimer && !persistInFlight) return
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  try {
+    htqlModuleBundlePutKeepalive(BAO_GIA_MODULE_ID, buildBaoGiaBundleForPersist())
+  } catch {
+    /* ignore */
+  }
+}
+
+function ensureBaoGiaBundleLifecycleFlush(): void {
+  if (typeof window === 'undefined' || pagehideFlushRegistered) return
+  pagehideFlushRegistered = true
+  window.addEventListener('pagehide', flushPendingPersistSyncFireAndForget)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingPersistSyncFireAndForget()
+  })
+}
 
 function buildBaoGiaBundleForPersist(): Record<string, unknown> {
   return {
@@ -142,22 +174,48 @@ function buildBaoGiaBundleForPersist(): Record<string, unknown> {
   }
 }
 
-function baoGiaHasPendingPersist(): boolean {
-  return persistTimer != null || persistInFlight
+/** Chỉ chặn merge bundle từ server khi đang PUT — không chặn khi chỉ còn debounce (tránh máy khác không thấy dữ liệu). */
+function baoGiaIsBundleWriteInFlight(): boolean {
+  return persistInFlight
+}
+
+/**
+ * Ghi bundle lên server một lần (chuỗi tuần tự nếu gọi dồn).
+ * Lỗi mạng/CSDL **bubbling** — `baoGiaPersistBundleNow` / Lưu form phải báo lỗi, không được giả thành công.
+ */
+function runPersistBaoGiaBundleOp(): Promise<void> {
+  persistInFlight = true
+  return htqlModuleBundlePut(BAO_GIA_MODULE_ID, buildBaoGiaBundleForPersist())
+    .then(({ version }) => {
+      _lastPersistedServerVersion = Math.max(_lastPersistedServerVersion, version)
+    })
+    .finally(() => {
+      persistInFlight = false
+    })
+    .then(() => undefined)
+}
+
+/**
+ * Ghi ngay bundle báo giá lên `/api/htql-module-bundle/baoGia` (hủy debounce đang chờ).
+ * Dùng sau Lưu / Sửa / Xóa để F5 không mất dữ liệu vì PUT chưa kịp chạy.
+ */
+export async function baoGiaPersistBundleNow(): Promise<void> {
+  ensureBaoGiaBundleLifecycleFlush()
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  await runPersistBaoGiaBundleOp()
 }
 
 function schedulePersistBaoGiaBundle(): void {
+  ensureBaoGiaBundleLifecycleFlush()
   if (persistTimer) clearTimeout(persistTimer)
   persistTimer = setTimeout(() => {
     persistTimer = null
-    persistInFlight = true
-    void htqlModuleBundlePut(BAO_GIA_MODULE_ID, buildBaoGiaBundleForPersist())
-      .catch(() => {
-        /* offline */
-      })
-      .finally(() => {
-        persistInFlight = false
-      })
+    void runPersistBaoGiaBundleOp().catch(() => {
+      /* autosave nháp — có thể offline; Lưu chứng từ dùng baoGiaPersistBundleNow và vẫn throw */
+    })
   }, PERSIST_DEBOUNCE_MS)
 }
 
@@ -191,10 +249,25 @@ export async function baoGiaFetchBundleAndApply(): Promise<number> {
   try {
     const { bundle, version, notModified } = await htqlModuleBundleGet(BAO_GIA_MODULE_ID)
     if (notModified) return version
-    if (!baoGiaHasPendingPersist()) applyBaoGiaBundlePayload(bundle)
+    if (!baoGiaIsBundleWriteInFlight()) {
+      /** Tránh đọc trễ (GET trước commit / cache) làm mất bản ghi vừa ghi. */
+      if (version < _lastPersistedServerVersion) {
+        return version
+      }
+      const holdDraft = persistTimer != null
+      const savedDraft = holdDraft ? _baoGiaDraft : null
+      applyBaoGiaBundlePayload(bundle)
+      if (holdDraft) {
+        _baoGiaDraft = savedDraft
+      }
+      _lastPersistedServerVersion = Math.max(_lastPersistedServerVersion, version)
+    }
     return version
   } catch {
-    if (!baoGiaHasPendingPersist() && _baoGiaList.length === 0) applyBaoGiaBundlePayload(null)
+    if (!baoGiaIsBundleWriteInFlight() && _baoGiaList.length === 0) {
+      applyBaoGiaBundlePayload(null)
+      _lastPersistedServerVersion = 0
+    }
     return 0
   }
 }
@@ -272,11 +345,16 @@ export const KY_OPTIONS = [
 
 export function baoGiaGetAll(filter: BaoGiaFilter): BaoGiaRecord[] {
   const { tu, den } = filter
-  if (!tu || !den) return [..._baoGiaList]
-  return _baoGiaList.filter((d) => {
-    const ngay = d.ngay_bao_gia
-    return ngay >= tu && ngay <= den
-  })
+  const rows =
+    !tu || !den
+      ? [..._baoGiaList]
+      : _baoGiaList.filter((d) => {
+          const ngay = (d.ngay_bao_gia ?? '').trim()
+          /** Thiếu ngày — vẫn hiện trong kỳ (sau Lưu / đổi lọc «reset» không bị «mất» dòng). */
+          if (!ngay) return true
+          return ngay >= tu && ngay <= den
+        })
+  return htqlSortCopyNewestFirst(rows)
 }
 
 export function baoGiaGetChiTiet(baoGiaId: string): BaoGiaChiTiet[] {
@@ -314,10 +392,12 @@ export function baoGiaCapNhatTuMenuTaoGd(
   if (!row) return
   const ct = baoGiaGetChiTiet(baoGiaId)
   const base = baoGiaBuildCreatePayloadFromRecord(row, ct)
-  baoGiaPut(baoGiaId, {
+  void baoGiaPut(baoGiaId, {
     ...base,
     tinh_trang: patch.tinh_trang,
     dien_giai: patch.dien_giai !== undefined ? patch.dien_giai : base.dien_giai,
+  }).catch(() => {
+    /* đồng bộ nền từ menu — không throw lên UI */
   })
 }
 
@@ -465,14 +545,16 @@ export function baoGiaSetTinhTrang(baoGiaId: string, tinh_trang: string): void {
   const row = _baoGiaList.find((d) => d.id === baoGiaId)
   if (!row) return
   const ct = baoGiaGetChiTiet(baoGiaId)
-  baoGiaPut(baoGiaId, { ...baoGiaBuildCreatePayloadFromRecord(row, ct), tinh_trang })
+  void baoGiaPut(baoGiaId, { ...baoGiaBuildCreatePayloadFromRecord(row, ct), tinh_trang }).catch(() => {
+    /* đồng bộ nền */
+  })
 }
 
 /** Xóa báo giá và toàn bộ chi tiết của báo giá. */
-export function baoGiaDelete(baoGiaId: string): void {
+export async function baoGiaDelete(baoGiaId: string): Promise<void> {
   _baoGiaList = _baoGiaList.filter((d) => d.id !== baoGiaId)
   _chiTietList = _chiTietList.filter((c) => c.bao_gia_id !== baoGiaId)
-  schedulePersistBaoGiaBundle()
+  await baoGiaPersistBundleNow()
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
   }
@@ -553,7 +635,7 @@ export async function baoGiaPost(payload: BaoGiaCreatePayload): Promise<BaoGiaRe
       bao_gia_id: id,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: c.chieu_dai ?? 0,
       chieu_rong: c.chieu_rong ?? 0,
@@ -572,12 +654,15 @@ export async function baoGiaPost(payload: BaoGiaCreatePayload): Promise<BaoGiaRe
       dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
-  schedulePersistBaoGiaBundle()
+  await baoGiaPersistBundleNow()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
+  }
   return baoGiaRow
 }
 
 /** Cập nhật báo giá (xóa chi tiết cũ, ghi lại theo payload). */
-export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void {
+export async function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): Promise<void> {
   const idx = _baoGiaList.findIndex((d) => d.id === baoGiaId)
   if (idx < 0) return
   _baoGiaList[idx] = {
@@ -644,7 +729,7 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
       bao_gia_id: baoGiaId,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: c.chieu_dai ?? 0,
       chieu_rong: c.chieu_rong ?? 0,
@@ -663,7 +748,10 @@ export function baoGiaPut(baoGiaId: string, payload: BaoGiaCreatePayload): void 
       dcnh_index: typeof c.dcnh_index === 'number' ? c.dcnh_index : 0,
     })
   })
-  schedulePersistBaoGiaBundle()
+  await baoGiaPersistBundleNow()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HTQL_BAO_GIA_RELOAD_EVENT))
+  }
 }
 
 /** Báo giá có thể chọn khi lập ĐHB/HĐ bán từ form (loại trừ đã chuyển ĐHB/HĐ, KH không đồng ý). */

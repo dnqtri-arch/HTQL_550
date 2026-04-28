@@ -42,9 +42,24 @@ import { ChiTienBangApiProvider } from './chiTienBangApiContext'
 import { ChiTienForm } from './chiTienForm'
 import styles from './banHangDetailMirror.module.css'
 import { daGhiSoPhieuChi, ghiSoTuPhieuChi, huyGhiSoPhieuChi } from './ghiSoChiTienApi'
-import { donHangBanKhiPhieuChiGhiSo, donHangBanKhiPhieuChiHuyGhiSo } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
-import { hopDongBanKhiPhieuChiGhiSo, hopDongBanKhiPhieuChiHuyGhiSo } from '../../crm/banHang/hopDongBan/hopDongBanChungTuApi'
-import { phuLucHopDongBanKhiPhieuChiGhiSo, phuLucHopDongBanKhiPhieuChiHuyGhiSo } from '../../crm/banHang/phuLucHopDongBan/phuLucHopDongBanChungTuApi'
+import {
+  donHangBanChiTienBangIdsLinked,
+  donHangBanGetAll,
+  donHangBanKhiPhieuChiGhiSo,
+  donHangBanKhiPhieuChiHuyGhiSo,
+} from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
+import {
+  hopDongBanChiTienBangIdsLinked,
+  hopDongBanChungTuGetAll,
+  hopDongBanKhiPhieuChiGhiSo,
+  hopDongBanKhiPhieuChiHuyGhiSo,
+} from '../../crm/banHang/hopDongBan/hopDongBanChungTuApi'
+import {
+  phuLucHopDongBanChiTienBangIdsLinked,
+  phuLucHopDongBanChungTuGetAll,
+  phuLucHopDongBanKhiPhieuChiGhiSo,
+  phuLucHopDongBanKhiPhieuChiHuyGhiSo,
+} from '../../crm/banHang/phuLucHopDongBan/phuLucHopDongBanChungTuApi'
 
 registerLocale('vi', vi)
 
@@ -246,6 +261,24 @@ function ChiTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
 
   const tongTien   = useMemo(() => filtered.reduce((s, r) => s + r.tong_thanh_toan, 0), [filtered])
   const selectedRow = useMemo(() => selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null, [selectedId, danhSach])
+  const phieuChiLienKetNguonIds = useMemo(() => {
+    const ids = new Set<string>()
+    const filterTatCa = { ky: 'tat-ca' as const, tu: '', den: '' }
+    donHangBanGetAll(filterTatCa).forEach((row) => {
+      donHangBanChiTienBangIdsLinked(row).forEach((id) => { if (id) ids.add(id) })
+    })
+    hopDongBanChungTuGetAll(filterTatCa).forEach((row) => {
+      hopDongBanChiTienBangIdsLinked(row).forEach((id) => { if (id) ids.add(id) })
+    })
+    phuLucHopDongBanChungTuGetAll(filterTatCa).forEach((row) => {
+      phuLucHopDongBanChiTienBangIdsLinked(row).forEach((id) => { if (id) ids.add(id) })
+    })
+    return ids
+  }, [danhSach.length])
+  const phieuChiDangLienKetNguon = useCallback(
+    (id: string) => phieuChiLienKetNguonIds.has(id),
+    [phieuChiLienKetNguonIds],
+  )
 
   const columnsChiTiet = useMemo((): DataGridColumn<ChiTienBangChiTiet>[] => {
     const maPhieu = selectedRow?.so_chi_tien_bang ?? ''
@@ -420,11 +453,20 @@ function ChiTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
   }, [])
 
   const xacNhanXoa = (row: ChiTienBangRecord) => {
-    huyGhiSoPhieuChi(row.id)
-    chiTienBangDelete(row.id)
-    loadData()
-    if (selectedId === row.id) setSelectedId(null)
-    toast?.showToast(`Đã xóa phiếu chi ${row.so_chi_tien_bang}.`, 'info')
+    if (phieuChiDangLienKetNguon(row.id)) {
+      toast?.showToast('Phiếu chi đã liên kết chứng từ nguồn, không cho phép xóa.', 'error')
+      setXoaModalRow(null)
+      return
+    }
+    try {
+      huyGhiSoPhieuChi(row.id)
+      chiTienBangDelete(row.id)
+      loadData()
+      if (selectedId === row.id) setSelectedId(null)
+      toast?.showToast(`Đã xóa phiếu chi ${row.so_chi_tien_bang}.`, 'info')
+    } catch (e) {
+      toast?.showToast(e instanceof Error ? e.message : 'Không thể xóa phiếu chi.', 'error')
+    }
     setXoaModalRow(null)
   }
 
@@ -436,7 +478,10 @@ function ChiTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
           <Plus size={13} /><span>Thêm</span>
         </button>
         <button type="button" className={styles.toolbarBtnDanger}
-          disabled={!selectedId || (selectedRow != null && daGhiSoPhieuChi(selectedRow.id))}
+          disabled={
+            !selectedId ||
+            (selectedRow != null && (daGhiSoPhieuChi(selectedRow.id) || phieuChiDangLienKetNguon(selectedRow.id)))
+          }
           onClick={() => selectedRow && setXoaModalRow(selectedRow)}>
           <Trash2 size={13} /><span>Xóa</span>
         </button>
@@ -656,19 +701,20 @@ function ChiTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
             disabled={
               chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang)
               || daGhiSoPhieuChi(contextMenu.row!.id)
+              || phieuChiDangLienKetNguon(contextMenu.row!.id)
             }
             style={{
               opacity:
-                chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuChi(contextMenu.row!.id)
+                chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuChi(contextMenu.row!.id) || phieuChiDangLienKetNguon(contextMenu.row!.id)
                   ? 0.45
                   : 1,
               cursor:
-                chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuChi(contextMenu.row!.id)
+                chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuChi(contextMenu.row!.id) || phieuChiDangLienKetNguon(contextMenu.row!.id)
                   ? 'default'
                   : 'pointer',
             }}
             onClick={() => {
-              if (chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuChi(contextMenu.row!.id))
+              if (chiTienBangBiKhoaChinhSuaTheoTinhTrang(contextMenu.row!.tinh_trang) || daGhiSoPhieuChi(contextMenu.row!.id) || phieuChiDangLienKetNguon(contextMenu.row!.id))
                 return
               moFormSua(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
@@ -731,10 +777,10 @@ function ChiTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
           </button>
           <hr className={styles.contextMenuSep} />
           <button type="button" className={styles.contextMenuItem} style={{ color: '#dc2626' }}
-            disabled={daGhiSoPhieuChi(contextMenu.row!.id)}
+            disabled={daGhiSoPhieuChi(contextMenu.row!.id) || phieuChiDangLienKetNguon(contextMenu.row!.id)}
             onClick={() => {
               const r = contextMenu.row!
-              if (daGhiSoPhieuChi(r.id)) return
+              if (daGhiSoPhieuChi(r.id) || phieuChiDangLienKetNguon(r.id)) return
               setXoaModalRow(r)
               setContextMenu((m) => ({ ...m, open: false }))
             }}>
@@ -775,6 +821,7 @@ function ChiTienBangContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: st
                 formMode === 'view'
                 || (formRecord != null && chiTienBangBiKhoaChinhSuaTheoTinhTrang(formRecord.tinh_trang))
                 || (formRecord != null && daGhiSoPhieuChi(formRecord.id))
+                || (formRecord != null && phieuChiDangLienKetNguon(formRecord.id))
               }
               initialDon={formMode === 'view' || formMode === 'edit' ? (formRecord ?? undefined) : null}
               initialChiTiet={formRecord ? chiTienBangGetChiTiet(formRecord.id) : undefined}

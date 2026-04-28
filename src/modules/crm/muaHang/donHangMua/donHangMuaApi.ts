@@ -3,9 +3,12 @@
  * Mã: {Năm}/DHM/{Số} — rule ma-he-thong.mdc
  */
 
+import { htqlSortCopyNewestFirst } from '@/utils/htqlListSortNewestFirst'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
 import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
+import type { VatTuHangHoaRecord } from '../../../../types/vatTuHangHoa'
+import { VTHH_ENTITY_STORAGE_KEY } from '../../../kho/vatTuHangHoaApi'
 import type {
   DonHangMuaAttachmentItem,
   DonHangMuaChiTiet,
@@ -96,7 +99,7 @@ const MOCK_CHI_TIET: DonHangMuaChiTiet[] = [
     don_hang_mua_id: 'dhm1',
     ma_hang: 'VT00001',
     ten_hang: 'decal trang sus',
-    ma_quy_cach: '',
+    ma_quy_cach: 'VT00001',
     dvt: 'Cây',
     chieu_dai: 0,
     chieu_rong: 0,
@@ -116,6 +119,47 @@ const MOCK_CHI_TIET: DonHangMuaChiTiet[] = [
 
 const STORAGE_KEY_DON = 'htql_don_hang_mua_list'
 const STORAGE_KEY_CHI_TIET = 'htql_don_hang_mua_chi_tiet'
+
+function syncVatTuGiaMuaGanNhatFromDonHangMua() {
+  try {
+    const raw = htqlEntityStorage.getItem(VTHH_ENTITY_STORAGE_KEY)
+    if (!raw) return
+    const vthh = JSON.parse(raw) as VatTuHangHoaRecord[]
+    if (!Array.isArray(vthh) || vthh.length === 0) return
+
+    const latestByMa = new Map<string, { ngay: string; donGia: number; order: number }>()
+    for (const ct of _chiTietList) {
+      const ma = String(ct.ma_hang ?? '').trim().toUpperCase()
+      if (!ma) continue
+      const don = _donList.find((d) => d.id === ct.don_hang_mua_id)
+      if (!don) continue
+      const ngay = String(don.ngay_don_hang ?? '').trim()
+      if (!ngay) continue
+      const donGia = Number(ct.don_gia ?? 0) || 0
+      const order = Number.parseInt(String(don.so_don_hang ?? '').split('/').pop() ?? '', 10) || 0
+      const prev = latestByMa.get(ma)
+      if (!prev || ngay > prev.ngay || (ngay === prev.ngay && order >= prev.order)) {
+        latestByMa.set(ma, { ngay, donGia, order })
+      }
+    }
+
+    let changed = false
+    const next = vthh.map((row) => {
+      const ma = String(row.ma ?? '').trim().toUpperCase()
+      const latest = latestByMa.get(ma)?.donGia ?? 0
+      const currentLatest = Number(row.gia_mua_gan_nhat ?? 0) || 0
+      if (currentLatest === latest) return row
+      changed = true
+      return { ...row, gia_mua_gan_nhat: latest }
+    })
+
+    if (changed) {
+      htqlEntityStorage.setItem(VTHH_ENTITY_STORAGE_KEY, JSON.stringify(next))
+    }
+  } catch {
+    // ignore sync errors
+  }
+}
 
 function normalizeDon(d: Partial<DonHangMuaRecord> & { id: string; de_xuat_id?: string }): DonHangMuaRecord {
   const legacyDx = (d as { de_xuat_id?: string }).de_xuat_id
@@ -299,11 +343,14 @@ export const KY_OPTIONS = [
 
 export function donHangMuaGetAll(filter: DonHangMuaFilter): DonHangMuaRecord[] {
   const { tu, den } = filter
-  if (!tu || !den) return [..._donList]
-  return _donList.filter((d) => {
-    const ngay = d.ngay_don_hang
-    return ngay >= tu && ngay <= den
-  })
+  const rows =
+    !tu || !den
+      ? [..._donList]
+      : _donList.filter((d) => {
+          const ngay = d.ngay_don_hang
+          return ngay >= tu && ngay <= den
+        })
+  return htqlSortCopyNewestFirst(rows)
 }
 
 export function donHangMuaGetChiTiet(donId: string): DonHangMuaChiTiet[] {
@@ -391,6 +438,7 @@ export function donHangMuaDelete(donId: string): void {
   _donList = _donList.filter((d) => d.id !== donId)
   _chiTietList = _chiTietList.filter((c) => c.don_hang_mua_id !== donId)
   saveToStorage()
+  syncVatTuGiaMuaGanNhatFromDonHangMua()
 }
 
 /** Tạo đơn hàng mua mới (thêm vào danh sách nội bộ). Trả về bản ghi đơn vừa tạo. */
@@ -461,7 +509,7 @@ export async function donHangMuaPost(payload: DonHangMuaCreatePayload): Promise<
       don_hang_mua_id: id,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: 0,
       chieu_rong: 0,
@@ -480,6 +528,7 @@ export async function donHangMuaPost(payload: DonHangMuaCreatePayload): Promise<
     })
   })
   saveToStorage()
+  syncVatTuGiaMuaGanNhatFromDonHangMua()
   return don
 }
 
@@ -544,7 +593,7 @@ export function donHangMuaPut(donId: string, payload: DonHangMuaCreatePayload): 
       don_hang_mua_id: donId,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: 0,
       chieu_rong: 0,
@@ -563,6 +612,7 @@ export function donHangMuaPut(donId: string, payload: DonHangMuaCreatePayload): 
     })
   })
   saveToStorage()
+  syncVatTuGiaMuaGanNhatFromDonHangMua()
 }
 
 export function getDefaultDonHangMuaFilter(): DonHangMuaFilter {

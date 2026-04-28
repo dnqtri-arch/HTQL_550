@@ -71,6 +71,7 @@ import {
   type GhiNhanDoanhThuApi,
 } from './ghiNhanDoanhThuApiContext'
 import { Modal } from '../../../../components/common/modal'
+import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { GhiNhanDoanhThuFormModal } from './ghiNhanDoanhThuFormModal'
 import {
   buildPrefillDonHeaderTuDhm,
@@ -79,7 +80,7 @@ import {
   type GhiNhanDoanhThuPrefillPayload,
 } from './ghiNhanDoanhThuPrefill'
 import type { DonHangBanChungTuRecord, DonHangBanChungTuChiTiet } from '../../../../types/donHangBanChungTu'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
 import { exportCsv } from '../../../../utils/exportCsv'
 import { HTQL_GHI_NHAN_DOANH_THU_LIST_REFRESH_EVENT } from '../banHangTabEvent'
@@ -1221,42 +1222,23 @@ function GhiNhanDoanhThuContent({
         )
       })()}
 
-      <Modal
+      <ConfirmXoaCaptchaModal
         open={deleteTarget != null}
         onClose={() => setDeleteTarget(null)}
         title={MUA_HANG_MODAL_TITLE_XOA}
-        size="sm"
-        footer={
-          <>
-            <button
-              type="button"
-              className={styles.modalBtn}
-              style={{ marginRight: 8 }}
-              onClick={() => setDeleteTarget(null)}
-            >
-              {MUA_HANG_MODAL_FOOTER_HUY}
-            </button>
-            <button
-              type="button"
-              className={styles.modalBtnPrimary}
-              onClick={() => {
-                if (deleteTarget) {
-                  api.delete(deleteTarget.id)
-                  loadData()
-                  setSelectedId(null)
-                  setDeleteTarget(null)
-                }
-              }}
-            >
-              {MUA_HANG_MODAL_FOOTER_DONG_Y}
-            </button>
-          </>
-        }
-      >
-        {deleteTarget ? (
+        cancelLabel={MUA_HANG_MODAL_FOOTER_HUY}
+        confirmLabel={MUA_HANG_MODAL_FOOTER_DONG_Y}
+        onConfirm={() => {
+          if (!deleteTarget) return
+          api.delete(deleteTarget.id)
+          loadData()
+          setSelectedId(null)
+          setDeleteTarget(null)
+        }}
+        message={deleteTarget ? (
           <MuaHangXoaModalBody variant="phieu_nhan_nvthh" soDonHang={deleteTarget.so_don_hang} nhaCungCap={deleteTarget.nha_cung_cap} />
         ) : null}
-      </Modal>
+      />
 
       <Modal
         open={phucHoiTargetNvthh != null}

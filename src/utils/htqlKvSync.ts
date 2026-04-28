@@ -41,17 +41,21 @@ import { hopDongMuaReloadFromStorage } from '../modules/crm/muaHang/hopDongMua/h
 import { thuTienBangReloadFromStorage } from '../modules/taiChinh/thuTien/thuTienBangApi'
 import { chiTienBangReloadFromStorage } from '../modules/taiChinh/chiTien/chiTienBangApi'
 import { chuyenTienBangReloadFromStorage } from '../modules/taiChinh/chuyenTien/chuyenTienBangApi'
-import { vatTuHangHoaNapLai, VTHH_ENTITY_STORAGE_KEY } from '../modules/kho/khoHang/vatTuHangHoaApi'
+import { vatTuHangHoaNapLai, VTHH_ENTITY_STORAGE_KEY } from '../modules/kho/vatTuHangHoa/api'
 
 const DEVICE_KEY = 'htql_device_id'
 /** Pending KV PUTs when offline; replay on next app start. Key avoids htql prefix to skip sync loop. */
 const OFFLINE_KV_SPOOL_KEY = '__htql_offline_kv_spool__'
 
-/** Khoảng poll GET /api/htql-kv (ms) — đồng bộ nhanh giữa máy trạm (MySQL htql_kv_store). */
-export const KV_POLL_INTERVAL_MS = 220
+/** Khoảng poll GET /api/htql-kv (ms) — cân bằng giữa realtime và độ mượt CPU/network. */
+export const KV_POLL_INTERVAL_MS = 100
 
-/** Debounce gom PUT sau chỉnh sửa htqlEntityStorage (ms) — cân bằng số request và độ trễ đẩy lên server. */
-const KV_PUT_DEBOUNCE_MS = 240
+/** Debounce PUT vừa phải để giảm số request nhưng vẫn cập nhật nhanh giữa các client. */
+const KV_PUT_DEBOUNCE_MS = 80
+const KV_HTTP_TIMEOUT_MS = 10000
+const KV_SSE_RECONNECT_BASE_MS = 250
+const KV_SSE_RECONNECT_MAX_MS = 3000
+const KV_SSE_TRIGGER_THROTTLE_MS = 20
 
 /** Keys with dedicated MySQL tables — do not mirror in htql_kv_store */
 const KV_EXCLUDE_KEYS = new Set([
@@ -86,6 +90,14 @@ const KV_POLL_FAIL_STREAK_MAX = 3
 
 /** Gán trong bootstrap — gọi từ visibility/online để kéo KV ngay khi quay lại tab. */
 let pollMergeFromServerRef: (() => Promise<void>) | null = null
+let kvSse: EventSource | null = null
+let kvSseReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let kvSseReconnectDelayMs = KV_SSE_RECONNECT_BASE_MS
+let lastKvSseTriggerAt = 0
+let lastSsePushLatencyMs: number | null = null
+let lastSsePushServerAt = 0
+let lastSsePushClientAt = 0
+let kvSseConnected = false
 
 export function htqlKvPollNow(): void {
   void pollMergeFromServerRef?.()
@@ -98,6 +110,10 @@ export type HtqlKvSyncStats = {
   lastPollAt: number
   lastPollBytesDown: number
   lastPollUsedFullKvGet: boolean
+  lastSsePushLatencyMs: number | null
+  lastSsePushServerAt: number
+  lastSsePushClientAt: number
+  sseConnected: boolean
 }
 
 export function getHtqlKvSyncStats(): HtqlKvSyncStats {
@@ -108,11 +124,25 @@ export function getHtqlKvSyncStats(): HtqlKvSyncStats {
     lastPollAt,
     lastPollBytesDown,
     lastPollUsedFullKvGet,
+    lastSsePushLatencyMs,
+    lastSsePushServerAt,
+    lastSsePushClientAt,
+    sseConnected: kvSseConnected,
   }
 }
 
 export function isHtqlKvSyncActive(): boolean {
   return patched
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs: number = KV_HTTP_TIMEOUT_MS): Promise<Response> {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...(init || {}), signal: ac.signal })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function readOfflineSpoolFromStorage(): { key: string; value: string }[] {
@@ -321,6 +351,17 @@ function isKvSyncKey(key: string): boolean {
   return key.startsWith('htql') && !KV_EXCLUDE_KEYS.has(key)
 }
 
+function closeKvSseConnection() {
+  if (!kvSse) return
+  try {
+    kvSse.close()
+  } catch {
+    /* ignore */
+  }
+  kvSse = null
+  kvSseConnected = false
+}
+
 /** Timer debounce PUT (gắn sau bootstrap). */
 let kvPutDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let kvFlushPendingImpl: (() => Promise<void>) | null = null
@@ -417,7 +458,7 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
     const spoolReplay = readOfflineSpool(origGet)
     if (spoolReplay.length) {
       try {
-        const replayRes = await fetch(htqlApiUrl('/api/htql-kv'), {
+        const replayRes = await fetchWithTimeout(htqlApiUrl('/api/htql-kv'), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ entries: spoolReplay }),
@@ -428,7 +469,7 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
       }
     }
 
-    const pullRes = await fetch(htqlApiUrl('/api/htql-kv?prefix=htql'))
+    const pullRes = await fetchWithTimeout(htqlApiUrl('/api/htql-kv?prefix=htql'))
     if (!pullRes.ok) return
     const pull = (await pullRes.json()) as {
       entries?: { key: string; value: string; version: number }[]
@@ -481,7 +522,7 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
       try {
         const payload = JSON.stringify({ entries: toPush })
         sessionBytesUp += byteLen(payload)
-        const r = await fetch(htqlApiUrl('/api/htql-kv'), {
+        const r = await fetchWithTimeout(htqlApiUrl('/api/htql-kv'), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
@@ -590,7 +631,7 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
       }
       let pullRes: Response
       try {
-        pullRes = await fetch(htqlApiUrl('/api/htql-kv?prefix=htql'))
+        pullRes = await fetchWithTimeout(htqlApiUrl('/api/htql-kv?prefix=htql'))
       } catch {
         bumpPollFail()
         return
@@ -683,6 +724,74 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
       }
     }
 
+    const triggerPollFromSse = () => {
+      const now = Date.now()
+      if (now - lastKvSseTriggerAt < KV_SSE_TRIGGER_THROTTLE_MS) return
+      lastKvSseTriggerAt = now
+      void pollMergeFromServer()
+    }
+
+    const scheduleKvSseReconnect = () => {
+      if (kvSseReconnectTimer) return
+      const waitMs = kvSseReconnectDelayMs
+      kvSseReconnectTimer = setTimeout(() => {
+        kvSseReconnectTimer = null
+        connectKvSse()
+      }, waitMs)
+      kvSseReconnectDelayMs = Math.min(KV_SSE_RECONNECT_MAX_MS, kvSseReconnectDelayMs * 2)
+    }
+
+    const connectKvSse = () => {
+      if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
+      if (kvSse) return
+      let es: EventSource
+      try {
+        es = new EventSource(htqlApiUrl('/api/htql-kv/stream'))
+      } catch {
+        scheduleKvSseReconnect()
+        return
+      }
+      kvSse = es
+      es.onopen = () => {
+        kvSseReconnectDelayMs = KV_SSE_RECONNECT_BASE_MS
+        kvSseConnected = true
+        try {
+          window.dispatchEvent(new CustomEvent('htql-dbd-status'))
+        } catch {
+          /* ignore */
+        }
+      }
+      es.onmessage = () => {
+        triggerPollFromSse()
+      }
+      es.addEventListener('kv', (ev) => {
+        try {
+          const msg = ev as MessageEvent<string>
+          const payload = JSON.parse(msg.data || '{}') as { at?: unknown }
+          const serverAt = Number(payload.at) || 0
+          if (serverAt > 0) {
+            const clientAt = Date.now()
+            lastSsePushServerAt = serverAt
+            lastSsePushClientAt = clientAt
+            lastSsePushLatencyMs = Math.max(0, clientAt - serverAt)
+          }
+        } catch {
+          /* ignore parse */
+        }
+        triggerPollFromSse()
+      })
+      es.onerror = () => {
+        if (kvSse !== es) return
+        closeKvSseConnection()
+        try {
+          window.dispatchEvent(new CustomEvent('htql-dbd-status'))
+        } catch {
+          /* ignore */
+        }
+        scheduleKvSseReconnect()
+      }
+    }
+
     const flush = async () => {
       if (kvPutDebouncedPendingKeys.size === 0) return
       const batch = [...kvPutDebouncedPendingKeys]
@@ -692,7 +801,7 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
       sessionBytesUp += byteLen(payload)
       kvRemoteWriteInFlight++
       try {
-        const putRes = await fetch(htqlApiUrl('/api/htql-kv'), {
+        const putRes = await fetchWithTimeout(htqlApiUrl('/api/htql-kv'), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
@@ -752,7 +861,7 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
       const payload = JSON.stringify({ entries: [{ key, value: '' }] })
       sessionBytesUp += byteLen(payload)
       kvRemoteWriteInFlight++
-      void fetch(htqlApiUrl('/api/htql-kv'), {
+      void fetchWithTimeout(htqlApiUrl('/api/htql-kv'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
@@ -787,6 +896,11 @@ export async function bootstrapHtqlKvSync(): Promise<void> {
     }
 
     pollMergeFromServerRef = pollMergeFromServer
+    connectKvSse()
+    window.addEventListener('online', () => {
+      if (!kvSse) connectKvSse()
+      void pollMergeFromServer()
+    })
     window.setInterval(() => {
       void pollMergeFromServer()
     }, KV_POLL_INTERVAL_MS)

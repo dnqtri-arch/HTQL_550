@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import axios from 'axios'
 import App from './app'
-import { initHtqlApiBase, getHtqlApiOrigin, getHtqlConnectionMode } from './config/htqlApiBase'
+import { ensureHtqlApiBaseAlive, initHtqlApiBase, getHtqlApiOrigin, getHtqlConnectionMode } from './config/htqlApiBase'
 import { bootstrapHtqlKvSync, ensureDeviceId, flushHtqlKvPendingSync, htqlKvPollNow } from './utils/htqlKvSync'
 import {
   bootstrapHtqlModuleBundleSyncPoll,
@@ -10,6 +10,21 @@ import {
 } from './utils/htqlModuleBundleSyncPoll'
 import './styles/global.css'
 import './styles/MisaStyle.css'
+
+/** Sau khi kéo KV về, chờ merge rồi gợi ý làm mới VTHH (KV không như bundle — lưới VTHH cần sự kiện). */
+let htqlVthhPostKvTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleHtqlVthhReloadAfterKv(): void {
+  if (typeof window === 'undefined') return
+  if (htqlVthhPostKvTimer) clearTimeout(htqlVthhPostKvTimer)
+  htqlVthhPostKvTimer = setTimeout(() => {
+    htqlVthhPostKvTimer = null
+    try {
+      window.dispatchEvent(new CustomEvent('htql-vthh-reload'))
+    } catch {
+      /* ignore */
+    }
+  }, 200)
+}
 
 const hn = (import.meta.env.VITE_HTQL_CLIENT_HOSTNAME as string | undefined) || ''
 
@@ -99,16 +114,20 @@ if (typeof window !== 'undefined') {
 }
 
 void initHtqlApiBase().then(async () => {
-  const origin = getHtqlApiOrigin()
-  if (origin && typeof window !== 'undefined' && window.htqlDesktop?.notifyResolvedApiBase) {
-    try {
-      await window.htqlDesktop.notifyResolvedApiBase(origin)
-    } catch {
-      /* main có thể chưa sẵn sàng — timer trong main.cjs vẫn thử lại */
+  const notifyResolvedOrigin = async () => {
+    const origin = getHtqlApiOrigin()
+    if (origin && typeof window !== 'undefined' && window.htqlDesktop?.notifyResolvedApiBase) {
+      try {
+        await window.htqlDesktop.notifyResolvedApiBase(origin)
+      } catch {
+        /* main có thể chưa sẵn sàng — timer trong main.cjs vẫn thử lại */
+      }
     }
   }
-  await bootstrapHtqlKvSync()
+  await notifyResolvedOrigin()
+  /** Poll bundle (Báo giá, ĐHB chung từ, …) ngay — không chờ KV; đa máy trạm thấy dữ liệu MySQL sớm hơn. */
   bootstrapHtqlModuleBundleSyncPoll()
+  await bootstrapHtqlKvSync()
   if (typeof window !== 'undefined') {
     ;(window as unknown as { __htqlFlushKvSync?: () => Promise<void> }).__htqlFlushKvSync = () =>
       flushHtqlKvPendingSync()
@@ -118,9 +137,31 @@ void initHtqlApiBase().then(async () => {
       if (document.visibilityState === 'visible') {
         htqlKvPollNow()
         void htqlModuleBundleVersionsPollNow()
+        scheduleHtqlVthhReloadAfterKv()
       }
     })
-    window.addEventListener('online', () => htqlKvPollNow())
+    window.addEventListener('online', () => {
+      htqlKvPollNow()
+      scheduleHtqlVthhReloadAfterKv()
+    })
+    window.addEventListener('focus', () => {
+      htqlKvPollNow()
+      void htqlModuleBundleVersionsPollNow()
+      scheduleHtqlVthhReloadAfterKv()
+    })
+    window.setInterval(() => {
+      void ensureHtqlApiBaseAlive()
+        .then(async (changed) => {
+          if (!changed) return
+          await notifyResolvedOrigin()
+          htqlKvPollNow()
+          void htqlModuleBundleVersionsPollNow()
+          scheduleHtqlVthhReloadAfterKv()
+        })
+        .catch(() => {
+          /* ignore */
+        })
+    }, 45000)
     window.addEventListener('pagehide', () => {
       void flushHtqlKvPendingSync()
     })

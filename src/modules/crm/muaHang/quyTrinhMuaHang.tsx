@@ -83,7 +83,7 @@ const ACCENT_DANH_MUC: Record<DanhMucId, string> = {
 const DANH_MUC: { id: DanhMucId; label: string; Icon: React.ElementType }[] = [
   { id: 'nha-cung-cap', label: 'Nhà cung cấp', Icon: Users },
   { id: 'vat-tu-hang-hoa', label: 'Vật tư, hàng hóa', Icon: ShoppingBag },
-  { id: 'dieu-khoan-thanh-toan', label: 'DKTT', Icon: FileCheck },
+  { id: 'dieu-khoan-thanh-toan', label: 'Điều khoản TT', Icon: FileCheck },
   { id: 'hinh-thuc', label: 'Hình thức', Icon: LayoutList },
   { id: 'tien-ich', label: 'Tiện ích', Icon: Wrench },
 ]

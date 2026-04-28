@@ -3,8 +3,21 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $OutDir = Join-Path $RepoRoot 'phanmem\tool'
 $ControlDir = Join-Path $RepoRoot 'phanmem\controlCenter'
+$ControlPkgPath = Join-Path $ControlDir 'package.json'
 
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
+
+# Tự tăng version Tool mỗi lần build (patch): 2.6.0 -> 2.6.1 -> 2.6.2 ...
+$pkgRaw = Get-Content -Path $ControlPkgPath -Raw -Encoding UTF8
+$m = [regex]::Match($pkgRaw, '"version"\s*:\s*"(\d+)\.(\d+)\.(\d+)"')
+if (-not $m.Success) { throw "Không đọc được version semver trong $ControlPkgPath" }
+[int]$maj = $m.Groups[1].Value
+[int]$min = $m.Groups[2].Value
+[int]$pat = $m.Groups[3].Value
+$nextVersion = "$maj.$min.$($pat + 1)"
+$pkgRaw2 = [regex]::Replace($pkgRaw, '"version"\s*:\s*"[^"]+"', "`"version`": `"$nextVersion`"", 1)
+[System.IO.File]::WriteAllText($ControlPkgPath, $pkgRaw2, [System.Text.UTF8Encoding]::new($false))
+Write-Host "Tool version -> $nextVersion"
 
 Set-Location $ControlDir
 npm run build

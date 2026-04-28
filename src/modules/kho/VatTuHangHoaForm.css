@@ -1,0 +1,787 @@
+/* VatTuHangHoaForm - HTQL_550 theme (trắng, cam) */
+
+/* Matrix bậc giá: làm nổi bật dòng định lượng đang nhập (ô con có focus) */
+.htql-vthh-price-matrix-row:focus-within {
+  background: rgba(245, 158, 11, 0.14);
+}
+.htql-vthh-price-matrix-row:hover {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+/* Fieldset Thông tin chung - cân đối với vùng tab, không chiếm quá 45% để tab đủ chỗ không scroll */
+.htql-form .htql-fieldset {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  margin: 0 0 6px 0;
+  background: var(--bg-secondary);
+  flex: 1;
+  min-height: 0;
+  max-height: 45%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Cột nhãn: cột 1 hẹp hơn 2px để các ô nhập (Mã, Tính chất, Mô tả...) nới rộng sang trái 2px */
+.htql-form .htql-fieldset .misa-form-grid {
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(82px, 108px) minmax(0, 1fr) minmax(56px, 72px) minmax(0, 2fr);
+  column-gap: 0;
+  row-gap: 4px;
+  align-items: center;
+}
+
+/* Khối bên trong fieldset: khoảng cách trên-dưới giữa các khối nhỏ lại */
+.htql-form .htql-fieldset .htql-fieldset-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 4px;
+}
+
+.htql-form .htql-fieldset .htql-fieldset-top,
+.htql-form .htql-fieldset .htql-fieldset-bottom {
+  flex-shrink: 0;
+}
+
+/* Hàng Mô tả: cột 1 hẹp hơn 2px để ô Mô tả nới rộng sang trái 2px */
+.htql-form .htql-fieldset .htql-mota-section {
+  flex: 1;
+  min-height: 0;
+  max-height: 100px;
+  display: grid;
+  grid-template-columns: minmax(82px, 108px) minmax(0, 1fr) minmax(56px, 72px) minmax(0, 2fr);
+  grid-template-rows: 1fr;
+  column-gap: 0;
+  align-items: stretch;
+  margin: 0;
+}
+
+/* Ô Mô tả bắt đầu từ cột 2 (sau cột nhãn) = cùng vị trí với ô Mã, ĐVT chính... */
+.htql-form .htql-fieldset .htql-mota-section .htql-mota-wrap {
+  grid-column: 2 / -1;
+  display: flex;
+  min-height: 0;
+  align-items: stretch;
+}
+
+/* Tiêu đề Mô tả: cột 1, canh phải sát ô nhập */
+.htql-form .htql-fieldset .htql-mota-section .htql-mota-label {
+  text-align: right;
+  padding-right: 2px;
+  align-self: start;
+  padding-top: 2px;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.htql-form .htql-fieldset .htql-mota-section .htql-mota-wrap textarea.misa-input-solo {
+  flex: 1;
+  min-height: 0;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.5;
+  padding: 6px 8px;
+}
+
+/* Tiêu đề ô nhập Thông tin chung: canh phải, sát ô nhập (giảm khoảng cách để ô nhập rộng hơn) */
+.htql-form .htql-fieldset .misa-label.misa-grid-item {
+  white-space: nowrap;
+  padding-right: 2px;
+  text-align: right;
+  min-height: 22px;
+  line-height: 1.3;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Ô nhập cột trái (Mã, Tính chất, ĐVT chính, Thời hạn BH): nhỏ lại 1/2; cột phải full width */
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item:nth-child(4n + 2) {
+  max-width: 100%;
+}
+
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item:nth-child(4n) {
+  min-width: 0;
+}
+
+/* Khoảng cách dọc giữa các hàng Thông tin chung = chuẩn 3 ô (Tài khoản kho, TK doanh thu, TK chiết khấu) */
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item {
+  min-height: 24px;
+}
+
+/* Ô nhập Thông tin chung: tăng chiều cao để không che nội dung (24px, line-height 22px) */
+.htql-form .htql-fieldset .misa-form-grid .misa-input-solo,
+.htql-form .htql-fieldset .misa-form-grid .misa-input-wrap,
+.htql-form .htql-fieldset .misa-form-grid select.misa-input-solo {
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 4px !important;
+  font-size: 11px;
+  line-height: 22px;
+  box-sizing: border-box;
+}
+.htql-form .htql-fieldset .misa-form-grid .misa-input-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+/* Trừ ô Mô tả (textarea) - không áp chuẩn 20px */
+.htql-form .htql-fieldset .htql-mota-section .misa-input-solo {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 6px 8px !important;
+}
+
+/* Ô Mô tả và các ô full width: rộng bằng form, khớp với các tab bên dưới */
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item.htql-full-width {
+  width: 100%;
+  min-width: 0;
+}
+
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item.htql-full-width input.misa-input-solo {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box;
+}
+
+/* Ô Mô tả: textarea co giãn theo chiều cao form, resize dọc */
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item.htql-mota-wrap {
+  display: flex;
+  min-height: 0;
+}
+
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item.htql-mota-wrap textarea.misa-input-solo {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 48px;
+  flex: 1;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.htql-form .htql-legend {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: bold;
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif);
+  padding: 0 8px;
+}
+
+/* Các tab bên dưới Thông tin chung */
+.htql-form .htql-sub-tabs {
+  display: flex;
+  gap: 0;
+  margin-top: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 28px;
+}
+
+.htql-form .htql-sub-tab {
+  padding: 6px 12px;
+  background: var(--bg-tab);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  margin-bottom: -1px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif);
+  text-decoration: underline;
+  box-sizing: border-box;
+  height: 28px;
+  line-height: 14px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.htql-form .htql-sub-tab:hover {
+  color: var(--text-primary);
+}
+
+.htql-form .htql-sub-tab-active {
+  background: var(--text-primary) !important;
+  color: var(--accent-text) !important;
+  font-weight: bold;
+  border-color: var(--connector);
+  border-width: 1px;
+}
+
+.htql-form .htql-sub-tab-content {
+  border: 1px solid var(--border);
+  border-top: none;
+  flex: 1;
+  min-height: 220px;
+  overflow: auto;
+  background: var(--bg-secondary);
+  padding: 10px 12px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grid trong tab nội dung - dùng chung layout với fieldset */
+.htql-form .htql-tab-grid {
+  padding: 0 !important;
+  min-height: 0;
+  align-content: start;
+}
+
+/* Tab 1. Ngầm định: giới hạn độ rộng cột ô nhập (170px) để có khoảng cách rõ với tiêu đề cột bên phải */
+.htql-form .htql-tab-ngam-dinh {
+  grid-template-columns: minmax(84px, 108px) minmax(0, 170px) minmax(108px, 150px) minmax(0, 170px);
+  column-gap: 0;
+  row-gap: 4px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+/* Tiêu đề và ô nhập sát lại (khoảng cách nhỏ giữa label và input) */
+.htql-form .htql-tab-ngam-dinh .misa-label.misa-grid-item {
+  min-height: 22px;
+  padding-right: 0;
+  text-align: right;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text-primary);
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.htql-form .htql-tab-ngam-dinh .misa-grid-item {
+  min-height: 24px;
+}
+
+/* Ô nhập cột trái (cột 2): khoảng cách với cột phải, không giới hạn max-width để bằng độ rộng ô Thuế suất XK */
+.htql-form .htql-tab-ngam-dinh .misa-grid-item:nth-child(4n + 2) {
+  margin-right: 20px;
+  min-width: 0;
+}
+
+/* Ô đơn giá (mua cố định, gần nhất, bán): bỏ viền ngoài, ô nhập 90% / nút 10% giống Nhóm VTHH, dịch trái 4px, full width ô */
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  margin-left: -4px;
+}
+
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap [data-vthh-variant-dropdown] {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap .misa-input-wrap {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border: none !important;
+  outline: none !important;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+}
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap .misa-input-wrap:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap .misa-input-wrap input {
+  border: none !important;
+  outline: none !important;
+  flex: 9;
+  min-width: 0;
+  max-width: none;
+}
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap .misa-input-wrap .misa-lookup-btn {
+  flex: 1;
+  min-width: 0;
+  flex-shrink: 0;
+  height: 24px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap .misa-input-solo {
+  text-align: right;
+}
+
+/* Nhóm control biến thể: khóa cứng cùng kích thước để không lệch giữa Mã PB / Định lượng / Khổ giấy */
+.htql-form .htql-tab-ngam-dinh .htql-don-gia-wrap .htql-variant-control {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  line-height: 20px !important;
+  padding: 0 4px !important;
+  box-sizing: border-box;
+}
+
+/* Đồng nhất chiều cao ô nhập với phần Thông tin chung (24px để không che nội dung) */
+.htql-form .htql-tab-ngam-dinh .misa-input-solo,
+.htql-form .htql-tab-ngam-dinh .misa-input-wrap {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 4px;
+  font-size: 11px;
+  border-radius: 2px;
+  line-height: 22px;
+}
+
+.htql-form .htql-tab-ngam-dinh .misa-input-wrap {
+  box-sizing: border-box;
+}
+
+.htql-form .htql-tab-ngam-dinh .htql-checkbox-cell {
+  padding: 6px 0;
+}
+
+/* Ô checkbox không có viền/background như input */
+.htql-form .htql-checkbox-cell {
+  background: transparent !important;
+  border: none !important;
+  padding: 2px 0 !important;
+}
+
+/* HTQL theme: override MISA light cho form */
+.htql-form .misa-label {
+  color: var(--text-primary) !important;
+}
+
+.htql-form .misa-required {
+  color: var(--accent) !important;
+}
+
+.htql-form .misa-input-wrap,
+.htql-form .misa-input-solo {
+  background: var(--bg-tab) !important;
+  border: 0.5px solid #D0D0D0 !important;
+  color: var(--text-primary) !important;
+}
+
+.htql-form .misa-input-wrap:focus-within,
+.htql-form .misa-input-solo:focus {
+  border-color: var(--accent) !important;
+}
+
+/* Ô Mã: bỏ viền bên ngoài (wrapper + input) */
+.htql-form .misa-input-wrap.htql-ma-no-border,
+.htql-form .misa-input-wrap.htql-ma-no-border input {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .misa-input-wrap.htql-ma-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Ô ĐVT chính: bỏ viền bên ngoài (wrapper + select), dịch trái 4px, mũi tên bên trong */
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border,
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border .htql-dvt-chinh-select {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border {
+  margin-left: -4px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border .htql-dvt-chinh-select {
+  padding-right: 26px;
+}
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border .htql-dvt-chinh-chevron {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border .htql-dvt-chinh-chevron svg {
+  color: var(--accent-text);
+}
+.htql-form .misa-input-wrap.htql-dvt-chinh-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Ô Tính chất: bỏ viền, mũi tên xổ xuống giống ĐVT chính (nền cam) */
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border,
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border .htql-tinh-chat-select {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border .htql-tinh-chat-select {
+  padding-right: 26px;
+}
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border .htql-tinh-chat-chevron {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border .htql-tinh-chat-chevron svg {
+  color: var(--accent-text);
+}
+.htql-form .misa-input-wrap.htql-tinh-chat-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Ô Kho ngầm định: bỏ viền (wrapper + input), dịch trái 4px */
+.htql-form .misa-input-wrap.htql-kho-ngam-dinh-no-border,
+.htql-form .misa-input-wrap.htql-kho-ngam-dinh-no-border input {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .misa-input-wrap.htql-kho-ngam-dinh-no-border {
+  margin-left: -4px;
+}
+.htql-form .misa-input-wrap.htql-kho-ngam-dinh-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Ô Thuế GTGT (%): định dạng giống Kho ngầm định (wrapper + select, mũi tên accent) */
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border,
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border select {
+  border: none !important;
+  outline: none !important;
+}
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border {
+  margin-left: -4px;
+}
+.htql-form .misa-input-wrap.htql-thue-gtgt-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Nút + cạnh ĐVT chính: chiều cao bằng ô nhập (24px) */
+.htql-form .htql-fieldset .misa-form-grid .htql-dvt-plus-btn,
+.htql-form .htql-tab-ngam-dinh .htql-dvt-plus-btn {
+  height: 24px !important;
+  min-height: 24px !important;
+  box-sizing: border-box;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ô Nhóm VTHH: bỏ viền, khoảng cách 2px; full width để canh trái bằng Tên, nút canh phải bằng ô Tên; dịch trái 2px */
+.htql-form .misa-input-wrap.htql-nhom-vthh-no-border {
+  border: none !important;
+  outline: none !important;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  margin-left: -4px;
+  justify-content: flex-start;
+}
+.htql-form .misa-input-wrap.htql-nhom-vthh-no-border input {
+  border: none !important;
+  outline: none !important;
+  flex: 9;
+  min-width: 0;
+  max-width: none;
+}
+/* Ô Nhóm VTHH read-only: giống ảnh - nền trắng nhạt, viền xanh nhạt, chữ tối */
+.htql-form .misa-input-wrap.htql-nhom-vthh-no-border input.htql-nhom-vthh-readonly {
+  background: var(--bg-nhom-vthh) !important;
+  color: #333 !important;
+  border: 1px solid var(--border-nhom-vthh) !important;
+}
+/* Nút cuối 10%, ô nhập 90% chiều rộng */
+.htql-form .misa-input-wrap.htql-nhom-vthh-no-border .misa-lookup-btn {
+  flex-shrink: 0;
+  flex: 1;
+  min-width: 26px;
+  height: 24px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ô chứa Nhóm VTHH: canh trái nội dung bằng ô Tên (cùng cột grid) */
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item:has(.htql-nhom-vthh-no-border) {
+  justify-self: stretch;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+.htql-form .htql-fieldset .misa-form-grid .misa-grid-item:has(.htql-nhom-vthh-no-border) > .misa-input-wrap {
+  width: 100%;
+}
+.htql-form .misa-input-wrap.htql-nhom-vthh-no-border:focus-within {
+  border: none !important;
+  outline: none !important;
+}
+
+.htql-form .misa-lookup-btn {
+  background-color: var(--accent) !important;
+  border-color: var(--connector) !important;
+  color: var(--accent-text) !important;
+}
+
+.htql-form .misa-lookup-btn:hover {
+  background-color: var(--accent-hover) !important;
+  border-color: var(--connector-highlight) !important;
+  color: var(--accent-text) !important;
+}
+
+.htql-form select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.misa-form table,
+.misa-form tr,
+.misa-form td,
+.misa-form th {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.misa-form input,
+.misa-form select {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Input wrap với Lookup - nút sát mép phải */
+.misa-form .misa-input-wrap {
+  display: inline-flex;
+  align-items: stretch;
+  height: 20px;
+  min-width: 0;
+  max-width: 100%;
+  border: 0.5px solid #D0D0D0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.misa-form .misa-input-wrap:focus-within {
+  border-color: #f59e0b;
+}
+
+.misa-form .misa-input-wrap input,
+.misa-form .misa-input-wrap select {
+  border: none !important;
+  flex: 1;
+  min-width: 0;
+  width: auto !important;
+  max-width: none !important;
+}
+
+.misa-form .misa-input-wrap .misa-lookup-btn {
+  width: 20px;
+  min-width: 20px;
+  height: 18px !important;
+  align-self: center;
+  background-color: #e5e7eb !important;
+  border: 0.5px solid #D0D0D0 !important;
+  border-left: 0.5px solid #D0D0D0 !important;
+  color: #000;
+  cursor: pointer;
+  font-size: 10px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.misa-form .misa-input-wrap .misa-lookup-btn:hover {
+  background-color: #d1d5db !important;
+}
+
+/* Input solo (không có lookup) - viền màu #D0D0D0, độ dày bằng ô mô tả (0.5px) */
+.misa-form .misa-input-solo {
+  border: 0.5px solid #D0D0D0 !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+
+.misa-form .misa-input-solo:focus {
+  outline: none;
+  border-color: #f59e0b !important;
+}
+
+.misa-form textarea.misa-input-solo {
+  min-height: 60px;
+  line-height: 1.2;
+  resize: vertical;
+}
+
+/* Grid layout - 2 cột, responsive */
+.misa-form .misa-form-grid {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) minmax(0, 1fr) minmax(90px, 120px) minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.misa-form .misa-form-grid .misa-grid-item {
+  min-height: 20px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.misa-form .misa-grid-item > .misa-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.misa-form .misa-dvt-table input,
+.misa-form .misa-dvt-table select {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Bảng đơn vị quy đổi - Căn lề theo logic kế toán, viền mảnh; đường dọc phân cách cột (tab 2, 3, 4) */
+.htql-dvt-quydoi-table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.htql-dvt-quydoi-table td,
+.htql-dvt-quydoi-table th {
+  border: 0.5px solid var(--border);
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.htql-dvt-quydoi-table th {
+  text-align: left;
+  padding-left: 8px;
+  border-bottom: 0.5px solid var(--border);
+  font-weight: bold;
+}
+
+/* Cột số tiền (ĐGB, ĐGB 1, 2, 3) - căn phải; ĐGB và ĐGB 1,2,3 cùng độ rộng (80px) */
+.htql-dvt-quydoi-table th:nth-child(6),
+.htql-dvt-quydoi-table th:nth-child(7),
+.htql-dvt-quydoi-table th:nth-child(8),
+.htql-dvt-quydoi-table th:nth-child(9),
+.htql-dvt-quydoi-table td:nth-child(6),
+.htql-dvt-quydoi-table td:nth-child(7),
+.htql-dvt-quydoi-table td:nth-child(8),
+.htql-dvt-quydoi-table td:nth-child(9) {
+  text-align: right;
+  padding-right: 8px;
+  min-width: 80px;
+}
+
+/* Cột TL - tiêu đề căn trái, padding-left 8px; nội dung căn trái */
+.htql-dvt-quydoi-table th:nth-child(3),
+.htql-dvt-quydoi-table td:nth-child(3) {
+  text-align: left;
+  padding-left: 8px;
+  padding-right: 15px;
+}
+
+/* Cột văn bản (ĐV quy đổi, Phép tính, Mô tả) - căn trái */
+.htql-dvt-quydoi-table td:nth-child(2),
+.htql-dvt-quydoi-table td:nth-child(4),
+.htql-dvt-quydoi-table th:nth-child(2),
+.htql-dvt-quydoi-table th:nth-child(4) {
+  text-align: left;
+}
+
+.htql-dvt-quydoi-table td:nth-child(5),
+.htql-dvt-quydoi-table th:nth-child(5) {
+  white-space: normal;
+  width: 100%;
+  text-align: left;
+}
+
+.htql-dvt-quydoi-table input,
+.htql-dvt-quydoi-table select {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 2px 4px;
+  font-size: 11px;
+  height: 24px;
+  line-height: 20px;
+  min-height: 24px;
+}
+
+/* Đơn vị đã chọn - in đậm trong dropdown để dễ nhận biết, không cho chọn trùng */
+.htql-dvt-quydoi-select option.htql-dvt-already-used,
+.htql-dvt-chinh-select option.htql-dvt-already-used {
+  font-weight: 700 !important;
+}
+
+/* Tab - thẻ bài nổi */
+.misa-form .misa-tab-row {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #9ca3af;
+  background: #f3f4f6;
+  padding: 0;
+}
+
+/* VatTuHangHoaForm - dùng biến font từ global.css (--font-misa) */
+.misa-form .misa-tab-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: #374151;
+  cursor: pointer;
+  font-size: var(--font-size-misa, 11px);
+  font-family: var(--font-misa, 'Tahoma', Arial, sans-serif);
+  margin-bottom: -1px;
+}
+
+.misa-form .misa-tab-btn.misa-tab-active {
+  background: #fff !important;
+  border: 1px solid #9ca3af;
+  border-bottom: 1px solid #fff;
+  font-weight: bold;
+  color: #000;
+}

@@ -11,6 +11,9 @@ import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../.
 import { htqlEntityStorage } from '@/utils/htqlEntityStorage'
 import { formatSoTienHienThi, parseFloatVN } from '../../../utils/numberFormat'
 import { donHangBanGetAll } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
+import { donHangBanChiTienBangIdsLinked } from '../../crm/banHang/donHangBan/donHangBanChungTuApi'
+import { hopDongBanChiTienBangIdsLinked, hopDongBanChungTuGetAll } from '../../crm/banHang/hopDongBan/hopDongBanChungTuApi'
+import { phuLucHopDongBanChiTienBangIdsLinked, phuLucHopDongBanChungTuGetAll } from '../../crm/banHang/phuLucHopDongBan/phuLucHopDongBanChungTuApi'
 import type {
   ChiTienBangAttachmentItem,
   ChiTienBangChiTiet,
@@ -606,8 +609,21 @@ export function dongBoLaiNoiDungPhieuChiTheoMaDonHang(khachHang: string, maDonHa
   }
 }
 
+function chiTienBangDangLienKetNguon(chiTienBangId: string): boolean {
+  const id = (chiTienBangId ?? '').trim()
+  if (!id) return false
+  const filterTatCa = { ky: 'tat-ca' as const, tu: '', den: '' }
+  if (donHangBanGetAll(filterTatCa).some((row) => donHangBanChiTienBangIdsLinked(row).includes(id))) return true
+  if (hopDongBanChungTuGetAll(filterTatCa).some((row) => hopDongBanChiTienBangIdsLinked(row).includes(id))) return true
+  if (phuLucHopDongBanChungTuGetAll(filterTatCa).some((row) => phuLucHopDongBanChiTienBangIdsLinked(row).includes(id))) return true
+  return false
+}
+
 /** Xóa báo giá và toàn bộ chi tiết của báo giá. */
 export function chiTienBangDelete(chiTienBangId: string): void {
+  if (chiTienBangDangLienKetNguon(chiTienBangId)) {
+    throw new Error('Phiếu chi đang liên kết chứng từ nguồn, không thể xóa.')
+  }
   const row = _ChiTienBangList.find((d) => d.id === chiTienBangId)
   const kh = row?.khach_hang?.trim() ?? ''
   const ctBefore = row ? _chiTietList.filter((c) => c.chi_tien_bang_id === chiTienBangId) : []
@@ -748,6 +764,9 @@ export async function chiTienBangPost(payload: ChiTienBangCreatePayload): Promis
 
 /** Cập nhật báo giá (xóa chi tiết cũ, ghi lại theo payload). */
 export function chiTienBangPut(chiTienBangId: string, payload: ChiTienBangCreatePayload): void {
+  if (chiTienBangDangLienKetNguon(chiTienBangId)) {
+    throw new Error('Phiếu chi đang liên kết chứng từ nguồn, không thể chỉnh sửa.')
+  }
   const idx = _ChiTienBangList.findIndex((d) => d.id === chiTienBangId)
   if (idx < 0) return
   _ChiTienBangList[idx] = {

@@ -34,8 +34,8 @@ import { loadDieuKhoanThanhToanKh, saveDieuKhoanThanhToanKh, khachHangGetAll, ty
 import { KhachHang } from '../khachHang/khachHang'
 import type { KhachHangRecord } from '../khachHang/khachHangApi'
 import type { VatTuHangHoaRecord } from '../../../../types/vatTuHangHoa'
-import { vatTuHangHoaGetForBanHang } from '../../../kho/khoHang/vatTuHangHoaApi'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { vatTuHangHoaGetForBanHang } from '../../../kho/vatTuHangHoaApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { matchSearchKeyword } from '../../../../utils/stringUtils'
 import { vietTatTenNganHang } from '../../../../utils/nganHangDisplay'
 import { mau_dhbkhongdongia, mau_dhbcodongia, mau_dhbcodongia_khong_vat } from './donHangBanGridMauFull'
@@ -52,19 +52,23 @@ import {
   parseFloatVN,
   parseNumber,
 } from '../../../../utils/numberFormat'
-import { dvtLaMetVuong } from '../../../../utils/dvtLaMetVuong'
+import {
+  computeBanHangChiTietFooterTotals,
+  formatBanHangChiTietThanhTienDisplay,
+  formatBanHangChiTietTienThueDisplay,
+  formatBanHangChiTietTongTienDisplay,
+  thanhTienChiTietBanHang,
+} from '../../../../utils/banHangChiTietTien'
+import { tinhSoLuongChiTietTuKichThuocVaVthh } from '../../../../utils/banHangChiTietSoLuongKichThuoc'
 import {
   buildDvtOptionsForVthh,
   chiTietToLines,
-  computeDonHangMuaFooterTotals,
-  formatDonHangLineThanhTienDisplay,
-  formatDonHangLineTienThueDisplay,
-  formatDonHangLineTongTienDisplay,
   parsePctThueGtgtFromLine,
   type DonHangMuaGridLineRow,
 } from '../../../../utils/donHangMuaCalculations'
 import {
   DON_HANG_BAN_COL_TEN_SPHH,
+  getBanHangB1TtAdjustment,
   getDonGiaBanDonHangBanLine,
   migrateDonHangBanLinesToCoDonGia,
   enrichDonHangBanGridLinesWithVthh,
@@ -2219,29 +2223,26 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
   //   setLines((prev) => enrichDonHangBanGridLinesWithVthh(prev, vatTuList))
   // }, [selectedDoiChieuDonMuaId, vatTuList.length, lines.length])
 
-  /** [YC30] Tính Số lượng từ Kích thước nếu VTHH có công thức */
-  const calculateSoLuongFromKichThuoc = (line: DonHangBanGridLineRow): string => {
-    const dvtRaw = (line['ĐVT'] ?? '').trim()
-    if (!dvtLaMetVuong(dvtRaw, dvtList)) return line['Số lượng'] ?? ''
-    const vthh = line._vthh
-    if (!vthh?.cong_thuc_tinh_so_luong) return line['Số lượng'] ?? ''
-    const formula = vthh.cong_thuc_tinh_so_luong.toLowerCase()
-    if (!formula.includes('dài') || !formula.includes('rộng') || !formula.includes('lượng')) {
-      return line['Số lượng'] ?? ''
-    }
-    const dai = parseFloatVN(line['mD'] ?? '') || 0
-    const rong = parseFloatVN(line['mR'] ?? '') || 0
-    const luong = parseFloatVN(line['Lượng'] ?? '1') || 1
-    const result = dai * rong * luong
-    return result > 0 ? formatSoTienHienThi(result) : ''
-  }
+  /** [YC30] Số lượng từ kích thước — đồng bộ Báo giá / `cong_thuc_tinh_so_luong` VTHH. */
+  const calculateSoLuongFromKichThuoc = (line: DonHangBanGridLineRow): string =>
+    tinhSoLuongChiTietTuKichThuocVaVthh(line, dvtList)
 
   /** Sau khi đổi Số lượng (trực tiếp hoặc qua kích thước): áp lại đơn giá theo bậc giá + ĐVT. */
   const syncDonGiaTheoBacVaSl = (row: DonHangBanGridLineRow): DonHangBanGridLineRow => {
     if (!row._vthh || !(initialDhb != null || mauHienTai === 'codongia')) return row
     const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
     const dvt = (row['ĐVT'] ?? '').trim() || (row._vthh.dvt_chinh ?? '')
-    return { ...row, 'Đơn giá': getDonGiaBanDonHangBanLine(row._vthh, dvt, sl) } as unknown as DonHangBanGridLineRow
+    const next = { ...row, 'Đơn giá': getDonGiaBanDonHangBanLine(row._vthh, dvt, sl) } as unknown as DonHangBanGridLineRow
+    const minB1 = getBanHangB1TtAdjustment(row._vthh, sl)
+    if (minB1.ap_dung) {
+      next['ĐVT'] = minB1.dvt_goi_y
+      next['Đơn giá'] = getDonGiaBanDonHangBanLine(row._vthh, minB1.dvt_goi_y, sl)
+      const note = (next['Ghi chú'] ?? '').trim()
+      if (!note.toLowerCase().includes('áp dụng đơn giá tối thiểu')) {
+        next['Ghi chú'] = note ? `${note}; ${minB1.ghi_chu}` : minB1.ghi_chu
+      }
+    }
+    return next
   }
 
   const handleChonVthh = (vthh: VatTuHangHoaRecord, rowIndex: number) => {
@@ -2258,6 +2259,15 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
       else row['% thuế GTGT'] = ''
       const sl = Math.max(0, parseFloatVN(row['Số lượng'] ?? '')) || 1
       row['Đơn giá'] = getDonGiaBanDonHangBanLine(vthh, (row['ĐVT'] ?? '').trim() || (vthh.dvt_chinh ?? ''), sl)
+      const minB1 = getBanHangB1TtAdjustment(vthh, sl)
+      if (minB1.ap_dung) {
+        row['ĐVT'] = minB1.dvt_goi_y
+        row['Đơn giá'] = getDonGiaBanDonHangBanLine(vthh, minB1.dvt_goi_y, sl)
+        const note = (row['Ghi chú'] ?? '').trim()
+        if (!note.toLowerCase().includes('áp dụng đơn giá tối thiểu')) {
+          row['Ghi chú'] = note ? `${note}; ${minB1.ghi_chu}` : minB1.ghi_chu
+        }
+      }
     }
     const opts = buildDvtOptionsForVthh(vthh)
     if (opts) row._dvtOptions = opts
@@ -2275,7 +2285,7 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
     const coBang =
       initialDhb != null || Boolean(prefillChiTiet && prefillChiTiet.length > 0) || mauHienTai === 'codongia'
     const apVat = coBang && apDungVatGtgt
-    const { tongTienHang, tienThue: tienThueRaw } = computeDonHangMuaFooterTotals(lines, { apDungVatGtgt: apVat })
+    const { tongTienHang, tienThue: tienThueRaw } = computeBanHangChiTietFooterTotals(lines, { apDungVatGtgt: apVat })
     const tienThue = apVat ? tienThueRaw : 0
     const tienCkTinh = Math.max(0, parseFloatVN(tienCkInput || '0'))
     const ttTongThanhToan = tongTienHang + tienThue - tienCkTinh
@@ -2289,7 +2299,7 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
       .map((line) => {
         const donGia = isCodongia ? parseFloatVN(line['Đơn giá'] ?? '') : 0
         const soLuong = Math.max(0, parseFloatVN(line['Số lượng'] ?? ''))
-        const thanhTien = isCodongia ? donGia * soLuong : 0
+        const thanhTien = isCodongia ? thanhTienChiTietBanHang(donGia, soLuong) : 0
         const pt = isCodongia && apVat ? parsePctThueGtgtFromLine(line['% thuế GTGT'] ?? '') : null
         const tienThueLine = pt != null ? (thanhTien * pt) / 100 : 0
         giaTriDonHang += thanhTien + (apVat ? tienThueLine : 0)
@@ -2554,7 +2564,7 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
   }, [hienThiFooterTongTien, apDungVatGtgt])
   const { tongTienHang, tienThue } = useMemo(
     () =>
-      computeDonHangMuaFooterTotals(lines, {
+      computeBanHangChiTietFooterTotals(lines, {
         apDungVatGtgt: hienThiFooterTongTien ? apDungVatGtgt : true,
       }),
     [lines, apDungVatGtgt, hienThiFooterTongTien],
@@ -4727,11 +4737,11 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
                                           (o) => o.value === String((line as Record<string, string>)[BAN_HANG_COL_DCNH] ?? '0'),
                                         )?.label ?? 'ĐCNH'
                                     : col === 'Thành tiền'
-                                      ? formatDonHangLineThanhTienDisplay(line)
+                                      ? formatBanHangChiTietThanhTienDisplay(line)
                                       : col === 'Tiền thuế GTGT'
-                                        ? formatDonHangLineTienThueDisplay(line)
+                                        ? formatBanHangChiTietTienThueDisplay(line)
                                         : col === 'Tổng tiền'
-                                          ? formatDonHangLineTongTienDisplay(line)
+                                          ? formatBanHangChiTietTongTienDisplay(line)
                                           : (line[col] ?? '')
                                 }
                               />
@@ -5012,7 +5022,7 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
                                 tabIndex={-1}
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Thành tiền'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatDonHangLineThanhTienDisplay(line)}
+                                value={formatBanHangChiTietThanhTienDisplay(line)}
                               />
                             ) : col === BAN_HANG_COL_DCNH ? (
                               <select
@@ -5038,7 +5048,7 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
                                 tabIndex={-1}
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Tiền thuế GTGT'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatDonHangLineTienThueDisplay(line)}
+                                value={formatBanHangChiTietTienThueDisplay(line)}
                               />
                             ) : col === 'Tổng tiền' ? (
                               <input
@@ -5046,7 +5056,7 @@ export function DonHangBanForm({ onClose, onSaved, onHeaderPointerDown, headerDr
                                 tabIndex={-1}
                                 className="misa-input-solo"
                                 style={{ ...inputStyle, ...chiTietNumericInputStyle('Tổng tiền'), width: '100%', cursor: 'default', border: '1px solid transparent', minHeight: 22, height: 22 }}
-                                value={formatDonHangLineTongTienDisplay(line)}
+                                value={formatBanHangChiTietTongTienDisplay(line)}
                               />
                             ) : col === '% thuế GTGT' ? (
                               <select

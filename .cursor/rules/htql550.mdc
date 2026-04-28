@@ -100,6 +100,12 @@ Focus/Blur: ô trống hiển thị 0 → focus xoá 0. Blur: xoá hết thì gi
 - Địa điểm GH, tiêu đề, địa chỉ: `input` đơn, không chevron.
 - Gợi ý địa chỉ qua `createPortal`, `position: fixed`, `z-index` cao.
 
+### 2.3.1 Ô mã (bắt buộc readonly)
+
+- Trên form nhập liệu nghiệp vụ/danh mục, trường **Mã** hiển thị dạng `input readOnly` (không cho gõ trực tiếp).
+- Mã được cấp tự động theo quy tắc module (sequence/prefix/STT) hoặc lấy từ bản ghi hiện có khi sửa.
+- Khi cần đổi mã nghiệp vụ đặc biệt: dùng luồng quản trị/migration riêng; không mở chỉnh tay tại form người dùng.
+
 ### 2.4 Ô lookup (dropdown + nút +)
 
 - File: `src/constants/lookupControlStyles.ts` — `LOOKUP_CONTROL_HEIGHT = 24px`.
@@ -152,6 +158,14 @@ Nhãn chuẩn: **Lưu**, **Lưu và cắt**, **Lưu và tiếp tục**. Không d
 - Nội dung modal: tên/mã bản ghi + cảnh báo "Thao tác không hoàn tác" (hoặc tương đương).
 - Menu ngữ cảnh Xoá dùng **cùng** modal captcha.
 - Kiểm tra ràng buộc trước khi xoá (ví dụ DVT đang dùng trong VTHH).
+- **Áp dụng toàn hệ thống:** mọi thao tác **xóa bản ghi** từ giao diện danh mục / danh sách (thanh công cụ **Xóa**, menu ngữ cảnh **Xóa**, **xóa vĩnh viễn** phiếu/chứng từ khỏi danh sách) phải dùng `ConfirmXoaCaptchaModal` (hoặc component tương đương cùng chuẩn captcha phép cộng), **không dùng** `window.confirm` cho các luồng đó. Trường hợp bản ghi đang được tham chiếu (ví dụ ĐVT đang dùng trong VTHH) thì **chặn xóa** (toast/cảnh báo) và **không** mở modal captcha.
+- **Ngoại lệ (không bắt buộc captcha):** xác nhận **lưu** chứng từ khi có cảnh báo nghiệp vụ (vượt tồn, v.v.); xác nhận **hủy chứng từ** (mục 3.3 — modal `ly_do_huy`); xác nhận **nhập kho / xuất kho** đổi trạng thái nếu không phải hành động «xóa bản ghi»; gỡ file **đính kèm** trong modal chi tiết có thể giữ `window.confirm` hoặc modal riêng tùy module — **không** thay bằng captcha nếu không phải nút **Xóa** danh sách chính.
+
+### 3.2.2 Quy trình thay thế luồng xóa cũ
+
+- Khi gặp màn đang dùng `Modal` xác nhận xóa cũ hoặc `window.confirm` cho nút **Xóa bản ghi danh sách**, bắt buộc đổi sang `ConfirmXoaCaptchaModal`.
+- Giữ nguyên nội dung cảnh báo nghiệp vụ (mã/tên chứng từ, cảnh báo không hoàn tác, cảnh báo xóa dây chuyền nếu có), chỉ thay lớp xác nhận bằng captcha.
+- Nếu có kiểm tra ràng buộc trước xóa (đang được tham chiếu, đã phát sinh liên quan...), phải kiểm tra **trước** khi mở captcha; điều kiện không hợp lệ thì báo lỗi và dừng.
 
 ### 3.2.1 Xóa toàn bộ / reset dữ liệu local (mock)
 
@@ -180,6 +194,12 @@ Nhãn chuẩn: **Lưu**, **Lưu và cắt**, **Lưu và tiếp tục**. Không d
 - Ưu tiên `font-variant-numeric: tabular-nums` cho ô số và ngày giờ.
 - `DataGrid`: `align: 'right'` cho cột số; `align: 'left'` cho cột chữ.
 - Form — nhãn cùng nhóm: `minWidth` đồng nhất để căn bằng lề trái (ví dụ `LABEL_MIN_WIDTH = 90`).
+
+### 4.1 Thứ tự dòng danh sách (mặc định — mới trước)
+
+Các màn danh sách **Vật tư hàng hóa**, **Báo giá**, **Đơn hàng bán** (chung từ), **Hợp đồng bán** (chung từ), **Đơn hàng mua**, **Hợp đồng mua**: thứ tự hiển thị mặc định **giảm dần theo thời gian tạo / số chứng từ** — ưu tiên phần số cuối mã dạng `{Năm}/PREFIX/{số}` (ví dụ `2026/BG/12` trên `2026/BG/5`); không có mã thì dùng số trong `id`. Logic dùng chung: `src/utils/htqlListSortNewestFirst.ts` (`htqlSortCopyNewestFirst` trong các hàm `*GetAll`). Cột sort thủ công trên lưới (nếu có) vẫn có thể ghi đè thứ tự khi user bật sort.
+
+**Đồng bộ VTHH (KV):** sau khi poll KV / quay lại tab, làm mới danh sách VTHH qua sự kiện `htql-vthh-reload` — **debounce** (~320ms) khi áp vào lưới để tránh giật; module bundle (Báo giá, …) giữ poll phiên bản riêng.
 
 ---
 
@@ -279,6 +299,15 @@ Tham chiếu: `dinhkem.mdc` — xử lý upload/download file đính kèm theo c
   - Mua hàng: Không filter, hiển thị toàn bộ VTHH.
 - **Tuyệt đối không tạo** API riêng cho Sản phẩm hay Hàng hóa — đã nhất thể hóa.
 - **Import paths:** Mọi module cần VTHH phải import từ `src/modules/kho/khoHang/vatTuHangHoaApi.ts` (không import từ inventory/kho/vatTuHangHoaApi.ts - đã xóa).
+
+### 12.1 Mã nhiều phiên bản VTHH (chính → phụ 1 → phụ 2)
+
+- **Logic & build mã:** `src/utils/vthhVariantMa.ts` — `vthhBuildMaPhu1`, `vthhBuildMaPhu2`, `vthhMachinhFromAnyVariantMa`, `vthhEffectiveParentMaU`, `vthhMaHienThiSauMaChinh`.
+- **Phiên bản chính:** `ma` = `{machinh}` (vd. `VT00001`).
+- **Phiên bản phụ 1** (độ dày / định lượng): `{machinh}_PB{n}` với `n` nguyên ≥ 1 — **một** gạch dưới trước `PB`, **không** có `_` giữa `PB` và số (vd. `VT00001_PB1`, `VT00001_PB2`). **Không** dùng dạng cũ `VT00001_PB_1` cho dữ liệu mới.
+- **Phiên bản phụ 2** (khổ giấy): `{maPhu1}{a|b|c|…}` — hậu tố chữ cái **thường** kiểu Excel (a…z, aa…) dính liền sau `maPhu1` (vd. `VT00001_PB1a`, `VT00001_PB1b`; nhóm ĐL thứ 2: `VT00001_PB2a`, …). Giá trị `pricing_matrix[].ma_quy_cach` lưu đúng mã phụ 2; mỗi cặp ĐL × khổ (tách `;`/`,` trong ô khổ) một dòng matrix.
+- **Lưới danh sách VTHH:** thứ tự thụt **chính → phụ 1 → phụ 2** (và dòng matrix ảo dưới phụ 1 khi khớp `pricing_matrix`). Cột **Mã VTHH** hiển thị rút gọn sau `{machinh}`: phụ 1 → `PB1`, phụ 2 → `PB1A` (chữ cái hậu tố **hiển thị hoa** trong cột dù DB lưu thường).
+- **Tương thích đọc cũ:** Parser vẫn nhận `_PB_{n}` và hậu tố chữ hoa để suy cha / machinh; khi lưu mới luôn dùng quy ước `_PB{n}` + chữ thường.
 
 ---
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Search } from 'lucide-react'
-import type { VatTuHangHoaRecord } from '../../kho/khoHang/vatTuHangHoaApi'
-import { vatTuHangHoaGetAll, vatTuHangHoaNapLai } from '../../kho/khoHang/vatTuHangHoaApi'
+import type { VatTuHangHoaRecord } from '../../kho/vatTuHangHoaApi'
+import { vatTuHangHoaGetAll, vatTuHangHoaNapLai } from '../../kho/vatTuHangHoaApi'
 import { formatNumberDisplay } from '../../../utils/numberFormat'
 import { useDraggable } from '../../../hooks/useDraggable'
 
@@ -92,12 +92,18 @@ export function ChonVatTuHangHoaDonMuaHangModal({ onSelect, onClose }: ChonVatTu
         })
     }
     load()
+    const debRef = { t: null as ReturnType<typeof setTimeout> | null }
     const onVthhReload = () => {
-      if (!cancelled) load({ silent: true })
+      if (debRef.t) clearTimeout(debRef.t)
+      debRef.t = setTimeout(() => {
+        debRef.t = null
+        if (!cancelled) load({ silent: true })
+      }, 320)
     }
     window.addEventListener('htql-vthh-reload', onVthhReload)
     return () => {
       cancelled = true
+      if (debRef.t) clearTimeout(debRef.t)
       window.removeEventListener('htql-vthh-reload', onVthhReload)
     }
   }, [])

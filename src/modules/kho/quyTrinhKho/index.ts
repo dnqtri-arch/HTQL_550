@@ -1,0 +1,1 @@
+export { QuyTrinhKho } from '../quyTrinhKho'

@@ -60,7 +60,7 @@ import { NhanVatTuHangHoaFormModal } from '../nhanVatTuHangHoa/nhanVatTuHangHoaF
 import { HopDongMuaForm } from './hopDongMuaForm'
 import type { HopDongMuaAttachmentItem } from './hopDongMuaAttachmentTypes'
 import { duongDanHienThi, formatDungLuongHienThi, partMccForPath, rebuildDhmAttachmentStoredFileName, uocLuongByteTuDataUrl } from './hopDongMuaDinhKemModal'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { nhaCungCapGetAll } from '../nhaCungCap/nhaCungCapApi'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
 import { exportCsv } from '../../../../utils/exportCsv'

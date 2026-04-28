@@ -1,0 +1,1 @@
+export { ThueGtgt } from '../thueGtgt'

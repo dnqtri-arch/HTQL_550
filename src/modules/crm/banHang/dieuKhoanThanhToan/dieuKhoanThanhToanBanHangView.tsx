@@ -9,6 +9,7 @@ import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { DataGrid, type DataGridColumn } from '../../../../components/common/dataGrid'
 import { useToastOptional } from '../../../../context/toastContext'
 import { formFooterButtonCancel, formFooterButtonSave } from '../../../../constants/formFooterButtons'
+import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 
 interface DieuKhoanRecord {
   id: string
@@ -54,6 +55,7 @@ export function DieuKhoanThanhToanBanHangView({ onQuayLai }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState({ ma: '', ten: '', so_ngay: '', mo_ta: '' })
   const [editId, setEditId] = useState<string | null>(null)
+  const [deleteCaptchaOpen, setDeleteCaptchaOpen] = useState(false)
 
   useEffect(() => { setDanhSach(loadDieuKhoan()) }, [])
 
@@ -75,14 +77,20 @@ export function DieuKhoanThanhToanBanHangView({ onQuayLai }: Props) {
     toast?.showToast('Đã lưu điều khoản thanh toán.', 'success')
   }
 
-  const handleXoa = () => {
+  const moXoa = () => {
     const row = danhSach.find((r) => r.id === selectedId)
     if (!row) return
-    if (!window.confirm(`Xóa điều khoản "${row.ten}"?\nThao tác này không thể hoàn tác.`)) return
+    setDeleteCaptchaOpen(true)
+  }
+
+  const xoaSauCaptcha = () => {
+    const row = danhSach.find((r) => r.id === selectedId)
+    if (!row) return
     const list = danhSach.filter((r) => r.id !== selectedId)
     saveDieuKhoan(list)
     setDanhSach(list)
     setSelectedId(null)
+    setDeleteCaptchaOpen(false)
     toast?.showToast(`Đã xóa "${row.ten}".`, 'info')
   }
 
@@ -135,7 +143,7 @@ export function DieuKhoanThanhToanBanHangView({ onQuayLai }: Props) {
         <button
           type="button"
           disabled={!selectedId}
-          onClick={handleXoa}
+          onClick={moXoa}
           style={{
             display: 'flex', alignItems: 'center', gap: 4,
             background: selectedId ? '#dc2626' : 'var(--bg-secondary)',
@@ -162,6 +170,21 @@ export function DieuKhoanThanhToanBanHangView({ onQuayLai }: Props) {
           summary={[{ label: 'Số điều khoản', value: `= ${danhSach.length}` }]}
         />
       </div>
+
+      <ConfirmXoaCaptchaModal
+        open={deleteCaptchaOpen}
+        onClose={() => setDeleteCaptchaOpen(false)}
+        onConfirm={xoaSauCaptcha}
+        title="Xóa điều khoản thanh toán"
+        message={
+          <div>
+            Bạn sắp xóa điều khoản <strong>{danhSach.find((r) => r.id === selectedId)?.ten}</strong> (mã{' '}
+            <strong>{danhSach.find((r) => r.id === selectedId)?.ma}</strong>).
+            <br />
+            Thao tác không hoàn tác.
+          </div>
+        }
+      />
 
       {showForm && (
         <div

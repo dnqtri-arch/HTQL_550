@@ -18,6 +18,7 @@ import {
 } from './khachHangApi'
 import { LOOKUP_CONTROL_HEIGHT } from '../../../../constants/lookupControlStyles'
 import { KhachHangForm } from './khachHangForm'
+import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
 import { DANH_MUC_POLL_INTERVAL_MS } from '../../../../constants/danhMucPoll'
 
 /** Chuẩn hóa chuỗi tiếng Việt để lọc (bỏ dấu, lowercase). */
@@ -100,6 +101,7 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
   const [nhomLoc, setNhomLoc] = useState('')
   const [danhSachNhom, setDanhSachNhom] = useState<NhomKhachHangItem[]>(() => loadNhomKhachHang())
   const [modalOpen, setModalOpen] = useState<'add' | 'edit' | 'clone' | null>(() => (embeddedAddMode ? 'add' : null))
+  const [deleteCaptchaOpen, setDeleteCaptchaOpen] = useState(false)
 
   const napLai = async () => {
     setDangTai(true)
@@ -199,14 +201,19 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
     if (embeddedAddMode) onClose?.()
   }
 
-  const xoa = async () => {
+  const moXoa = () => {
     if (!dongChon) return
-    if (!window.confirm('Bạn có chắc chắn muốn xóa khách hàng này?')) return
+    setDeleteCaptchaOpen(true)
+  }
+
+  const thucHienXoaSauCaptcha = async () => {
+    if (!dongChon) return
     const idXoa = dongChon.id
     try {
       await khachHangDelete(idXoa)
       setDanhSach((prev) => prev.filter((r) => r.id !== idXoa))
       setDongChon(null)
+      setDeleteCaptchaOpen(false)
       await napLai()
     } catch (e) {
       showError(e instanceof Error ? e.message : 'Có lỗi xảy ra.')
@@ -252,7 +259,7 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
               { icon: <Plus size={14} />, label: 'Thêm', onClick: moThem },
               { icon: <Copy size={14} />, label: 'Nhân bản', onClick: moNhanBan, disabled: !dongChon },
               { icon: <Pencil size={14} />, label: 'Sửa', onClick: moSua, disabled: !dongChon },
-              { icon: <Trash2 size={14} />, label: 'Xóa', onClick: xoa, disabled: !dongChon },
+              { icon: <Trash2 size={14} />, label: 'Xóa', onClick: moXoa, disabled: !dongChon },
               { icon: <RefreshCw size={14} />, label: 'Nạp', onClick: napLai, disabled: dangTai, title: 'Nạp lại dữ liệu' },
               { icon: <Upload size={14} />, label: 'Nhập khẩu', onClick: () => {}, title: 'Chức năng đang phát triển' },
               { icon: <Download size={14} />, label: 'Xuất khẩu', onClick: xuatKhau },
@@ -366,6 +373,20 @@ export function KhachHang({ onQuayLai, embeddedAddMode, onAddSuccess, onClose }:
           </div>
         </div>
       ) : null}
+
+      <ConfirmXoaCaptchaModal
+        open={deleteCaptchaOpen}
+        onClose={() => setDeleteCaptchaOpen(false)}
+        onConfirm={() => void thucHienXoaSauCaptcha()}
+        title="Xóa khách hàng"
+        message={
+          <div>
+            Bạn sắp xóa khách hàng <strong>{dongChon?.ten_kh}</strong> (mã <strong>{dongChon?.ma_kh}</strong>).
+            <br />
+            Thao tác không hoàn tác.
+          </div>
+        }
+      />
 
       <KhachHangForm
         modalOpen={modalOpen}

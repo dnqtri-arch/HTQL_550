@@ -11,12 +11,12 @@ import type {
 export interface BaoGiaApi {
   getAll: (filter: BaoGiaFilter) => BaoGiaRecord[]
   getChiTiet: (baoGiaId: string) => BaoGiaChiTiet[]
-  delete: (baoGiaId: string) => void
+  delete: (baoGiaId: string) => Promise<void>
   getDefaultFilter: () => BaoGiaFilter
   getDateRangeForKy: (ky: string) => { tu: string; den: string }
   KY_OPTIONS: readonly { value: BaoGiaKyValue; label: string }[]
   post: (payload: BaoGiaCreatePayload) => Promise<BaoGiaRecord>
-  put: (baoGiaId: string, payload: BaoGiaCreatePayload) => void
+  put: (baoGiaId: string, payload: BaoGiaCreatePayload) => Promise<void>
   soDonHangTiepTheo: () => string
   getDraft: () => BaoGiaDraftLine[] | null
   setDraft: (lines: Array<Record<string, string> & { _dvtOptions?: string[]; _vthh?: unknown }>) => void

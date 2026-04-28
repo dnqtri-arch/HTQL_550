@@ -36,7 +36,7 @@ import { hopDongBanChungTuGetAll, hopDongBanChungTuGetChiTiet } from '../hopDong
 import type { BanHangFilter, HoaDonBanCreatePayload } from '../../../../types/banHang'
 import type { HopDongBanChungTuRecord } from '../../../../types/hopDongBanChungTu'
 import type { DonHangBanChungTuRecord } from '../../../../types/donHangBanChungTu'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import { HTQL_HOA_DON_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import styles from '../BanHang.module.css'

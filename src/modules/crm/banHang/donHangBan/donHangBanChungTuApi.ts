@@ -5,6 +5,7 @@
  * Du lieu: /api/htql-module-bundle/donHangBanChungTu (MySQL htql_module_bundle hoac file JSON).
  */
 
+import { htqlSortCopyNewestFirst } from '@/utils/htqlListSortNewestFirst'
 import { maFormatHeThong, getCurrentYear } from '../../../../utils/maFormat'
 import { allocateMaHeThongFromServer, hintMaxSerialForYearPrefix } from '../../../../utils/htqlSequenceApi'
 import { htqlModuleBundleGet, htqlModuleBundlePut } from '@/utils/htqlModuleBundleApi'
@@ -164,8 +165,8 @@ function buildDonHangBanChungTuBundleForPersist(): Record<string, unknown> {
   }
 }
 
-function donHangBanChungTuHasPendingPersist(): boolean {
-  return persistTimer != null || persistInFlight
+function donHangBanChungTuIsBundleWriteInFlight(): boolean {
+  return persistInFlight
 }
 
 function schedulePersistDonHangBanChungTuBundle(): void {
@@ -213,10 +214,19 @@ export async function donHangBanChungTuFetchBundleAndApply(): Promise<number> {
   try {
     const { bundle, version, notModified } = await htqlModuleBundleGet(DON_HANG_BAN_CHUNG_TU_MODULE_ID)
     if (notModified) return version
-    if (!donHangBanChungTuHasPendingPersist()) applyDonHangBanChungTuBundlePayload(bundle)
+    if (!donHangBanChungTuIsBundleWriteInFlight()) {
+      const holdDraft = persistTimer != null
+      const savedDraft = holdDraft ? _donHangBanDraft : null
+      applyDonHangBanChungTuBundlePayload(bundle)
+      if (holdDraft) {
+        _donHangBanDraft = savedDraft
+      }
+    }
     return version
   } catch {
-    if (!donHangBanChungTuHasPendingPersist() && _donHangBanList.length === 0) applyDonHangBanChungTuBundlePayload(null)
+    if (!donHangBanChungTuIsBundleWriteInFlight() && _donHangBanList.length === 0) {
+      applyDonHangBanChungTuBundlePayload(null)
+    }
     return 0
   }
 }
@@ -294,11 +304,14 @@ export const KY_OPTIONS = [
 
 export function donHangBanGetAll(filter: DonHangBanChungTuFilter): DonHangBanChungTuRecord[] {
   const { tu, den } = filter
-  if (!tu || !den) return [..._donHangBanList]
-  return _donHangBanList.filter((d) => {
-    const ngay = d.ngay_don_hang
-    return ngay >= tu && ngay <= den
-  })
+  const rows =
+    !tu || !den
+      ? [..._donHangBanList]
+      : _donHangBanList.filter((d) => {
+          const ngay = d.ngay_don_hang
+          return ngay >= tu && ngay <= den
+        })
+  return htqlSortCopyNewestFirst(rows)
 }
 
 export function donHangBanGetChiTiet(donHangBanId: string): DonHangBanChungTuChiTiet[] {
@@ -707,7 +720,7 @@ export async function donHangBanPost(
       don_hang_ban_id: id,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: c.chieu_dai ?? 0,
       chieu_rong: c.chieu_rong ?? 0,
@@ -806,7 +819,7 @@ export function donHangBanPut(donHangBanId: string, payload: DonHangBanChungTuCr
       don_hang_ban_id: donHangBanId,
       ma_hang: c.ma_hang,
       ten_hang: c.ten_hang,
-      ma_quy_cach: '',
+      ma_quy_cach: (c.ma_quy_cach ?? c.ma_hang ?? '').trim(),
       dvt: c.dvt,
       chieu_dai: c.chieu_dai ?? 0,
       chieu_rong: c.chieu_rong ?? 0,

@@ -174,6 +174,7 @@ export interface BaoGiaCreatePayload {
   chiTiet: Array<{
     ma_hang: string
     ten_hang: string
+    ma_quy_cach?: string
     dvt: string
     so_luong: number
     don_gia: number

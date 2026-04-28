@@ -1,15 +1,22 @@
 /**
- * Client production: Local-First LAN (≤5s), sau đó fallback WAN 14.224.152.48.
+ * Client production: Local-First LAN (probe nhanh), sau đó fallback WAN 14.224.152.48.
  * Dev: URL tương đối /api (proxy Vite → localhost:3001).
  * Probe HTTP dùng axios (timeout rõ ràng).
  */
 
 import axios from 'axios'
+import {
+  HTQL_DEFAULT_API_PORT,
+  HTQL_DEFAULT_IP_LAN,
+  HTQL_DEFAULT_IP_PUBLIC,
+} from '../constants/htqlConnectionDefaults'
 
-const PROBE_PATH = '/api/don-vi-tinh'
-const LAN_RESOLVE_BUDGET_MS = 5000
-const PROBE_TIMEOUT_MS = 4500
-const SWEEP_HOST_TIMEOUT_MS = 800
+/** Ưu tiên health (nhẹ); fallback DVT cho bản server cũ. */
+const PROBE_PATHS = ['/api/health', '/api/don-vi-tinh'] as const
+const LAN_RESOLVE_BUDGET_MS = 3200
+const PROBE_TIMEOUT_MS = 2200
+const SWEEP_HOST_TIMEOUT_MS = 350
+const PROBE_RETRY_DELAY_MS = 250
 
 let resolvedBase = ''
 
@@ -40,16 +47,32 @@ function buildBase(ip: string, port: string): string {
   return `http://${ip}:${port}`
 }
 
+function probeResponseOk(path: string, data: unknown): boolean {
+  if (path === '/api/health' && data && typeof data === 'object' && 'ok' in data && (data as { ok?: unknown }).ok === true)
+    return true
+  if (path === '/api/don-vi-tinh' && Array.isArray(data)) return true
+  return false
+}
+
 async function probeOk(baseUrl: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<boolean> {
-  try {
-    const r = await axios.get(`${baseUrl}${PROBE_PATH}`, {
-      timeout: timeoutMs,
-      validateStatus: (s) => s >= 200 && s < 300,
-    })
-    return r.status >= 200 && r.status < 300
-  } catch {
-    return false
+  for (const path of PROBE_PATHS) {
+    try {
+      const r = await axios.get(`${baseUrl}${path}`, {
+        timeout: timeoutMs,
+        validateStatus: (s) => s >= 200 && s < 300,
+      })
+      if (r.status >= 200 && r.status < 300 && probeResponseOk(path, r.data)) return true
+    } catch {
+      /* thử path kế */
+    }
   }
+  return false
+}
+
+async function probeOkWithRetry(baseUrl: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<boolean> {
+  if (await probeOk(baseUrl, timeoutMs)) return true
+  await new Promise((r) => setTimeout(r, PROBE_RETRY_DELAY_MS))
+  return probeOk(baseUrl, timeoutMs)
 }
 
 function isFileProtocol(): boolean {
@@ -92,14 +115,14 @@ async function tryDevRemoteProxyFromEnv(): Promise<void> {
   const raw = (import.meta.env.VITE_HTTP_PROXY_API_TARGET as string | undefined)?.trim()
   if (!raw) return
   const base = raw.replace(/\/$/, '')
-  if (await probeOk(base)) {
+  if (await probeOkWithRetry(base)) {
     resolvedBase = base
   }
 }
 
 /**
  * Gọi một lần trước khi render app (main.tsx).
- * Ưu tiên: discovery (cài đặt) → LAN cố định → quét LAN trong ~5s → WAN.
+ * Ưu tiên: discovery (cài đặt) → LAN cố định → quét LAN trong ngân sách ngắn → WAN.
  * Dev: mặc định proxy /api → localhost:3001. Bật VITE_HTQL_DEV_USE_REMOTE_API=1 để probe LAN/WAN (server thật 192.168.1.68:3001).
  */
 export async function initHtqlApiBase(): Promise<void> {
@@ -111,9 +134,9 @@ export async function initHtqlApiBase(): Promise<void> {
     resolvedBase = ''
     return
   }
-  const port = (import.meta.env.VITE_HTQL_API_PORT as string | undefined) ?? '3001'
-  const lan = (import.meta.env.VITE_HTQL_IP_LAN as string | undefined) ?? '192.168.1.68'
-  const pub = (import.meta.env.VITE_HTQL_IP_PUBLIC as string | undefined) ?? '14.224.152.48'
+  const port = (import.meta.env.VITE_HTQL_API_PORT as string | undefined) ?? HTQL_DEFAULT_API_PORT
+  const lan = (import.meta.env.VITE_HTQL_IP_LAN as string | undefined) ?? HTQL_DEFAULT_IP_LAN
+  const pub = (import.meta.env.VITE_HTQL_IP_PUBLIC as string | undefined) ?? HTQL_DEFAULT_IP_PUBLIC
   const lanBase = buildBase(lan, port)
   const pubBase = buildBase(pub, port)
 
@@ -123,19 +146,19 @@ export async function initHtqlApiBase(): Promise<void> {
   if (discovery?.discoveredHost) {
     const p = discovery.apiPort != null ? String(discovery.apiPort) : port
     const base = buildBase(discovery.discoveredHost, p)
-    if (await probeOk(base)) {
+    if (await probeOkWithRetry(base)) {
       resolvedBase = base
       return
     }
   }
 
-  if (await probeOk(lanBase)) {
+  if (await probeOkWithRetry(lanBase)) {
     resolvedBase = lanBase
     return
   }
 
   if (Date.now() - t0 >= LAN_RESOLVE_BUDGET_MS) {
-    if (await probeOk(pubBase)) {
+    if (await probeOkWithRetry(pubBase)) {
       resolvedBase = pubBase
       return
     }
@@ -154,7 +177,7 @@ export async function initHtqlApiBase(): Promise<void> {
     return
   }
 
-  if (await probeOk(pubBase)) {
+  if (await probeOkWithRetry(pubBase)) {
     resolvedBase = pubBase
     return
   }
@@ -165,6 +188,18 @@ export async function initHtqlApiBase(): Promise<void> {
   }
   resolvedBase = ''
   await tryDevRemoteProxyFromEnv()
+}
+
+/**
+ * Kiểm tra base hiện tại còn sống; nếu mất kết nối lâu (router đổi IP, server đổi LAN/WAN),
+ * tự resolve lại để client không đứng yên ở base cũ.
+ * @returns true nếu base thay đổi.
+ */
+export async function ensureHtqlApiBaseAlive(): Promise<boolean> {
+  const prev = resolvedBase
+  if (prev && (await probeOk(prev, 1200))) return false
+  await initHtqlApiBase()
+  return prev !== resolvedBase
 }
 
 /** Base đã chọn (vd http://192.168.1.68:3001) hoặc '' khi dùng cùng origin. */

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Filter } from 'lucide-react'
 import dgStyles from './DataGrid.module.css'
 
@@ -58,6 +58,8 @@ export interface DataGridProps<T extends object> {
   stripedRows?: boolean
   /** Class thêm vào wrapper ngoài (vd. scope style cột tùy chỉnh) */
   wrapClassName?: string
+  /** Style bổ sung theo từng dòng (vd. phân tầng mẹ / con) */
+  getRowExtraStyle?: (row: T) => CSSProperties | undefined
 }
 
 const tableWrap: React.CSSProperties = {
@@ -131,6 +133,7 @@ export function DataGrid<T extends object>({
   onClearAllFilters,
   stripedRows = false,
   wrapClassName,
+  getRowExtraStyle,
 }: DataGridProps<T>) {
   const [filterPopupColumn, setFilterPopupColumn] = useState<string | null>(null)
   const [filterSearchKeyword, setFilterSearchKeyword] = useState('')
@@ -279,6 +282,7 @@ export function DataGrid<T extends object>({
                   data-htql-dg-row={stripedRows ? '' : undefined}
                   {...(stripedRows && isSelected ? { 'data-htql-dg-selected': '' } : {})}
                   style={{
+                    ...getRowExtraStyle?.(row),
                     ...(stripedRows
                       ? { cursor: onRowSelect || onRowDoubleClick ? 'pointer' : undefined }
                       : {

@@ -44,10 +44,10 @@ import type {
 import { buildHopDongBanChungTuPrefillFromBaoGia } from './baoGiaToHopDongBanChungTuPrefill'
 import { HopDongBanForm } from './hopDongBanForm'
 import { HopDongBanChungTuApiProvider } from './hopDongBanChungTuApiContext'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { dvtHienThiLabel, type DvtListItem } from '../../../../utils/dvtHienThiLabel'
 import { ConfirmXoaCaptchaModal } from '../../../../components/common/confirmXoaCaptchaModal'
-import { HTQL_BAN_HANG_TAB_EVENT, HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
+import { HTQL_BAN_HANG_TAB_EVENT, HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT } from '../banHangTabEvent'
 import { HTQL_THU_TIEN_BANG_RELOAD_EVENT, thuTienBangGetAll } from '../../../taiChinh/thuTien/thuTienBangApi'
 import { ThuTienForm } from '../../../taiChinh/thuTien/thuTienForm'
 import { ThuTienBangApiProvider } from '../../../taiChinh/thuTien/thuTienBangApiContext'
@@ -62,6 +62,7 @@ import {
   phuLucHopDongBanSoHopDongTiepTheo,
 } from '../phuLucHopDongBan/phuLucHopDongBanChungTuApi'
 import { buildPhuLucHopDongBanChungTuPrefillFromHopDongBanGoc } from '../phuLucHopDongBan/hopDongBanToPhuLucHopDongBanChungTuPrefill'
+import { phuLucHopDongBanChungTuGetAll, getDefaultPhuLucHopDongBanChungTuFilter } from '../phuLucHopDongBan/phuLucHopDongBanChungTuApi'
 import { tinhDaThuVaConLaiChoHopDongBan } from '../../../taiChinh/thuTien/chungTuCongNoKhach'
 import { tinhDaThuVaConLaiChoHopDongBan as tinhDaChiVaConLaiChoHopDongBan } from '../../../taiChinh/chiTien/chungTuCongNoChiTien'
 import { ChiTienForm } from '../../../taiChinh/chiTien/chiTienForm'
@@ -77,6 +78,7 @@ import { HTQL_NVTHH_SYNC_DHM_TINH_TRANG_EVENT } from '../../muaHang/muaHangTabEv
 import { ghiNhanDoanhThuGetAll, getDefaultGhiNhanDoanhThuFilter } from '../ghiNhanDoanhThu/ghiNhanDoanhThuApi'
 import styles from '../BanHang.module.css'
 import { parseTrailingIntFromMa } from '../../../../utils/parseMaChungTuSuffix'
+import { lockReasonHopDongByChain } from '../chungTuChainLocks'
 
 function Badge({ value }: { value: string }) {
   const cls =
@@ -164,6 +166,18 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   const [tinhTrangFilterSelected, setTinhTrangFilterSelected] = useState<string[]>([])
 
   const selectedRow = selectedId ? danhSach.find((r) => r.id === selectedId) ?? null : null
+  const allPhuLucRows = useMemo(
+    () => phuLucHopDongBanChungTuGetAll({ ...getDefaultPhuLucHopDongBanChungTuFilter(), tu: '', den: '' }),
+    [danhSach],
+  )
+  const hopDongChainLockReasonById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const row of danhSach) {
+      const reason = lockReasonHopDongByChain(row, allPhuLucRows)
+      if (reason) m.set(row.id, reason)
+    }
+    return m
+  }, [danhSach, allPhuLucRows])
 
   const thuCongNoHdbById = useMemo(() => {
     const m = new Map<string, { da_thu: number; con_lai: number; tong_da_lap: number }>()
@@ -222,9 +236,19 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
   }
 
   const coTheXoaHopDongBan = (row: HopDongBanChungTuRecord) => {
+    const chainReason = hopDongChainLockReasonById.get(row.id)
+    if (chainReason) return false
     const thuIds = hopDongBanThuTienBangIdsLinked(row).filter((tid) => tid && phieuThuTonTai.has(tid))
     const chiIds = hopDongBanChiTienBangIdsLinked(row).filter((cid) => cid && phieuChiTonTai.has(cid))
     return thuIds.length === 0 && chiIds.length === 0
+  }
+  const hopDongLockReasonForActions = (row: HopDongBanChungTuRecord): string | null => {
+    const chainReason = hopDongChainLockReasonById.get(row.id)
+    if (chainReason) return chainReason
+    if (hopDongBanKhoaViDaTaoPhieuThuHoacChi(row, phieuThuTonTai, phieuChiTonTai)) {
+      return 'Hợp đồng bán đã có phiếu thu/chi liên kết nên không thể sửa hoặc xóa.'
+    }
+    return null
   }
 
   const moChiTienTuHopDong = (row: HopDongBanChungTuRecord) => {
@@ -319,6 +343,11 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
     const h = () => loadData()
     window.addEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, h)
     return () => window.removeEventListener(HTQL_HOP_DONG_BAN_LIST_REFRESH_EVENT, h)
+  }, [loadData])
+  useEffect(() => {
+    const h = () => loadData()
+    window.addEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, h)
+    return () => window.removeEventListener(HTQL_PHU_LUC_HOP_DONG_BAN_LIST_REFRESH_EVENT, h)
   }, [loadData])
   useEffect(() => {
     const h = () => {
@@ -484,7 +513,15 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           <Plus size={13} /><span>Thêm</span>
         </button>
         <button type="button" className={styles.toolbarBtnDanger} disabled={!selectedId || !selectedRow || !coTheXoaHopDongBan(selectedRow)}
-          onClick={() => selectedRow && setXoaModal(selectedRow)}>
+          onClick={() => {
+            if (!selectedRow) return
+            const reason = hopDongLockReasonForActions(selectedRow)
+            if (reason) {
+              toast?.showToast(reason, 'error')
+              return
+            }
+            setXoaModal(selectedRow)
+          }}>
           <Trash2 size={13} /><span>Xóa</span>
         </button>
         <div
@@ -622,13 +659,17 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
           <button
             type="button"
             className={styles.contextMenuItem}
-            disabled={hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
+            disabled={!!hopDongLockReasonForActions(contextMenu.row!)}
             style={{
-              opacity: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
-              cursor: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
+              opacity: hopDongLockReasonForActions(contextMenu.row!) ? 0.55 : 1,
+              cursor: hopDongLockReasonForActions(contextMenu.row!) ? 'not-allowed' : 'pointer',
             }}
             onClick={() => {
-              if (hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
+              const reason = hopDongLockReasonForActions(contextMenu.row!)
+              if (reason) {
+                toast?.showToast(reason, 'error')
+                return
+              }
               resetFormPrefill()
               setFormRecord(contextMenu.row!)
               setFormMode('edit')
@@ -849,12 +890,16 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
             className={styles.contextMenuItem}
             style={{
               color: '#dc2626',
-              opacity: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 0.55 : 1,
-              cursor: hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai) ? 'not-allowed' : 'pointer',
+              opacity: hopDongLockReasonForActions(contextMenu.row!) ? 0.55 : 1,
+              cursor: hopDongLockReasonForActions(contextMenu.row!) ? 'not-allowed' : 'pointer',
             }}
-            disabled={hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)}
+            disabled={!!hopDongLockReasonForActions(contextMenu.row!)}
             onClick={() => {
-              if (hopDongBanKhoaViDaTaoPhieuThuHoacChi(contextMenu.row!, phieuThuTonTai, phieuChiTonTai)) return
+              const reason = hopDongLockReasonForActions(contextMenu.row!)
+              if (reason) {
+                toast?.showToast(reason, 'error')
+                return
+              }
               setXoaModal(contextMenu.row!)
               setContextMenu((m) => ({ ...m, open: false }))
             }}
@@ -869,6 +914,12 @@ function HopDongBanContent({ onNavigate: _onNavigate }: { onNavigate?: (tab: str
         onClose={() => setXoaModal(null)}
         onConfirm={() => {
           if (!xoaModal) return
+          const reason = hopDongLockReasonForActions(xoaModal)
+          if (reason) {
+            toast?.showToast(reason, 'error')
+            setXoaModal(null)
+            return
+          }
           hopDongBanChungTuDelete(xoaModal.id)
           loadData()
           if (selectedId === xoaModal.id) setSelectedId(null)

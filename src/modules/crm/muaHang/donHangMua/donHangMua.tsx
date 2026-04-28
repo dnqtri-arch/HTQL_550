@@ -66,7 +66,7 @@ import {
 import { DonHangMuaForm } from './donHangMuaForm'
 import type { DonHangMuaAttachmentItem } from './donHangMuaAttachmentTypes'
 import { duongDanHienThi, formatDungLuongHienThi, partMccForPath, rebuildDhmAttachmentStoredFileName, uocLuongByteTuDataUrl } from './donHangMuaDinhKemModal'
-import { donViTinhGetAll } from '../../../kho/khoHang/donViTinhApi'
+import { donViTinhGetAll } from '../../../kho/donViTinhApi'
 import { nhaCungCapGetAll } from '../nhaCungCap/nhaCungCapApi'
 import { formatNumberDisplay, formatSoThapPhan } from '../../../../utils/numberFormat'
 import { exportCsv } from '../../../../utils/exportCsv'
