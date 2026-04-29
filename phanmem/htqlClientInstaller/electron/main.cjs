@@ -65,10 +65,23 @@ function maybeSetupAutoUpdater() {
 }
 
 /**
+ * Định dạng mới `YYYY.MM.BUILD` (htql_client_v…) — cộng **BASE** để luôn **lớn hơn** mọi semver/tag cũ
+ * (`2026.4.28-5` dùng ngày × 1e6 nên thuần so trực tiếp với BUILD mới sẽ sai).
+ */
+const HTQL_CLIENT_NEW_FORMAT_RANK_BASE = 5_000_000_000_000_000
+
+/**
  * Thứ tự so sánh — semver (2026.4.15-2), tag VYYYY_MM_DD_NN, và **YYYY.MM.BUILD** (đồng bộ server/client).
  */
 function versionRank(s) {
   const t = String(s || '').trim()
+  const ymb = t.match(/^(\d{4})\.(\d{2})\.(\d+)$/)
+  if (ymb) {
+    const Y = parseInt(ymb[1], 10)
+    const M = parseInt(ymb[2], 10)
+    const B = parseInt(ymb[3], 10)
+    return HTQL_CLIENT_NEW_FORMAT_RANK_BASE + Y * 1e9 + M * 1e6 + B
+  }
   const sem = t.match(/^(\d+)\.(\d+)\.(\d+)-(\d+)$/)
   if (sem) {
     return (
@@ -76,14 +89,6 @@ function versionRank(s) {
       parseInt(sem[2], 10) * 1e9 +
       parseInt(sem[3], 10) * 1e6 +
       parseInt(sem[4], 10)
-    )
-  }
-  const ymb = t.match(/^(\d{4})\.(\d{2})\.(\d+)$/)
-  if (ymb) {
-    return (
-      parseInt(ymb[1], 10) * 1e12 +
-      parseInt(ymb[2], 10) * 1e9 +
-      parseInt(ymb[3], 10)
     )
   }
   const tag = t.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)

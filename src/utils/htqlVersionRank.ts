@@ -2,6 +2,9 @@
  * So sánh phiên bản client (tag V… / semver) — đồng bộ logic với `phanmem/htqlClientInstaller/electron/main.cjs` (versionRank).
  */
 
+/** Đồng bộ `electron/main.cjs` — định dạng `YYYY.MM.BUILD` luôn trên dải legacy. */
+const HTQL_CLIENT_NEW_FORMAT_RANK_BASE = 5_000_000_000_000_000
+
 export function extractHtqlClientVxTag(...candidates: (string | null | undefined)[]): string | null {
   for (const c of candidates) {
     const s = String(c ?? '').trim()
@@ -16,6 +19,15 @@ export function extractHtqlClientVxTag(...candidates: (string | null | undefined
 
 export function versionRankHtql(s: string): number {
   const t = String(s || '').trim()
+  const ymb = t.match(/^(\d{4})\.(\d{2})\.(\d+)$/)
+  if (ymb) {
+    return (
+      HTQL_CLIENT_NEW_FORMAT_RANK_BASE +
+      parseInt(ymb[1], 10) * 1e9 +
+      parseInt(ymb[2], 10) * 1e6 +
+      parseInt(ymb[3], 10)
+    )
+  }
   const sem = t.match(/^(\d+)\.(\d+)\.(\d+)-(\d+)$/)
   if (sem) {
     return (
@@ -33,10 +45,6 @@ export function versionRankHtql(s: string): number {
       parseInt(tag[3], 10) * 1e6 +
       parseInt(tag[4], 10)
     )
-  }
-  const ymb = t.match(/^(\d{4})\.(\d{2})\.(\d+)$/)
-  if (ymb) {
-    return parseInt(ymb[1], 10) * 1e12 + parseInt(ymb[2], 10) * 1e9 + parseInt(ymb[3], 10)
   }
   const digits = t.replace(/\D/g, '')
   return digits ? parseInt(digits.slice(0, 16), 10) : 0
