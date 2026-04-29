@@ -39,7 +39,7 @@ alwaysApply: false
 ## Bước 6 — Phát hành
 
 - **Server:** deploy route mới → `pm2 restart … --update-env`.
-- **Client:** bump `VERSION_TAG` → `scripts/build-htql-client.ps1` → `phanmem/client` + Tool → `update/client` + manifest.
+- **Client:** `scripts/build-htql-client.ps1` (bộ đếm `scripts/client-build-counter.txt`, tên file `htql_client_vYYYY.MM.BUILD.exe`) → `phanmem/client` + Tool → `update/client` + manifest.
 - **Tương thích:** `GET /api/htql-meta` có `htqlSyncStateApi: true`. Phiên bản API tối thiểu cho client có sync state / ETag / delta: gói server chứa `server/db/htqlSyncRoutes.js`, `htqlSyncBump.js`, schema `htql_system_state` + `htql_sync_log` (xem `ensureSchema.js`).
 
 ## Tóm tắt

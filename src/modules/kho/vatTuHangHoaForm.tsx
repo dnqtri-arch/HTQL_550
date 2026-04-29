@@ -32,7 +32,7 @@ import { ThemKhoModal } from './themKhoModal'
 import { ThemNhomVTHHModal } from './themNhomVTHHModal'
 import { Modal } from '../../components/common/modal'
 import { VatTuHangHoaFormTabNgamDinh, LabelCell } from './vatTuHangHoaFormTabNgamDinh'
-import { VthhCategoryManager } from './vthhCategoryManager'
+import { ThemVthhDanhMucMiniModal } from './themVthhDanhMucMiniModal'
 import { formFooterButtonCancel, formFooterButtonSave, formFooterButtonSaveAndAdd } from '../../constants/formFooterButtons'
 import { lookupActionButtonStyle } from '../../constants/lookupControlStyles'
 import './VatTuHangHoaForm.css'
@@ -1991,10 +1991,57 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     specialOnlyKhoSelection,
   ])
 
-  /* Matrix ĐVQĐ: tỉ lệ người dùng tự nhập, không tự điền theo kích thước. */
+  /** Khổ đặc biệt ĐVQĐ: không có chiều dài hoặc chiều dài = 0 → tỉ lệ matrix = chiều rộng (m) × ô kích thước mD. */
+  const isDvdqKhoDacBiet = useCallback(
+    (ten: string) => !(Number.isFinite(khoGiayChieuDaiByTen[ten]) && (khoGiayChieuDaiByTen[ten] ?? 0) > 0),
+    [khoGiayChieuDaiByTen],
+  )
+
   useEffect(() => {
     if (dvdqMatrixKhoTens.length === 0) return
-  }, [dvdqMatrixKhoTens])
+    const mdNum = parseDecimalFlex(String(kichThuocMd ?? '').trim())
+    if (!(mdNum > 0)) return
+    const dlTokens = selectedPhu1Axis.length > 0 ? selectedPhu1Axis : ['']
+    const rows = getValues('don_vi_quy_doi') ?? []
+    rows.forEach((row, idx) => {
+      const phep = row.phep_tinh
+      if (!phep || (phep !== 'nhan' && phep !== 'chia')) return
+      let map = { ...parseTiLeKhoJson((row as { ti_le_kho_json?: string }).ti_le_kho_json) }
+      let changed = false
+      for (const tenKh of dvdqMatrixKhoTens) {
+        if (!isDvdqKhoDacBiet(tenKh)) continue
+        const rong = khoGiayChieuRongByTen[tenKh] ?? 0
+        if (!(rong > 0)) continue
+        const nextVal = numberToStoredFormat(rong * mdNum)
+        for (const dlToken of dlTokens) {
+          const key = dvdqTiLeMatrixKey(dlToken, tenKh)
+          if ((map[key] ?? '').trim() !== nextVal) {
+            map = { ...map, [key]: nextVal }
+            changed = true
+          }
+        }
+      }
+      if (!changed) return
+      setValue(`don_vi_quy_doi.${idx}.ti_le_kho_json`, JSON.stringify(map), { shouldValidate: false })
+      userEnteredTiLeByIndex.current.add(idx)
+      const order = parseMultiStoredList(getValues('kho_giay') ?? '')
+      const firstPool = dvdqMatrixKhoTens.length > 0 ? dvdqMatrixKhoTens : order
+      const firstDl = selectedPhu1Axis[0] ?? ''
+      const first = firstPool
+        .map((t) => map[firstDl ? dvdqTiLeMatrixKey(firstDl, t) : t] ?? map[t])
+        .find((v) => v && parseFloatVN(v) > 0)
+      setValue(`don_vi_quy_doi.${idx}.ti_le_quy_doi`, first ?? '', { shouldValidate: false })
+    })
+  }, [
+    dvdqMatrixKhoTens,
+    kichThuocMd,
+    khoGiayChieuRongByTen,
+    selectedPhu1Axis,
+    getValues,
+    setValue,
+    isDvdqKhoDacBiet,
+    donViQuyDoiInputSignature,
+  ])
 
   /**
    * Tab 3 (Đơn vị quy đổi): không chặn lưu khi có dòng chưa nhập đủ. Chỉ gửi và lưu các dòng đã nhập đủ (ĐV quy đổi + Tỉ lệ); dòng thiếu ô không đưa vào payload.
@@ -4135,31 +4182,16 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       )}
 
       {variantManagerMode && (
-        <Modal
-          open
+        <ThemVthhDanhMucMiniModal
+          mode={variantManagerMode}
           onClose={() => {
             setVariantManagerMode(null)
             setTimeout(() => { void refreshLoaiNhomDanhMuc(); setOpenVariantDropdown(null) }, 0)
           }}
-          title={
-            variantManagerMode === 'dinh-luong'
-              ? 'Độ dày/ Kích thước'
-              : variantManagerMode === 'kho-giay'
-                ? 'Khổ giấy'
-                : 'Hệ màu'
-          }
-          size="lg"
-        >
-          <div style={{ height: '62vh', minHeight: 420 }}>
-            <VthhCategoryManager
-              mode={variantManagerMode}
-              onQuayLai={() => {
-                setVariantManagerMode(null)
-                setTimeout(() => { void refreshLoaiNhomDanhMuc(); setOpenVariantDropdown(null) }, 0)
-              }}
-            />
-          </div>
-        </Modal>
+          onSaved={() => {
+            setTimeout(() => { void refreshLoaiNhomDanhMuc() }, 0)
+          }}
+        />
       )}
 
       {formulaDialogOpen && ReactDOM.createPortal(

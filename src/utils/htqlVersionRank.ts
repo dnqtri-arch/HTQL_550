@@ -7,6 +7,9 @@ export function extractHtqlClientVxTag(...candidates: (string | null | undefined
     const s = String(c ?? '').trim()
     const m = s.match(/(V\d{4}_\d{2}_\d{2}_\d+)/i)
     if (m) return m[1]
+    const hc = s.match(/htql_client_v(\d{4}\.\d{2}\.\d+)/i)
+    if (hc) return hc[1]
+    if (/^\d{4}\.\d{2}\.\d+$/.test(s)) return s
   }
   return null
 }
@@ -30,6 +33,10 @@ export function versionRankHtql(s: string): number {
       parseInt(tag[3], 10) * 1e6 +
       parseInt(tag[4], 10)
     )
+  }
+  const ymb = t.match(/^(\d{4})\.(\d{2})\.(\d+)$/)
+  if (ymb) {
+    return parseInt(ymb[1], 10) * 1e12 + parseInt(ymb[2], 10) * 1e9 + parseInt(ymb[3], 10)
   }
   const digits = t.replace(/\D/g, '')
   return digits ? parseInt(digits.slice(0, 16), 10) : 0

@@ -1027,9 +1027,12 @@ ipcMain.handle('ssh:uploadClientInstaller', async (event, localPath) => {
   const sha256 = crypto.createHash('sha256').update(buf).digest('hex')
   const ver = base.replace(/\.exe$/i, '')
   const tagM = ver.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
+  const hcM = ver.match(/htql_client_v(\d{4}\.\d{2}\.\d+)/i)
   const semverFromTag = tagM
     ? `${tagM[1]}.${parseInt(tagM[2], 10)}.${parseInt(tagM[3], 10)}-${tagM[4]}`
-    : ''
+    : hcM
+      ? hcM[1]
+      : ''
   const manifestObj = {
     version: ver,
     semver: semverFromTag || undefined,
@@ -1277,9 +1280,12 @@ ipcMain.handle('ssh:restoreClientInstaller', async (event, payload) => {
   if (!/^[a-f0-9]{64}$/i.test(sha)) return { ok: false, error: 'Không lấy được SHA256 hợp lệ trên server.' }
 
   const tagM = base.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
+  const hcM = base.match(/htql_client_v(\d{4}\.\d{2}\.\d+)/i)
   const semverFromTag = tagM
     ? `${tagM[1]}.${parseInt(tagM[2], 10)}.${parseInt(tagM[3], 10)}-${tagM[4]}`
-    : undefined
+    : hcM
+      ? hcM[1]
+      : undefined
   const manifestObj = {
     version: base,
     semver: semverFromTag,

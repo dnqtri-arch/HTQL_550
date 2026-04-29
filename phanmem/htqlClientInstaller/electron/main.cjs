@@ -65,8 +65,7 @@ function maybeSetupAutoUpdater() {
 }
 
 /**
- * Thứ tự so sánh — semver (2026.4.15-2) và tag VYYYY_MM_DD_NN phải cùng thang điểm
- * (trước đây tag dùng 1e8 khiến luôn < bản đang chạy → không bao giờ báo cập nhật).
+ * Thứ tự so sánh — semver (2026.4.15-2), tag VYYYY_MM_DD_NN, và **YYYY.MM.BUILD** (đồng bộ server/client).
  */
 function versionRank(s) {
   const t = String(s || '').trim()
@@ -77,6 +76,14 @@ function versionRank(s) {
       parseInt(sem[2], 10) * 1e9 +
       parseInt(sem[3], 10) * 1e6 +
       parseInt(sem[4], 10)
+    )
+  }
+  const ymb = t.match(/^(\d{4})\.(\d{2})\.(\d+)$/)
+  if (ymb) {
+    return (
+      parseInt(ymb[1], 10) * 1e12 +
+      parseInt(ymb[2], 10) * 1e9 +
+      parseInt(ymb[3], 10)
     )
   }
   const tag = t.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
@@ -92,7 +99,7 @@ function versionRank(s) {
   return digits ? parseInt(digits.slice(0, 16), 10) : 0
 }
 
-/** Lấy tag V… trong version hoặc tên file Setup (manifest có thể ghi cả tên .exe). */
+/** Chuỗi định danh phiên bản từ manifest: tag V… hoặc **YYYY.MM.BUILD** / `htql_client_v….exe`. */
 function extractVxTagFromManifest(m) {
   if (!m || typeof m !== 'object') return ''
   const parts = [m.version, m.latestFile, m.fileName]
@@ -100,18 +107,26 @@ function extractVxTagFromManifest(m) {
     const s = String(p || '')
     const tagM = s.match(/(V\d{4}_\d{2}_\d{2}_\d+)/i)
     if (tagM) return tagM[1]
+    const hc = s.match(/htql_client_v(\d{4}\.\d{2}\.\d+)/i)
+    if (hc) return hc[1]
+    const plain = s.match(/(\d{4}\.\d{2}\.\d+)/)
+    if (plain) return plain[1]
   }
   return ''
 }
 
 function semverFromManifestVersion(m) {
-  const tag = extractVxTagFromManifest(m)
-  if (tag) {
-    const tm = tag.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
+  const v0 = m && typeof m.version === 'string' ? m.version.trim() : ''
+  const hc0 = v0.match(/htql_client_v(\d{4}\.\d{2}\.\d+)/i)
+  if (hc0) return hc0[1]
+  if (/^\d{4}\.\d{2}\.\d+$/.test(v0)) return v0
+  const id = extractVxTagFromManifest(m)
+  if (id && /^\d{4}\.\d{2}\.\d+$/.test(id)) return id
+  if (id && /^V/i.test(id)) {
+    const tm = id.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
     if (tm) return `${tm[1]}.${parseInt(tm[2], 10)}.${parseInt(tm[3], 10)}-${tm[4]}`
   }
-  const v = m && typeof m.version === 'string' ? m.version.trim() : ''
-  const tagM = v.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
+  const tagM = v0.match(/V(\d{4})_(\d{2})_(\d{2})_(\d+)/i)
   if (tagM) {
     return `${tagM[1]}.${parseInt(tagM[2], 10)}.${parseInt(tagM[3], 10)}-${tagM[4]}`
   }
@@ -312,13 +327,13 @@ function installerCacheDestPath(m, downloadUrl) {
   if (!baseName || !/\.(exe|dmg)$/i.test(baseName)) {
     try {
       const u = new URL(downloadUrl)
-      baseName = path.basename(u.pathname) || 'HTQL_550_Setup.exe'
+      baseName = path.basename(u.pathname) || 'htql_client_v.exe'
     } catch {
-      baseName = 'HTQL_550_Setup.exe'
+      baseName = 'htql_client_v.exe'
     }
   }
   const safe = baseName.replace(/[^a-zA-Z0-9._\- ()[\]]/g, '_')
-  return path.join(app.getPath('temp'), 'htql-client-updates', safe || 'HTQL_550_Setup.exe')
+  return path.join(app.getPath('temp'), 'htql-client-updates', safe || 'htql_client_v.exe')
 }
 
 /** So sánh manifest (server hoặc thư mục update/client cạnh exe) với bản đang chạy — chỉ hỏi khi phiên bản mới hơn. */

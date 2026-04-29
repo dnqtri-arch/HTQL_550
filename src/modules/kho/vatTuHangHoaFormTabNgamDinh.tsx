@@ -342,7 +342,12 @@ export function VatTuHangHoaFormTabNgamDinh({
               className="misa-lookup-btn htql-dvt-plus-btn"
               style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
               title="Thêm độ dày/ kích thước"
-              onClick={() => onAddVariantOption?.('dinh-luong')}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onAddVariantOption?.('dinh-luong')
+              }}
             >
               +
             </button>
@@ -406,7 +411,12 @@ export function VatTuHangHoaFormTabNgamDinh({
               className="misa-lookup-btn htql-dvt-plus-btn"
               style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
               title="Thêm khổ giấy"
-              onClick={() => onAddVariantOption?.('kho-giay')}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onAddVariantOption?.('kho-giay')
+              }}
             >
               +
             </button>
@@ -504,7 +514,12 @@ export function VatTuHangHoaFormTabNgamDinh({
               className="misa-lookup-btn htql-dvt-plus-btn"
               style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
               title="Thêm hệ màu"
-              onClick={() => onAddVariantOption?.('he-mau')}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onAddVariantOption?.('he-mau')
+              }}
             >
               +
             </button>

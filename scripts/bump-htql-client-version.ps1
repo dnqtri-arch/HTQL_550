@@ -1,3 +1,5 @@
+# [Lưu ý] Đặt tên bản client mới dùng `scripts/client-build-counter.txt` + sync-version.cjs (đồng bộ htql_server_v…).
+# Script này chỉ còn để chỉnh tay VERSION_TAG kiểu cũ (VYYYY_MM_DD_NN) nếu cần bảo trì dữ liệu cũ.
 # Tăng VERSION_TAG: cùng ngày tháng năm → +1 hậu tố; ngày mới → _01
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
