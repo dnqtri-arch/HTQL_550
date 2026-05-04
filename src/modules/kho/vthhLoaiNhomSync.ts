@@ -16,6 +16,7 @@ export const STORAGE_KEY_VTHH_THUE_VAT_DISABLED = 'htql550_vthh_thue_vat_disable
 export const STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM = 'htql550_vthh_kho_giay_custom'
 export const STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM = 'htql550_vthh_dinh_luong_custom'
 export const STORAGE_KEY_VTHH_HE_MAU_CUSTOM = 'htql550_vthh_he_mau_custom'
+export const STORAGE_KEY_VTHH_LOAI_GIAY_CUSTOM = 'htql550_vthh_loai_giay_custom'
 
 export const HTQL_VTHH_LOAI_NHOM_CHANGED = 'htql-vthh-loai-nhom-changed'
 
@@ -27,6 +28,7 @@ export const TINH_CHAT_BASE_OPTIONS: { value: string; label: string }[] = [
 export interface VthhDanhMucItem {
   ma: string
   ten: string
+  loai_giay?: string
   chieu_rong_m?: string
   chieu_dai_m?: string
   dien_giai?: string
@@ -124,6 +126,7 @@ function parseDanhMucStorageRaw(
           value?: unknown
           chieu_rong_m?: unknown
           chieu_dai_m?: unknown
+          loai_giay?: unknown
           dien_giai?: unknown
           he_mau_in?: unknown
           he_mau_vat_tu?: unknown
@@ -146,6 +149,7 @@ function parseDanhMucStorageRaw(
         out.push({
           ma,
           ten,
+          ...(String(obj.loai_giay ?? '').trim() ? { loai_giay: String(obj.loai_giay ?? '').trim() } : {}),
           ...(chieuRong ? { chieu_rong_m: chieuRong } : {}),
           ...(chieuDai ? { chieu_dai_m: chieuDai } : {}),
           ...(String(obj.dien_giai ?? '').trim() ? { dien_giai: String(obj.dien_giai ?? '').trim() } : {}),
@@ -260,6 +264,11 @@ export function readVthhDinhLuongCustomFromStorage(): VthhDanhMucItem[] {
 export function readVthhHeMauCustomFromStorage(): VthhDanhMucItem[] {
   const raw = htqlEntityStorage.getItem(STORAGE_KEY_VTHH_HE_MAU_CUSTOM)
   return parseDanhMucStorageRaw(raw, { legacyPrefix: 'HM' })
+}
+
+export function readVthhLoaiGiayCustomFromStorage(): VthhDanhMucItem[] {
+  const raw = htqlEntityStorage.getItem(STORAGE_KEY_VTHH_LOAI_GIAY_CUSTOM)
+  return parseDanhMucStorageRaw(raw, { legacyPrefix: 'LG' })
 }
 
 function saveVthhThueVatCustomToStorage(items: VthhDanhMucItem[]): void {

@@ -125,6 +125,7 @@ export function QuyTrinhKho({
   onChonLoaiVthh,
   onChonNhomVthh,
   onChonKhoGiay,
+  onChonLoaiGiay,
   onChonDoDayDinhLuong,
   onChonHeMau,
   onChonThueGtgt,
@@ -137,6 +138,7 @@ export function QuyTrinhKho({
   onChonLoaiVthh: () => void
   onChonNhomVthh: () => void
   onChonKhoGiay: () => void
+  onChonLoaiGiay: () => void
   onChonDoDayDinhLuong: () => void
   onChonHeMau: () => void
   onChonThueGtgt: () => void
@@ -541,7 +543,28 @@ export function QuyTrinhKho({
           }}
         >
           <FileStack size={22} color="#7c3aed" style={{ marginBottom: 2 }} />
-          <span style={{ textAlign: 'center' }}>Khổ giấy</span>
+          <span style={{ textAlign: 'center' }}>Khổ giấy/ Chiều rộng</span>
+        </button>
+        <button
+          type="button"
+          onClick={onChonLoaiGiay}
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '6px 8px',
+            background: DARK.panel,
+            border: `1px solid ${DARK.border}`,
+            borderRadius: 8,
+            cursor: 'pointer',
+            color: DARK.textLight,
+            fontSize: 10,
+          }}
+        >
+          <FileStack size={22} color="#8b5cf6" style={{ marginBottom: 2 }} />
+          <span style={{ textAlign: 'center' }}>Loại giấy</span>
         </button>
         <button
           type="button"

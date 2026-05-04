@@ -44,7 +44,14 @@ export function mountHtqlUploadRoutes(app, { pathThietKe, pathChungTu, pathVthhH
         if (!base) return cb(new Error('Chưa cấu hình đường dẫn lưu file (SSD / DATA_DIR)'))
         const rel = sanitizeRelativeDir(String(req.query?.relativeDir || ''))
         const dest = rel ? path.join(base, rel) : path.join(base, '_uploads')
-        fs.mkdirSync(dest, { recursive: true })
+        try {
+          fs.mkdirSync(dest, { recursive: true })
+        } catch (mkdirErr) {
+          if (kind === 'vthh_hinh') {
+            return cb(new Error(`Không tạo được thư mục ảnh VTHH (${dest}). Kiểm tra quyền ghi: /ssd_2tb/htql_550/vthh/`))
+          }
+          return cb(mkdirErr)
+        }
         cb(null, dest)
       } catch (e) {
         cb(e)

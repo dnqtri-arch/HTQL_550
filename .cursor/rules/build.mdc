@@ -220,10 +220,10 @@ npm run build
 ### Đồng bộ với repo
 
 - **`setup_server.sh`** nguồn sự thật: **`HTQL_550\setup_server.sh`** (gốc repo). **Không** cài **`mariadb-server`** (tránh xung đột MySQL **aaPanel**). Cài **`mariadb-client`** để kiểm tra kết nối; DB + user tạo trong aaPanel (Local server); script ghi **`server/.env`** + **`/opt/htql550/.mysql_password`** sau khi **verify** TCP `127.0.0.1:3306`.
-- **Đường dẫn mặc định lưu đính kèm trên SSD (cài đặt / `setup_server.sh`):** dưới gốc **`HTQL_ROOT_SSD`** (vd **`/ssd_2tb/htql_550`**): **`…/thietke/`** — file thiết kế; **`…/hdct/`** — đính kèm chứng từ / hóa đơn. Biến API: **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_HOADON_CHUNG_TU`** (mặc định suy từ gốc SSD).
+- **Đường dẫn mặc định lưu đính kèm trên SSD (cài đặt / `setup_server.sh`):** dưới gốc **`HTQL_ROOT_SSD`** (vd **`/ssd_2tb/htql_550`**): **`…/thietke/`** — file thiết kế; **`…/vthh/`** — ảnh VTHH; **`…/hdct/`** — đính kèm chứng từ / hóa đơn. Biến API: **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_VTHH_HINH_ANH`**, **`HTQL_PATH_HOADON_CHUNG_TU`** (mặc định suy từ gốc SSD).
 - **Gốc SSD (`HTQL_ROOT_SSD`) và `setup_server.sh` (cài mới Ubuntu / máy trần):**
-  - **Tương tác:** script hỏi **1)** gốc cài HTQL (API, `data`, `.env`), **2a)** `thietke`, **2b)** `hdct`, **3)** thư mục backup HDD — **không** còn bước legacy …/attachments hay rsync backup riêng một thư mục đính kèm cũ.
-  - **Chuẩn lưu trữ:** hai đường dẫn đầy đủ **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_HOADON_CHUNG_TU`** (mặc định vd **`/ssd_2tb/htql_550/thietke`**, **…/hdct**). **`HTQL_ROOT_SSD`** trong `.env` là cha chung của hai nhánh (hoặc cha `thietke` khi tách đĩa — xem cảnh báo Samba trong script).
+  - **Tương tác:** script hỏi **1)** gốc cài HTQL (API, `data`, `.env`), **2a)** `thietke`, **2b)** `vthh`, **2c)** `hdct`, **3)** thư mục backup HDD — **không** còn bước legacy …/attachments hay rsync backup riêng một thư mục đính kèm cũ.
+  - **Chuẩn lưu trữ:** ba đường dẫn đầy đủ **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_VTHH_HINH_ANH`**, **`HTQL_PATH_HOADON_CHUNG_TU`** (mặc định vd **`/ssd_2tb/htql_550/thietke`**, **…/vthh**, **…/hdct**). **`HTQL_ROOT_SSD`** trong `.env` là cha chung của các nhánh (hoặc cha `thietke` khi tách đĩa — xem cảnh báo Samba trong script).
   - **Control Center (`HTQL_SETUP_NONINTERACTIVE=1`):** có thể truyền **`HTQL_SETUP_ATTACH`** + **`HTQL_SETUP_PATH_*`**; nếu giá trị gốc kết thúc **…/attachments**, code trong script **chỉ** dùng để **suy** thietke/hdct (tương thích biến môi trường cũ), **không** tạo luồng backup `attachments_incremental`.
 - Gói zip phải chứa bản **`setup_server.sh`**, **`VERSION.txt`**, và **`HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md`** (nguồn **`deploy/HUONG_DAN_CAI_DAT_SERVER_UBUNTU.md`**) — hướng dẫn cài đặt từng bước trên Ubuntu mới (phụ trợ, MySQL, đường dẫn, PM2, kiểm tra).
 - **Schema MySQL tự động:** `server/db/ensureSchema.js` — **`CREATE TABLE IF NOT EXISTS`** cho DVT, NCC, KH, registry, workstation, `htql_kv_store`, …; chạy **mỗi lần** API khởi động (PM2). Với **module mới từ client**: module **KV** tự tạo bảng động `htql_mod_<moduleId>`; module **bundle** lưu chuẩn tại `htql_module_bundle` (không mirror thêm `htql_mod_*`) để giảm trùng dữ liệu và tăng tốc ghi/đọc.
@@ -252,8 +252,8 @@ Sau khi **đóng gói zip** (`package-htql-server.ps1`) và **upload lên Ubuntu
    - **MySQL:** đủ **`HTQL_MYSQL_*`** *hoặc* tương thích **`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASS`** (API map sang cùng nghĩa).
    - **Dữ liệu JSON/registry:** **`HTQL_DATA_DIR`** (vd `/opt/htql550/data`).
    - **Gốc SSD (bắt buộc cho file thiết kế + đính kèm chứng từ trên đĩa):** **`HTQL_ROOT_SSD`** — do `setup_server.sh` ghi từ **2a/2b** (hoặc biến **`HTQL_SETUP_*`** khi không tương tác), vd **`/ssd_2tb/htql_550`**.
-     - Mặc định (khi không ghi `HTQL_PATH_*` riêng): **`HTQL_PATH_THIET_KE`** → **`${HTQL_ROOT_SSD}/thietke`**, **`HTQL_PATH_HOADON_CHUNG_TU`** → **`${HTQL_ROOT_SSD}/hdct`**. **Không** yêu cầu thư mục tên **`attachments`** ở cấp gốc SSD cho vận hành chuẩn.
-     - Có thể ghi tường minh **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_HOADON_CHUNG_TU`** nếu cần tách cấu trúc con (không dùng lại tên thư mục cũ `thiet-ke`, `attachments/hoa-don-chung-tu`).
+     - Mặc định (khi không ghi `HTQL_PATH_*` riêng): **`HTQL_PATH_THIET_KE`** → **`${HTQL_ROOT_SSD}/thietke`**, **`HTQL_PATH_VTHH_HINH_ANH`** → **`${HTQL_ROOT_SSD}/vthh`**, **`HTQL_PATH_HOADON_CHUNG_TU`** → **`${HTQL_ROOT_SSD}/hdct`**. **Không** yêu cầu thư mục tên **`attachments`** ở cấp gốc SSD cho vận hành chuẩn.
+     - Có thể ghi tường minh **`HTQL_PATH_THIET_KE`**, **`HTQL_PATH_VTHH_HINH_ANH`**, **`HTQL_PATH_HOADON_CHUNG_TU`** nếu cần tách cấu trúc con (không dùng lại tên thư mục cũ `thiet-ke`, `attachments/hoa-don-chung-tu`).
 2. **Áp dụng env:** `pm2 restart <tên_app> --update-env` (vd `htql550-api` — đúng tên app trong `ecosystem.config.cjs`).
 3. **Quyền thư mục SSD:** `setup_server.sh` đã tạo gốc + **`thietke`** / **`hdct`** và phân quyền. Nếu log API báo lỗi sau khi đổi tay đường dẫn: **`sudo mkdir -p`** + **`sudo chown`** user chạy PM2.
 4. **API file trên SSD (bản server có `htqlUploadRoutes.js`):**
@@ -487,7 +487,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\build-htql-client
 ## Thư mục / đường dẫn — tự tạo khi thiếu
 
 - **Control Center (Electron):** khi SFTP file zip/installer, nếu cần thì chạy `mkdir -p` trên server cho thư mục đích (ví dụ `/tmp` đã có; các đường dẫn SSD trong bước `sudo cp` đều có `mkdir -p` trước).
-- **API Node (`server/donViTinhServer.js`):** khi khởi động, tự `fs.mkdirSync(..., { recursive: true })` + (Linux) `chmod 775` cho `DATA_DIR`, SSD gốc, `hdct`, `thietke`, SQLite (nếu dùng), `update/server`, `update/client`, `logs`, backup (theo biến môi trường). Ghi file đính kèm lên SSD qua `POST /api/htql-upload` (`server/htqlUploadRoutes.js`) vào **`HTQL_PATH_THIET_KE`** / **`HTQL_PATH_HOADON_CHUNG_TU`**. **`setup_server.sh`** tạo và phân quyền gốc SSD + **`thietke`**/**`hdct`** theo **`HTQL_SETUP_ATTACH`**; bổ sung `chown` user triển khai cho `data` / `update` / `logs` và cây backup HDD.
+- **API Node (`server/donViTinhServer.js`):** khi khởi động, tự `fs.mkdirSync(..., { recursive: true })` + (Linux) `chmod 775` cho `DATA_DIR`, SSD gốc, `hdct`, `thietke`, `vthh`, SQLite (nếu dùng), `update/server`, `update/client`, `logs`, backup (theo biến môi trường). Ghi file đính kèm lên SSD qua `POST /api/htql-upload` (`server/htqlUploadRoutes.js`) vào **`HTQL_PATH_THIET_KE`** / **`HTQL_PATH_VTHH_HINH_ANH`** / **`HTQL_PATH_HOADON_CHUNG_TU`**. **`setup_server.sh`** tạo và phân quyền gốc SSD + **`thietke`**/**`vthh`**/**`hdct`** theo **`HTQL_SETUP_ATTACH`**; bổ sung `chown` user triển khai cho `data` / `update` / `logs` và cây backup HDD.
 - **Client cài đặt (Electron installer):** thư mục làm việc / file cấu hình cạnh exe được tạo khi ghi (theo code hiện có).
 
 
@@ -497,6 +497,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\build-htql-client
 
 - **Hóa đơn / chứng từ:** đường dẫn tuyệt đối `/ssd_2tb/htql_550/hdct/` — biến `HTQL_PATH_HOADON_CHUNG_TU`; API upload `kind=chung_tu`.
 - **File thiết kế:** đường dẫn tuyệt đối `/ssd_2tb/htql_550/thietke/` — biến `HTQL_PATH_THIET_KE`; API upload `kind=thiet_ke`.
+- **Ảnh VTHH:** đường dẫn tuyệt đối `/ssd_2tb/htql_550/vthh/` — biến `HTQL_PATH_VTHH_HINH_ANH`; API upload `kind=vthh_hinh`.
 - Hai kho **không** gộp chung trong một thư mục `attachments` khi cài mới. `HTQL_ROOT_SSD=/ssd_2tb/htql_550` vẫn là gốc SSD; nếu không khai báo `HTQL_PATH_*`, Node suy `${HTQL_ROOT_SSD}/hdct` và `${HTQL_ROOT_SSD}/thietke`. `deploy/env.server.example` có sẵn hai dòng `HTQL_PATH_*` tường minh.
 
 ## Bổ sung — Build máy trạm và thư mục phân phối

@@ -13,10 +13,12 @@ import {
 import { useToastOptional } from '../../context/toastContext'
 import {
   NHOM_VTHH_BASE_ITEMS,
+  TINH_CHAT_BASE_OPTIONS,
   STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM,
   STORAGE_KEY_VTHH_HE_MAU_CUSTOM,
   STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM,
   STORAGE_KEY_VTHH_LOAI_CUSTOM,
+  STORAGE_KEY_VTHH_LOAI_GIAY_CUSTOM,
   STORAGE_KEY_VTHH_NHOM_DISABLED,
   STORAGE_KEY_VTHH_NHOM_CUSTOM,
   STORAGE_KEY_VTHH_THUE_VAT_CUSTOM,
@@ -32,6 +34,7 @@ import {
   readVthhHeMauCustomFromStorage,
   readVthhKhoGiayCustomFromStorage,
   readVthhLoaiCustomFromStorage,
+  readVthhLoaiGiayCustomFromStorage,
   readVthhNhomDisabledFromStorage,
   readVthhNhomCustomFromStorage,
   readVthhThueVatCustomFromStorage,
@@ -43,7 +46,7 @@ import { htqlEntityStorage } from '../../utils/htqlEntityStorage'
 import { htqlApiUrl } from '../../config/htqlApiBase'
 import { formatSoTien, isZeroDisplay, normalizeKichThuocInput, parseDecimalFlex } from '../../utils/numberFormat'
 
-type ManagerMode = 'loai' | 'nhom' | 'vat' | 'kho-giay' | 'dinh-luong' | 'he-mau'
+type ManagerMode = 'loai' | 'nhom' | 'vat' | 'loai-giay' | 'kho-giay' | 'dinh-luong' | 'he-mau'
 
 interface Props {
   mode: ManagerMode
@@ -54,6 +57,7 @@ interface RowItem {
   id: string
   ma: string
   ten: string
+  loaiGiay: string
   chieuRongM: string
   chieuDaiM: string
   dienGiai: string
@@ -65,7 +69,8 @@ interface RowItem {
 function titleByMode(mode: ManagerMode): string {
   if (mode === 'loai') return 'Loại VTHH'
   if (mode === 'nhom') return 'Nhóm VTHH'
-  if (mode === 'kho-giay') return 'Khổ giấy'
+  if (mode === 'loai-giay') return 'Loại giấy'
+  if (mode === 'kho-giay') return 'Khổ giấy/ Chiều rộng'
   if (mode === 'dinh-luong') return 'Độ dày/ Định lượng'
   if (mode === 'he-mau') return 'Hệ màu'
   return 'Thuế GTGT'
@@ -97,6 +102,7 @@ function normalizeMaByMode(raw: string, mode: ManagerMode): string {
 function readCustomValuesByMode(mode: ManagerMode): VthhDanhMucItem[] {
   if (mode === 'loai') return readVthhLoaiCustomFromStorage()
   if (mode === 'nhom') return readVthhNhomCustomFromStorage()
+  if (mode === 'loai-giay') return readVthhLoaiGiayCustomFromStorage()
   if (mode === 'kho-giay') return readVthhKhoGiayCustomFromStorage()
   if (mode === 'dinh-luong') return readVthhDinhLuongCustomFromStorage()
   if (mode === 'he-mau') return readVthhHeMauCustomFromStorage()
@@ -233,15 +239,26 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
   const [pendingDienGiai, setPendingDienGiai] = useState('')
   const [pendingHeMauIn, setPendingHeMauIn] = useState(false)
   const [pendingHeMauVatTu, setPendingHeMauVatTu] = useState(false)
+  const [pendingLoaiGiay, setPendingLoaiGiay] = useState('')
   const [napKichThuocDangTai, setNapKichThuocDangTai] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   const title = titleByMode(mode)
+  const loaiGiayOptions = useMemo(
+    () =>
+      readVthhLoaiGiayCustomFromStorage()
+        .filter((x) => String(x.ma ?? '').trim() && String(x.ten ?? '').trim())
+        .map((x) => ({ ma: String(x.ma ?? '').trim(), ten: String(x.ten ?? '').trim() }))
+        .sort((a, b) => sortByMaNumericThenText(a.ma, b.ma)),
+    [],
+  )
   const storageKey =
     mode === 'loai'
       ? STORAGE_KEY_VTHH_LOAI_CUSTOM
       : mode === 'nhom'
         ? STORAGE_KEY_VTHH_NHOM_CUSTOM
+        : mode === 'loai-giay'
+          ? STORAGE_KEY_VTHH_LOAI_GIAY_CUSTOM
         : mode === 'kho-giay'
           ? STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM
           : mode === 'dinh-luong'
@@ -349,6 +366,12 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     const tenByMa = new Map<string, string>()
 
     if (mode === 'loai') {
+      for (const base of TINH_CHAT_BASE_OPTIONS) {
+        const maBase = String(base.value ?? '').trim()
+        if (!maBase) continue
+        if (!countMap.has(maBase)) countMap.set(maBase, 0)
+        tenByMa.set(maBase, String(base.label ?? base.value ?? '').trim() || maBase)
+      }
       for (const item of customValues) {
         if (!item.ma || !item.ten) continue
         if (!countMap.has(item.ma)) countMap.set(item.ma, 0)
@@ -364,7 +387,18 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       }
       return [...countMap.entries()]
         .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
-        .map(([ma, count]) => ({ id: ma, ma, ten: tenByMa.get(ma) ?? ma, chieuRongM: '', chieuDaiM: '', dienGiai: '', heMauIn: false, heMauVatTu: false, count }))
+        .map(([ma, count]) => ({
+          id: ma,
+          ma,
+          ten: tenByMa.get(ma) ?? ma,
+          loaiGiay: '',
+          chieuRongM: '',
+          chieuDaiM: '',
+          dienGiai: '',
+          heMauIn: false,
+          heMauVatTu: false,
+          count,
+        }))
     }
 
     if (mode === 'vat') {
@@ -393,6 +427,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
           id: ma,
           ma,
           ten: tenByMa.get(ma) ?? thueVatTokenDisplayLabel(ma, customValues),
+          loaiGiay: '',
           chieuRongM: '',
           chieuDaiM: '',
           dienGiai: '',
@@ -402,8 +437,39 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
         }))
     }
 
+    if (mode === 'loai-giay') {
+      const ghiChuByMa = new Map<string, string>()
+      for (const item of customValues) {
+        const ma = String(item.ma ?? '').trim()
+        const ten = String(item.ten ?? '').trim()
+        if (!ma || !ten) continue
+        if (!countMap.has(ma)) countMap.set(ma, 0)
+        tenByMa.set(ma, ten)
+        ghiChuByMa.set(ma, String(item.dien_giai ?? '').trim())
+      }
+      const khoGiayItems = readVthhKhoGiayCustomFromStorage()
+      for (const kg of khoGiayItems) {
+        const lg = String(kg.loai_giay ?? '').trim()
+        if (!lg) continue
+        countMap.set(lg, (countMap.get(lg) ?? 0) + 1)
+      }
+      return [...countMap.entries()]
+        .sort((a, b) => sortByMaNumericThenText(a[0], b[0]))
+        .map(([ma, count]) => ({
+          id: ma,
+          ma,
+          ten: tenByMa.get(ma) ?? ma,
+          loaiGiay: '',
+          chieuRongM: '',
+          chieuDaiM: '',
+          dienGiai: ghiChuByMa.get(ma) ?? '',
+          heMauIn: false,
+          heMauVatTu: false,
+          count,
+        }))
+    }
+
     if (mode === 'kho-giay' || mode === 'dinh-luong' || mode === 'he-mau') {
-      /** Chỉ hiển thị dòng danh mục đã khai báo (custom); «Số VTHH sử dụng» = token khớp ma/ten + pricing_matrix. */
       const countByMa = new Map<string, number>()
       for (const item of customValues) {
         const ma = String(item.ma ?? '').trim()
@@ -436,6 +502,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
             id: ma,
             ma,
             ten,
+            loaiGiay: mode === 'kho-giay' ? String(item.loai_giay ?? '').trim() : '',
             chieuRongM: mode === 'kho-giay' ? String(item.chieu_rong_m ?? '').trim() : '',
             chieuDaiM: mode === 'kho-giay' ? String(item.chieu_dai_m ?? '').trim() : '',
             dienGiai: mode === 'he-mau' ? String(item.dien_giai ?? '').trim() : '',
@@ -470,6 +537,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
         id: ma,
         ma,
         ten: tenByMa.get(ma) ?? nhomTokenDisplayLabel(ma, customValues),
+        loaiGiay: '',
         chieuRongM: '',
         chieuDaiM: '',
         dienGiai: '',
@@ -483,7 +551,8 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     if (mode === 'kho-giay') {
       return [
         { key: 'ma', label: 'Mã', width: '16%', filterable: false },
-        { key: 'ten', label: title, width: '28%', filterable: false },
+        { key: 'ten', label: title, width: '22%', filterable: false },
+        { key: 'loaiGiay', label: 'Tên loại giấy', width: '14%', filterable: false },
         {
           key: 'chieuRongM',
           label: 'Kích thước (m) - Chiều rộng',
@@ -501,6 +570,14 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
           renderCell: (v) => meterDisplayVn(String(v ?? '')),
         },
         { key: 'count', label: 'Số VTHH sử dụng', width: '24%', align: 'right', filterable: false },
+      ]
+    }
+    if (mode === 'loai-giay') {
+      return [
+        { key: 'ma', label: 'Mã', width: '18%', filterable: false },
+        { key: 'ten', label: 'Loại giấy', width: '42%', filterable: false },
+        { key: 'dienGiai', label: 'Ghi chú', width: '24%', filterable: false },
+        { key: 'count', label: 'Số khổ giấy sử dụng', width: '16%', align: 'right', filterable: false },
       ]
     }
     if (mode === 'he-mau') {
@@ -526,6 +603,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     setPendingDienGiai('')
     setPendingHeMauIn(false)
     setPendingHeMauVatTu(false)
+    setPendingLoaiGiay('')
     setEditModal('add')
   }
 
@@ -538,6 +616,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
     setPendingDienGiai(selected.dienGiai ?? '')
     setPendingHeMauIn(Boolean(selected.heMauIn))
     setPendingHeMauVatTu(Boolean(selected.heMauVatTu))
+    setPendingLoaiGiay(selected.loaiGiay ?? '')
     setEditModal('edit')
   }
 
@@ -592,6 +671,10 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
       }
       chieuRongM = String(w)
       chieuDaiM = l == null ? '' : String(l)
+      if (!pendingLoaiGiay.trim()) {
+        showError('Tên loại giấy là bắt buộc.')
+        return
+      }
     }
     const selectedMa = selected?.ma ?? ''
     const duplicateMa = rows.find((x) => x.ma === ma && x.ma !== selectedMa)
@@ -615,7 +698,13 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
         {
           ma,
           ten,
+          ...(mode === 'loai-giay'
+            ? {
+                dien_giai: pendingDienGiai.trim() || undefined,
+              }
+            : {}),
           ...(mode === 'kho-giay' ? { chieu_rong_m: chieuRongM, chieu_dai_m: chieuDaiM } : {}),
+          ...(mode === 'kho-giay' ? { loai_giay: pendingLoaiGiay.trim() } : {}),
           ...(mode === 'he-mau'
             ? {
                 dien_giai: pendingDienGiai.trim() || undefined,
@@ -682,6 +771,39 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
           ),
         )
       }
+      if (mode === 'kho-giay') {
+        saveCustomValues(
+          customValues.map((x) =>
+            x.ma === selected.ma
+              ? {
+                  ...x,
+                  ma,
+                  ten,
+                  loai_giay: pendingLoaiGiay.trim(),
+                  chieu_rong_m: chieuRongM,
+                  chieu_dai_m: chieuDaiM,
+                }
+              : x,
+          ),
+        )
+      }
+      setEditModal(null)
+      return
+    }
+    if (mode === 'loai-giay') {
+      upsertCustomValue(ma, ten, selected.ma)
+      saveCustomValues(
+        customValues.map((x) =>
+          x.ma === selected.ma
+            ? {
+                ...x,
+                ma,
+                ten,
+                dien_giai: pendingDienGiai.trim() || undefined,
+              }
+            : x,
+        ),
+      )
       setEditModal(null)
       return
     }
@@ -781,9 +903,10 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
                 <thead>
                   <tr>
                     <th rowSpan={2} style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'left', width: '16%' }}>Mã</th>
-                    <th rowSpan={2} style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'left', width: '28%' }}>{title}</th>
+                    <th rowSpan={2} style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'left', width: '22%' }}>{title}</th>
+                    <th rowSpan={2} style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'left', width: '14%' }}>Tên loại giấy</th>
                     <th colSpan={2} style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'center', width: '32%' }}>Kích thước (m)</th>
-                    <th rowSpan={2} style={{ borderBottom: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'right', width: '24%' }}>Số VTHH sử dụng</th>
+                    <th rowSpan={2} style={{ borderBottom: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'right', width: '16%' }}>Số VTHH sử dụng</th>
                   </tr>
                   <tr>
                     <th style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '4px 6px', background: 'var(--bg-tab)', textAlign: 'right' }}>Chiều rộng</th>
@@ -801,6 +924,7 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
                       >
                         <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px' }}>{r.ma}</td>
                         <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px' }}>{r.ten}</td>
+                        <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px' }}>{r.loaiGiay}</td>
                         <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{meterDisplayVn(r.chieuRongM || '')}</td>
                         <td style={{ borderBottom: '0.5px solid var(--border)', borderRight: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{meterDisplayVn(r.chieuDaiM || '')}</td>
                         <td style={{ borderBottom: '0.5px solid var(--border)', padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.count}</td>
@@ -883,8 +1007,32 @@ export function VthhCategoryManager({ mode, onQuayLai }: Props) {
             placeholder={`Nhập ${title.toLowerCase()}`}
             style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12 }}
           />
+          {mode === 'loai-giay' && (
+            <>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ghi chú</label>
+              <input
+                value={pendingDienGiai}
+                onChange={(e) => setPendingDienGiai(e.target.value)}
+                placeholder="Nhập ghi chú loại giấy"
+                style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12 }}
+              />
+            </>
+          )}
           {mode === 'kho-giay' && (
             <>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tên loại giấy</label>
+              <select
+                value={pendingLoaiGiay}
+                onChange={(e) => setPendingLoaiGiay(e.target.value)}
+                style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12 }}
+              >
+                <option value="">Chọn loại giấy</option>
+                {loaiGiayOptions.map((x) => (
+                  <option key={x.ma} value={x.ma}>
+                    {x.ten}
+                  </option>
+                ))}
+              </select>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Chiều rộng (m)</label>
               <input
                 value={pendingChieuRongM}

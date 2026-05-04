@@ -50,6 +50,7 @@ fi
 DEFAULT_ROOT="/opt/htql550"
 # Hai đường dẫn đầy đủ (API: HTQL_PATH_THIET_KE / HTQL_PATH_HOADON_CHUNG_TU). Mặc định cài đặt:
 DEFAULT_THIETKE="/ssd_2tb/htql_550/thietke"
+DEFAULT_VTHH="/ssd_2tb/htql_550/vthh"
 DEFAULT_HDCT="/ssd_2tb/htql_550/hdct"
 DEFAULT_BACKUP="/hdd_4tb/htql_550"
 
@@ -71,11 +72,14 @@ fi
 # Gán đường dẫn thiết kế / chứng từ (Control Center: HTQL_SETUP_ATTACH + PATH_* tùy chọn)
 htql_apply_storage_paths() {
   HTQL_DIR_THIETKE="${DEFAULT_THIETKE}"
+  HTQL_DIR_VTHH="${DEFAULT_VTHH}"
   HTQL_DIR_HDCT="${DEFAULT_HDCT}"
   [[ -n "${HTQL_SETUP_PATH_THIET_KE:-}" ]] && HTQL_DIR_THIETKE="${HTQL_SETUP_PATH_THIET_KE}"
   [[ -n "${HTQL_SETUP_THIETKE:-}" ]] && HTQL_DIR_THIETKE="${HTQL_SETUP_THIETKE}"
   [[ -n "${HTQL_SETUP_PATH_HOADON_CHUNG_TU:-}" ]] && HTQL_DIR_HDCT="${HTQL_SETUP_PATH_HOADON_CHUNG_TU}"
   [[ -n "${HTQL_SETUP_HDCT:-}" ]] && HTQL_DIR_HDCT="${HTQL_SETUP_HDCT}"
+  [[ -n "${HTQL_SETUP_PATH_VTHH_HINH_ANH:-}" ]] && HTQL_DIR_VTHH="${HTQL_SETUP_PATH_VTHH_HINH_ANH}"
+  [[ -n "${HTQL_SETUP_VTHH:-}" ]] && HTQL_DIR_VTHH="${HTQL_SETUP_VTHH}"
 
   if [[ -n "${HTQL_SETUP_ATTACH:-}" ]]; then
     _a="${HTQL_SETUP_ATTACH%/}"
@@ -86,10 +90,14 @@ htql_apply_storage_paths() {
     if [[ -z "${HTQL_SETUP_PATH_HOADON_CHUNG_TU:-}" && -z "${HTQL_SETUP_HDCT:-}" ]]; then
       HTQL_DIR_HDCT="${_root}/hdct"
     fi
+    if [[ -z "${HTQL_SETUP_PATH_VTHH_HINH_ANH:-}" && -z "${HTQL_SETUP_VTHH:-}" ]]; then
+      HTQL_DIR_VTHH="${_root}/vthh"
+    fi
   fi
 
   HTQL_DIR_THIETKE="${HTQL_DIR_THIETKE%/}"
   HTQL_DIR_HDCT="${HTQL_DIR_HDCT%/}"
+  HTQL_DIR_VTHH="${HTQL_DIR_VTHH%/}"
 
   PARENT_TK="$(dirname "${HTQL_DIR_THIETKE}")"
   PARENT_HDCT="$(dirname "${HTQL_DIR_HDCT}")"
@@ -117,6 +125,7 @@ if [[ "${HTQL_SETUP_NONINTERACTIVE:-}" == "1" ]]; then
   echo ""
   echo "→ (HTQL Control) Hệ thống & DB: ${HTQL_ROOT}"
   echo "→ (HTQL Control) Thiết kế (thietke):  ${HTQL_DIR_THIETKE}"
+  echo "→ (HTQL Control) Ảnh VTHH (vthh):     ${HTQL_DIR_VTHH}"
   echo "→ (HTQL Control) Chứng từ (hdct):     ${HTQL_DIR_HDCT}"
   echo "→ (HTQL Control) HTQL_ROOT_SSD (.env): ${SSD_DEFAULT}"
   echo "→ (HTQL Control) Backup HDD:    ${HTQL_BACKUP}"
@@ -131,10 +140,13 @@ else
   HTQL_ROOT="${IN_ROOT:-$DEFAULT_ROOT}"
 
   read -r -p "2a) Thư mục đính kèm thiết kế (thietke) [${DEFAULT_THIETKE}]: " IN_THIETKE
-  read -r -p "2b) Thư mục đính kèm chứng từ / hóa đơn (hdct) [${DEFAULT_HDCT}]: " IN_HDCT
+  read -r -p "2b) Thư mục ảnh VTHH (vthh) [${DEFAULT_VTHH}]: " IN_VTHH
+  read -r -p "2c) Thư mục đính kèm chứng từ / hóa đơn (hdct) [${DEFAULT_HDCT}]: " IN_HDCT
   HTQL_DIR_THIETKE="${IN_THIETKE:-$DEFAULT_THIETKE}"
+  HTQL_DIR_VTHH="${IN_VTHH:-$DEFAULT_VTHH}"
   HTQL_DIR_HDCT="${IN_HDCT:-$DEFAULT_HDCT}"
   HTQL_DIR_THIETKE="${HTQL_DIR_THIETKE%/}"
+  HTQL_DIR_VTHH="${HTQL_DIR_VTHH%/}"
   HTQL_DIR_HDCT="${HTQL_DIR_HDCT%/}"
 
   PARENT_TK="$(dirname "${HTQL_DIR_THIETKE}")"
@@ -172,6 +184,7 @@ else
   echo ""
   echo "→ Hệ thống & DB (gốc HTQL):  ${HTQL_ROOT}"
   echo "→ Thiết kế (thietke):         ${HTQL_DIR_THIETKE}"
+  echo "→ Ảnh VTHH (vthh):            ${HTQL_DIR_VTHH}"
   echo "→ Chứng từ (hdct):            ${HTQL_DIR_HDCT}"
   echo "→ HTQL_ROOT_SSD (.env):      ${SSD_DEFAULT}"
   echo "→ Backup (HDD):               ${HTQL_BACKUP}"
@@ -259,12 +272,12 @@ htql_log ">>> [HTQL] Bước 5/6 — Triển khai thư mục, API, PostgreSQL, P
 
 # --- Thư mục ---
 sudo mkdir -p "${HTQL_ROOT}/server" "${HTQL_ROOT}/database" "${HTQL_ROOT}/data" \
-  "${HTQL_DIR_THIETKE}" "${HTQL_DIR_HDCT}" "${HTQL_BACKUP}"
+  "${HTQL_DIR_THIETKE}" "${HTQL_DIR_VTHH}" "${HTQL_DIR_HDCT}" "${HTQL_BACKUP}"
 sudo chown -R "$(whoami):$(whoami)" "${HTQL_ROOT}"
-sudo chown -R "$(whoami):$(whoami)" "${HTQL_DIR_THIETKE}" "${HTQL_DIR_HDCT}" 2>/dev/null || true
+sudo chown -R "$(whoami):$(whoami)" "${HTQL_DIR_THIETKE}" "${HTQL_DIR_VTHH}" "${HTQL_DIR_HDCT}" 2>/dev/null || true
 sudo chown -R "$(whoami):$(whoami)" "${HTQL_BACKUP}" 2>/dev/null || true
 
-chmod -R u+rwX "${HTQL_DIR_THIETKE}" "${HTQL_DIR_HDCT}" "${SSD_DEFAULT}" 2>/dev/null || true
+chmod -R u+rwX "${HTQL_DIR_THIETKE}" "${HTQL_DIR_VTHH}" "${HTQL_DIR_HDCT}" "${SSD_DEFAULT}" 2>/dev/null || true
 
 # --- Copy gói ---
 rsync -a "${SCRIPT_DIR}/server/" "${HTQL_ROOT}/server/"
@@ -278,7 +291,7 @@ rsync -a "${SCRIPT_DIR}/deploy/" "${HTQL_ROOT}/deploy/" 2>/dev/null || true
 htql_log ">>> [HTQL] npm install API (server)..."
 (cd "${HTQL_ROOT}/server" && npm install --omit=dev)
 
-htql_log ">>> [HTQL] SSD: thietke=${HTQL_DIR_THIETKE} hdct=${HTQL_DIR_HDCT}  HTQL_ROOT_SSD=${SSD_DEFAULT}"
+htql_log ">>> [HTQL] SSD: thietke=${HTQL_DIR_THIETKE} vthh=${HTQL_DIR_VTHH} hdct=${HTQL_DIR_HDCT}  HTQL_ROOT_SSD=${SSD_DEFAULT}"
 
 # --- MySQL (aaPanel) — chỉ kiểm tra kết nối + ghi .env (không tạo DB/user trên máy) ---
 htql_log ">>> [HTQL] MySQL (aaPanel): kiểm tra TCP 127.0.0.1:3306, database đã tạo trong panel..."
@@ -327,6 +340,7 @@ _env_out="$(mktemp)"
   echo "HTQL_ROOT_SSD=${SSD_DEFAULT}"
   echo "HTQL_PATH_HOADON_CHUNG_TU=${HTQL_DIR_HDCT}"
   echo "HTQL_PATH_THIET_KE=${HTQL_DIR_THIETKE}"
+  echo "HTQL_PATH_VTHH_HINH_ANH=${HTQL_DIR_VTHH}"
   echo "HTQL_PATH_BACKUP_DU_LIEU=${HTQL_BACKUP}/backup_dulieu"
   echo "HTQL_PATH_BACKUP_CT_TK=${HTQL_BACKUP}/backup_ct_tk"
   echo "HTQL_UPDATE_CLIENT_DIR=${HTQL_ROOT}/update/client"
@@ -600,6 +614,7 @@ _REPORT_FILE="${HTQL_ROOT}/HTQL_INSTALL_REPORT.txt"
   echo "— Nơi lưu trữ —"
   echo "Hệ thống + DB (API, data):  ${HTQL_ROOT}"
   echo "Thiết kế (thietke):          ${HTQL_DIR_THIETKE}"
+  echo "Ảnh VTHH (vthh):             ${HTQL_DIR_VTHH}"
   echo "Chứng từ (hdct):             ${HTQL_DIR_HDCT}"
   echo "HTQL_ROOT_SSD (.env):        ${SSD_DEFAULT}"
   echo "Backup định kỳ (HDD):       ${HTQL_BACKUP}"

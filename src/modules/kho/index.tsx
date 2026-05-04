@@ -11,6 +11,7 @@ import { LoaiVthh } from './loaiVthh/index'
 import { NhomVthh } from './nhomVthh/index'
 import { ThueGtgt } from './thueGtgt/index'
 import { KhoGiay } from './khoGiay/index'
+import { LoaiGiay } from './loaiGiay/index'
 import { DoDayDinhLuong } from './doDayDinhLuong/index'
 import { HeMau } from './heMau/index'
 
@@ -30,6 +31,7 @@ type ViewDanhMuc =
   | 'loai-vthh'
   | 'nhom-vthh'
   | 'kho-giay'
+  | 'loai-giay'
   | 'do-day-dinh-luong'
   | 'he-mau'
   | 'thue-gtgt'
@@ -51,7 +53,9 @@ export function Kho() {
           : viewDanhMuc === 'nhom-vthh'
             ? 'Nhóm VTHH'
             : viewDanhMuc === 'kho-giay'
-              ? 'Khổ giấy'
+              ? 'Khổ giấy/ Chiều rộng'
+              : viewDanhMuc === 'loai-giay'
+                ? 'Loại giấy'
               : viewDanhMuc === 'do-day-dinh-luong'
                 ? 'Độ dày/ Định lượng'
                 : viewDanhMuc === 'he-mau'
@@ -92,6 +96,9 @@ export function Kho() {
     if (viewDanhMuc === 'kho-giay') {
       return <KhoGiay onQuayLai={() => setViewDanhMuc(null)} />
     }
+    if (viewDanhMuc === 'loai-giay') {
+      return <LoaiGiay onQuayLai={() => setViewDanhMuc(null)} />
+    }
     if (viewDanhMuc === 'do-day-dinh-luong') {
       return <DoDayDinhLuong onQuayLai={() => setViewDanhMuc(null)} />
     }
@@ -124,6 +131,7 @@ export function Kho() {
           onChonLoaiVthh={() => setViewDanhMuc('loai-vthh')}
           onChonNhomVthh={() => setViewDanhMuc('nhom-vthh')}
           onChonKhoGiay={() => setViewDanhMuc('kho-giay')}
+          onChonLoaiGiay={() => setViewDanhMuc('loai-giay')}
           onChonDoDayDinhLuong={() => setViewDanhMuc('do-day-dinh-luong')}
           onChonHeMau={() => setViewDanhMuc('he-mau')}
           onChonThueGtgt={() => setViewDanhMuc('thue-gtgt')}

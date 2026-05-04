@@ -7,10 +7,12 @@ import {
 } from '../../constants/formFooterButtons'
 import { useToastOptional } from '../../context/toastContext'
 import { htqlApiUrl } from '../../config/htqlApiBase'
+import { htqlEntityStorage } from '../../utils/htqlEntityStorage'
 import {
   STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM,
   STORAGE_KEY_VTHH_HE_MAU_CUSTOM,
   STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM,
+  readVthhLoaiGiayCustomFromStorage,
   dispatchVthhLoaiNhomChanged,
   readVthhDinhLuongCustomFromStorage,
   readVthhHeMauCustomFromStorage,
@@ -36,7 +38,7 @@ function parseNonNegativeMeter(raw: string): number | null {
 
 function titleByMode(mode: ThemVthhDanhMucMode): string {
   if (mode === 'dinh-luong') return 'Độ dày/ Kích thước'
-  if (mode === 'kho-giay') return 'Khổ giấy'
+  if (mode === 'kho-giay') return 'Khổ giấy/ Chiều rộng'
   return 'Hệ màu'
 }
 
@@ -47,6 +49,7 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
   const [pendingTen, setPendingTen] = useState('')
   const [pendingChieuRongM, setPendingChieuRongM] = useState('')
   const [pendingChieuDaiM, setPendingChieuDaiM] = useState('')
+  const [pendingLoaiGiay, setPendingLoaiGiay] = useState('')
   const [pendingDienGiai, setPendingDienGiai] = useState('')
   const [pendingHeMauIn, setPendingHeMauIn] = useState(true)
   const [pendingHeMauVatTu, setPendingHeMauVatTu] = useState(false)
@@ -65,6 +68,13 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
     const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
     return String(next)
   }, [customValues])
+  const loaiGiayOptions = useMemo(
+    () =>
+      readVthhLoaiGiayCustomFromStorage()
+        .filter((x) => String(x.ma ?? '').trim() && String(x.ten ?? '').trim())
+        .map((x) => ({ ma: String(x.ma ?? '').trim(), ten: String(x.ten ?? '').trim() })),
+    [],
+  )
 
   useEffect(() => {
     setPendingMa(nextSttMa)
@@ -128,7 +138,7 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
 
       if (mode === 'dinh-luong') {
         const cur = readVthhDinhLuongCustomFromStorage()
-        localStorage.setItem(STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM, JSON.stringify([...cur, { ma, ten }]))
+        htqlEntityStorage.setItem(STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM, JSON.stringify([...cur, { ma, ten }]))
         setStorageRev((x) => x + 1)
         persistAndNotify()
         toast?.showToast(`Đã thêm ${title.toLowerCase()}.`, 'success')
@@ -140,6 +150,10 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
       }
 
       if (mode === 'kho-giay') {
+        if (!pendingLoaiGiay.trim()) {
+          toast?.showToast('Tên loại giấy là bắt buộc.', 'error')
+          return
+        }
         const w = parseNonNegativeMeter(pendingChieuRongM)
         const l = parseNonNegativeMeter(pendingChieuDaiM)
         if (w == null) {
@@ -147,9 +161,9 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
           return
         }
         const cur = readVthhKhoGiayCustomFromStorage()
-        localStorage.setItem(
+        htqlEntityStorage.setItem(
           STORAGE_KEY_VTHH_KHO_GIAY_CUSTOM,
-          JSON.stringify([...cur, { ma, ten, chieu_rong_m: String(w), chieu_dai_m: l == null ? '' : String(l) }]),
+          JSON.stringify([...cur, { ma, ten, loai_giay: pendingLoaiGiay.trim(), chieu_rong_m: String(w), chieu_dai_m: l == null ? '' : String(l) }]),
         )
         setStorageRev((x) => x + 1)
         persistAndNotify()
@@ -157,6 +171,7 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
         if (closeAfter) onClose()
         else {
           setPendingTen('')
+          setPendingLoaiGiay('')
           setPendingChieuRongM('')
           setPendingChieuDaiM('')
         }
@@ -172,7 +187,7 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
         return
       }
       const cur = readVthhHeMauCustomFromStorage()
-      localStorage.setItem(
+      htqlEntityStorage.setItem(
         STORAGE_KEY_VTHH_HE_MAU_CUSTOM,
         JSON.stringify([
           ...cur,
@@ -204,6 +219,7 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
       pendingDienGiai,
       pendingHeMauIn,
       pendingHeMauVatTu,
+      pendingLoaiGiay,
       pendingMa,
       pendingTen,
       persistAndNotify,
@@ -266,6 +282,23 @@ export function ThemVthhDanhMucMiniModal({ mode, onClose, onSaved }: Props) {
           placeholder={`Nhập ${title.toLowerCase()}`}
           style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12 }}
         />
+        {mode === 'kho-giay' ? (
+          <>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Tên loại giấy</label>
+            <select
+              value={pendingLoaiGiay}
+              onChange={(e) => setPendingLoaiGiay(e.target.value)}
+              style={{ height: 28, border: '1px solid var(--border-strong)', borderRadius: 4, padding: '0 8px', fontSize: 12 }}
+            >
+              <option value="">Chọn loại giấy</option>
+              {loaiGiayOptions.map((x) => (
+                <option key={x.ma} value={x.ma}>
+                  {x.ten}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
         {mode === 'kho-giay' ? (
           <>
             <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Chiều rộng (m)</label>

@@ -28,6 +28,15 @@ const DU_LIEU_MAU: DonViTinhRecord[] = [
 ]
 
 const API_BASE = '/api/don-vi-tinh'
+const DVT_CAI_MAC_DINH: Omit<DonViTinhRecord, 'id'> = { ma_dvt: '01', ten_dvt: 'Cái', ky_hieu: 'Cái', dien_giai: '' }
+
+function coDonViTinhCai(list: DonViTinhRecord[]): boolean {
+  return list.some((r) => {
+    const ten = String(r.ten_dvt ?? '').trim().toLowerCase()
+    const kyHieu = String(r.ky_hieu ?? '').trim().toLowerCase()
+    return ten === 'cái' || ten === 'cai' || kyHieu === 'cái' || kyHieu === 'cai'
+  })
+}
 
 async function apiGet<T>(url: string): Promise<T | null> {
   try {
@@ -111,7 +120,13 @@ if (typeof window !== 'undefined') {
 
 export async function donViTinhGetAll(): Promise<DonViTinhRecord[]> {
   if (await checkApi()) {
-    const data = await apiGet<DonViTinhRecord[]>(API_BASE)
+    let data = await apiGet<DonViTinhRecord[]>(API_BASE)
+    if (data) {
+      if (!coDonViTinhCai(data)) {
+        await apiPost<DonViTinhRecord>(API_BASE, DVT_CAI_MAC_DINH)
+        data = await apiGet<DonViTinhRecord[]>(API_BASE)
+      }
+    }
     if (data) {
       cache = data
       return [...data]

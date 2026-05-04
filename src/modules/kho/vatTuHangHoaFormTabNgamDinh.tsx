@@ -74,6 +74,7 @@ export interface TabNgamDinhProps {
   selectedHeMau: string[]
   dinhLuongOptions: string[]
   khoGiayOptions: string[]
+  khoGiayLoaiByTen?: Record<string, string>
   heMauOptions: string[]
   onToggleVariantDropdown: (kind: 'dinh-luong' | 'kho-giay' | 'he-mau') => void
   onToggleVariantValue: (field: 'dinh_luong' | 'kho_giay' | 'he_mau', value: string) => void
@@ -135,6 +136,7 @@ export function VatTuHangHoaFormTabNgamDinh({
   selectedHeMau,
   dinhLuongOptions,
   khoGiayOptions,
+  khoGiayLoaiByTen,
   heMauOptions,
   onToggleVariantDropdown,
   onToggleVariantValue,
@@ -205,6 +207,10 @@ export function VatTuHangHoaFormTabNgamDinh({
     [openVariantDropdown, selectedDinhLuong, selectedKhoGiay, selectedHeMau],
   )
   const optionKind = openVariantDropdown
+  const selectedKhoGiayLoai = useMemo(
+    () => selectedKhoGiay.map((x) => String(khoGiayLoaiByTen?.[x] ?? '').trim()).find(Boolean) ?? '',
+    [selectedKhoGiay, khoGiayLoaiByTen],
+  )
   const groupedActiveOptions = useMemo(() => {
     const options = activeOptions ?? []
     if (!optionKind) return [{ label: '', items: options }]
@@ -221,18 +227,18 @@ export function VatTuHangHoaFormTabNgamDinh({
         .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
         .map(([label, items]) => ({ label, items }))
     }
-    const isMxN = (s: string) => /^\s*\d+([.,]\d+)?\s*m\s*x\s*\d+([.,]\d+)?\s*m\s*$/i.test(String(s ?? ''))
-    const standard: string[] = []
-    const byDimension: string[] = []
-    options.forEach((item) => {
-      if (isMxN(item)) byDimension.push(item)
-      else standard.push(item)
-    })
-    const out: Array<{ label: string; items: string[] }> = []
-    if (standard.length > 0) out.push({ label: 'Khổ tiêu chuẩn', items: standard })
-    if (byDimension.length > 0) out.push({ label: 'Khổ theo kích thước (m x m)', items: byDimension })
-    return out
-  }, [activeOptions, optionKind])
+    if (optionKind === 'kho-giay') {
+      const sorted = [...options].sort((a, b) => {
+        const loaiA = String(khoGiayLoaiByTen?.[a] ?? '').trim()
+        const loaiB = String(khoGiayLoaiByTen?.[b] ?? '').trim()
+        const loaiCmp = loaiA.localeCompare(loaiB, 'vi', { sensitivity: 'base' })
+        if (loaiCmp !== 0) return loaiCmp
+        return a.localeCompare(b, 'vi', { numeric: true, sensitivity: 'base' })
+      })
+      return [{ label: '', items: sorted }]
+    }
+    return [{ label: '', items: options }]
+  }, [activeOptions, optionKind, khoGiayLoaiByTen])
   return (
     <div className="misa-form-grid htql-tab-grid htql-tab-ngam-dinh" onKeyDown={handleEnterNav}>
       {/* Row 1 — Left: Kho | Right: ĐG mua cố định */}
@@ -377,7 +383,7 @@ export function VatTuHangHoaFormTabNgamDinh({
         <input {...register('tai_khoan_doanh_thu')} className="misa-input-solo" style={inputStyle} placeholder="5111" />
         <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }} />
       </div>
-      <LabelCell label={nhieuPhienBan ? 'Khổ giấy' : 'Thuế GTGT (%)'} />
+      <LabelCell label={nhieuPhienBan ? 'Khổ giấy/ Chiều rộng' : 'Thuế GTGT (%)'} />
       <div className={nhieuPhienBan ? 'misa-grid-item htql-don-gia-wrap' : 'misa-grid-item'} style={nhieuPhienBan ? undefined : { position: 'relative' }}>
         {nhieuPhienBan ? (
           <div data-vthh-variant-dropdown style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -399,10 +405,10 @@ export function VatTuHangHoaFormTabNgamDinh({
                 boxSizing: 'border-box',
               }}
               onClick={() => onToggleVariantDropdown('kho-giay')}
-              title="Khổ giấy (chọn nhiều)"
+              title="Khổ giấy/ Chiều rộng (chọn nhiều)"
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedKhoGiay.length > 0 ? selectedKhoGiay.join(', ') : 'Khổ giấy'}
+                {selectedKhoGiay.length > 0 ? selectedKhoGiay.join(', ') : 'Khổ giấy/ Chiều rộng'}
               </span>
               <ChevronDown size={12} />
             </button>
@@ -410,7 +416,7 @@ export function VatTuHangHoaFormTabNgamDinh({
               type="button"
               className="misa-lookup-btn htql-dvt-plus-btn"
               style={{ width: 24, height: 24, minHeight: 24, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}
-              title="Thêm khổ giấy"
+              title="Thêm khổ giấy/ chiều rộng"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.preventDefault()
@@ -432,7 +438,7 @@ export function VatTuHangHoaFormTabNgamDinh({
               {openVariantDropdown === 'dinh-luong'
                 ? 'Chưa có dữ liệu ở module Độ dày/ Kích thước'
                 : openVariantDropdown === 'kho-giay'
-                  ? 'Chưa có dữ liệu ở module Khổ giấy'
+                  ? 'Chưa có dữ liệu ở module Khổ giấy/ Chiều rộng'
                   : 'Chưa có dữ liệu ở module Hệ màu'}
             </span>
           ) : (
@@ -445,6 +451,8 @@ export function VatTuHangHoaFormTabNgamDinh({
                 ) : null}
                 {group.items.map((item) => {
                   const disabled = Boolean(optionKind && isVariantOptionDisabled?.(optionKind, item))
+                  const loaiGiay = optionKind === 'kho-giay' ? String(khoGiayLoaiByTen?.[item] ?? '').trim() : ''
+                  const differentLoai = optionKind === 'kho-giay' && selectedKhoGiayLoai && loaiGiay && loaiGiay !== selectedKhoGiayLoai
                   return (
                     <label
                       key={item}
@@ -455,6 +463,7 @@ export function VatTuHangHoaFormTabNgamDinh({
                         fontSize: 11,
                         cursor: disabled ? 'not-allowed' : 'pointer',
                         opacity: disabled ? 0.45 : 1,
+                        color: differentLoai ? '#9ca3af' : 'var(--text-primary)',
                       }}
                       title={disabled ? 'Không cho phép chọn' : item}
                     >

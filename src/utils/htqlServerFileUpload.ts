@@ -53,7 +53,7 @@ export async function htqlUploadFileToServer(
     filename: opts.filename,
   })
   const url = htqlApiUrl(`/api/htql-upload?${q.toString()}`)
-  const r = await fetch(url, { method: 'POST', body: fd })
+  const r = await fetch(url, { method: 'POST', body: fd, credentials: 'include' })
   if (!r.ok) {
     let msg = `HTTP ${r.status}`
     try {

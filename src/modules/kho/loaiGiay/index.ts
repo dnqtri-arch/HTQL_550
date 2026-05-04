@@ -1,0 +1,1 @@
+export { LoaiGiay } from '../loaiGiay'

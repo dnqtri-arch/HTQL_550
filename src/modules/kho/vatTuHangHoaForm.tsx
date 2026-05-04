@@ -15,6 +15,7 @@ import {
   readVthhDinhLuongCustomFromStorage,
   readVthhHeMauCustomFromStorage,
   readVthhKhoGiayCustomFromStorage,
+  readVthhLoaiGiayCustomFromStorage,
   HTQL_VTHH_LOAI_NHOM_CHANGED,
   STORAGE_KEY_VTHH_DINH_LUONG_CUSTOM,
   STORAGE_KEY_VTHH_HE_MAU_CUSTOM,
@@ -736,6 +737,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
   const [loaiVthhOptions, setLoaiVthhOptions] = useState<Array<{ value: string; label: string }>>([])
   const [dinhLuongOptions, setDinhLuongOptions] = useState<string[]>([])
   const [khoGiayOptions, setKhoGiayOptions] = useState<string[]>([])
+  const [khoGiayLoaiByTen, setKhoGiayLoaiByTen] = useState<Record<string, string>>({})
   const [heMauAllOptions, setHeMauAllOptions] = useState<Array<{ ten: string; he_mau_in?: boolean; he_mau_vat_tu?: boolean }>>([])
   const [khoGiayChieuRongByTen, setKhoGiayChieuRongByTen] = useState<Record<string, number>>({})
   const [khoGiayChieuDaiByTen, setKhoGiayChieuDaiByTen] = useState<Record<string, number>>({})
@@ -913,7 +915,25 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
           .sort((a, b) => a.ten.localeCompare(b.ten, 'vi', { numeric: true })),
       )
       const khoGiayItems = readVthhKhoGiayCustomFromStorage()
-      setKhoGiayOptions(sortKhoGiayByGroups(khoGiayItems.map((x) => x.ten).filter(Boolean)))
+      const loaiGiayByMa = new Map(
+        readVthhLoaiGiayCustomFromStorage().map((x) => [String(x.ma ?? '').trim(), String(x.ten ?? '').trim()] as const),
+      )
+      const loaiByTen: Record<string, string> = {}
+      khoGiayItems.forEach((x) => {
+        const ten = String(x.ten ?? '').trim()
+        if (!ten) return
+        const loaiMa = String(x.loai_giay ?? '').trim()
+        loaiByTen[ten] = loaiGiayByMa.get(loaiMa) || loaiMa || ''
+      })
+      const sortedKhoGiay = [...new Set(khoGiayItems.map((x) => String(x.ten ?? '').trim()).filter(Boolean))].sort((a, b) => {
+        const loaiA = loaiByTen[a] || ''
+        const loaiB = loaiByTen[b] || ''
+        const loaiCmp = loaiA.localeCompare(loaiB, 'vi', { sensitivity: 'base' })
+        if (loaiCmp !== 0) return loaiCmp
+        return a.localeCompare(b, 'vi', { numeric: true, sensitivity: 'base' })
+      })
+      setKhoGiayLoaiByTen(loaiByTen)
+      setKhoGiayOptions(sortedKhoGiay)
       const widthMap: Record<string, number> = {}
       const daiMap: Record<string, number> = {}
       khoGiayItems.forEach((item) => {
@@ -1478,7 +1498,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     return khoGiayNamesForDvdqMatrixUi
   }, [nhieuPhienBan, khoGiayNamesForDvdqMatrixUi, khoGiayChieuDaiByTen])
   const isDemToken = useCallback((raw: string) => /\bdem\b/i.test(String(raw ?? '').trim()), [])
-  const isKhoGiayNormalToken = useCallback((ten: string) => Number.isFinite(khoGiayChieuDaiByTen[ten]) && khoGiayChieuDaiByTen[ten] > 0, [khoGiayChieuDaiByTen])
+  const khoGiayLoaiOf = useCallback((ten: string) => String(khoGiayLoaiByTen[ten] ?? '').trim(), [khoGiayLoaiByTen])
   const decodePhu1Token = useCallback((token: string): { dinhLuong?: string; heMau?: string } => {
     const raw = String(token ?? '')
     if (raw.startsWith('DL:')) return { dinhLuong: raw.slice(3) }
@@ -1493,11 +1513,11 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
     }
     if (kind === 'kho-giay') {
       const current = selectedKhoGiay
-      const nextIsNormal = isKhoGiayNormalToken(value)
-      return current.some((item) => item !== value && isKhoGiayNormalToken(item) !== nextIsNormal)
+      const nextLoai = khoGiayLoaiOf(value)
+      return current.some((item) => item !== value && khoGiayLoaiOf(item) !== nextLoai)
     }
     return false
-  }, [selectedDinhLuong, selectedKhoGiay, isDemToken, isKhoGiayNormalToken])
+  }, [selectedDinhLuong, selectedKhoGiay, isDemToken, khoGiayLoaiOf])
 
   const toggleVariantMultiValue = useCallback((field: 'dinh_luong' | 'kho_giay' | 'he_mau', value: string) => {
     const current = parseMultiStoredList(getValues(field) ?? '')
@@ -1512,10 +1532,10 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       }
     }
     if (adding && field === 'kho_giay') {
-      const nextIsNormal = isKhoGiayNormalToken(value)
-      const hasOpposite = current.some((item) => isKhoGiayNormalToken(item) !== nextIsNormal)
+      const nextLoai = khoGiayLoaiOf(value)
+      const hasOpposite = current.some((item) => khoGiayLoaiOf(item) !== nextLoai)
       if (hasOpposite) {
-        setSubmitError('Khổ giấy: không được chọn trộn khổ thường với khổ đặc biệt.')
+        setSubmitError('Khổ giấy/ Chiều rộng: chỉ được chọn trong cùng một loại giấy.')
         return
       }
     }
@@ -1527,7 +1547,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       setValue('do_day', next, { shouldDirty: true, shouldTouch: true })
     }
     setSubmitError('')
-  }, [getValues, setValue, isDemToken, isKhoGiayNormalToken])
+  }, [getValues, setValue, isDemToken, khoGiayLoaiOf])
 
   const variantCombos = useMemo(() => {
     if (!nhieuPhienBan) return []
@@ -1815,7 +1835,10 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
       }
       setValue('ten_file_hinh_anh', tenFile)
     } catch (e) {
-      setImageUploadError(e instanceof Error ? e.message : 'Lỗi xử lý ảnh')
+      const rawMsg = e instanceof Error ? e.message : 'Lỗi xử lý ảnh'
+      const hint =
+        'Kiểm tra server có quyền ghi thư mục ảnh VTHH: /ssd_2tb/htql_550/vthh/ (HTQL_PATH_VTHH_HINH_ANH).'
+      setImageUploadError(`${rawMsg}. ${hint}`)
     } finally {
       setImageUploading(false)
     }
@@ -2888,6 +2911,7 @@ export function VatTuHangHoaForm({ mode, initialData, dvtList, onClose, onSubmit
                   selectedDinhLuong={selectedDinhLuongDisplay}
                   dinhLuongOptions={dinhLuongOptionsDisplay}
                   khoGiayOptions={khoGiayOptions}
+                  khoGiayLoaiByTen={khoGiayLoaiByTen}
                   heMauOptions={heMauOptions}
                   onToggleVariantDropdown={(kind) => setOpenVariantDropdown((prev) => (prev === kind ? null : kind))}
                   onToggleVariantValue={toggleVariantMultiValue}
